@@ -61,18 +61,42 @@
   .filter-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
 
   /* RSS MANAGER */
-  .rss-list{display:flex;flex-direction:column;gap:5px;margin-bottom:8px;}
-  .rss-item{display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;}
-  .rss-item-name{font-weight:600;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;}
-  .rss-item-toggle{width:32px;height:18px;background:var(--border2);border-radius:9px;cursor:pointer;position:relative;transition:background 0.2s;flex-shrink:0;}
-  .rss-item-toggle.on{background:var(--accent);}
-  .rss-item-toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left 0.2s;}
-  .rss-item-toggle.on::after{left:16px;}
-  .rss-add-form{display:flex;flex-direction:column;gap:5px;}
-  .rss-add-row{display:flex;gap:5px;}
-  .rss-add-row input{flex:1;font-size:11px;padding:6px 8px;}
-  .btn-add{background:var(--success);color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif;}
-  .btn-add:hover{background:#047857;}
+  .rss-section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  .rss-count{font-size:11px;color:var(--muted);}
+  .btn-manage{background:var(--accent-light);color:var(--accent);border:1px solid rgba(0,61,143,0.2);border-radius:5px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;}
+  .btn-manage:hover{background:var(--accent);color:#fff;}
+
+  /* RSS MODAL */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;display:none;align-items:center;justify-content:center;}
+  .modal-overlay.show{display:flex;}
+  .modal{background:var(--surface);border-radius:12px;width:520px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 40px rgba(0,0,0,0.15);}
+  .modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+  .modal-header h3{font-size:15px;font-weight:700;color:var(--text);}
+  .modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted);padding:2px 6px;border-radius:4px;}
+  .modal-close:hover{background:var(--surface2);color:var(--text);}
+  .modal-body{padding:16px 20px;overflow-y:auto;flex:1;}
+  .modal-footer{padding:12px 20px;border-top:1px solid var(--border);background:var(--surface2);border-radius:0 0 12px 12px;}
+
+  .rss-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px;}
+  .rss-table th{text-align:left;padding:8px 10px;background:var(--surface2);border-bottom:2px solid var(--border);font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);}
+  .rss-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  .rss-table tr:hover td{background:var(--surface2);}
+  .rss-name-cell{font-weight:600;color:var(--text);}
+  .rss-url-cell{color:var(--muted);font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .rss-toggle{width:32px;height:18px;background:var(--border2);border-radius:9px;cursor:pointer;position:relative;transition:background 0.2s;border:none;flex-shrink:0;display:inline-block;}
+  .rss-toggle.on{background:var(--accent);}
+  .rss-toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left 0.2s;}
+  .rss-toggle.on::after{left:16px;}
+  .rss-actions{display:flex;gap:4px;align-items:center;}
+
+  .add-feed-form{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;}
+  .add-feed-form h4{font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px;}
+  .add-feed-grid{display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px;}
+  .add-feed-grid input{font-size:12px;}
+  .btn-add-feed{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;width:100%;font-family:'Inter',sans-serif;}
+  .btn-add-feed:hover{background:var(--accent2);}
+  .btn-danger-sm{background:none;border:1px solid #fecaca;color:var(--danger);font-size:11px;padding:3px 7px;border-radius:4px;cursor:pointer;font-family:'Inter',sans-serif;}
+  .btn-danger-sm:hover{background:#fee2e2;}
 
   /* PROGRESS */
   .progress-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:none;box-shadow:var(--shadow);}
@@ -201,22 +225,47 @@
 
     <!-- RSS MANAGER -->
     <div>
-      <div class="sidebar-label">Sumber RSS Tambahan</div>
-      <div class="rss-list" id="rssList"></div>
-      <div class="rss-add-form">
-        <input type="text" id="rssName" placeholder="Nama media (contoh: Koreri)" style="font-size:11px;padding:6px 8px;"/>
-        <div class="rss-add-row">
-          <input type="text" id="rssUrl" placeholder="URL RSS feed..."/>
-          <button class="btn-add" onclick="addRssFeed()">+ Tambah</button>
+      <div class="rss-section-header">
+        <div class="sidebar-label" style="margin-bottom:0">Sumber RSS</div>
+        <button class="btn-manage" onclick="openRssModal()">⚙ Kelola</button>
+      </div>
+      <div id="rssStatusList" style="display:flex;flex-direction:column;gap:4px;margin-top:6px"></div>
+    </div>
+
+  <!-- RSS MODAL -->
+  <div class="modal-overlay" id="rssModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>⚙ Kelola Sumber RSS</h3>
+        <button class="modal-close" onclick="closeRssModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <table class="rss-table" id="rssTable">
+          <thead>
+            <tr>
+              <th>Nama Media</th>
+              <th>URL Feed</th>
+              <th>Status</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="rssTableBody"></tbody>
+        </table>
+
+        <div class="add-feed-form">
+          <h4>+ Tambah Feed Baru</h4>
+          <div class="add-feed-grid">
+            <input type="text" id="rssName" placeholder="Nama media (contoh: Koreri)"/>
+            <input type="text" id="rssUrl" placeholder="URL RSS (contoh: koreri.com/feed)"/>
+          </div>
+          <button class="btn-add-feed" onclick="addRssFeed()">+ Tambah Feed</button>
         </div>
       </div>
-      <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.5">
-        Contoh aktif:<br/>
-        antaranews.com/rss/terkini.xml<br/>
-        koreri.com/feed<br/>
-        kabarpapua.co/feed
+      <div class="modal-footer" style="font-size:11px;color:var(--muted)">
+        Feed aktif: antaranews.com/rss/terkini.xml · koreri.com/feed · kabarpapua.co/feed · jubi.id/feed
       </div>
     </div>
+  </div>
 
     <!-- FILTERS -->
     <div>
@@ -242,6 +291,15 @@
       <div class="sidebar-label">Tersimpan</div>
       <div id="bookmarkCount" style="font-size:12px;color:var(--muted);margin-bottom:8px">0 artikel ditandai</div>
       <button class="btn btn-ghost" style="width:100%" onclick="toggleBookmarks()">📌 Lihat Tersimpan</button>
+    </div>
+
+    <!-- RSS MANAGER (bottom) -->
+    <div>
+      <div class="rss-section-header">
+        <div class="sidebar-label" style="margin-bottom:0">Sumber RSS</div>
+        <button class="btn-manage" onclick="openRssModal()">⚙ Kelola</button>
+      </div>
+      <div id="rssStatusList" style="display:flex;flex-direction:column;gap:4px;margin-top:6px"></div>
     </div>
   </div>
 
@@ -314,44 +372,86 @@ function initRssFeeds() {
     rssFeeds = [...DEFAULT_FEEDS];
     saveRssFeeds();
   }
-  renderRssList();
+  renderRssStatus();
+  renderRssTable();
 }
 
 function saveRssFeeds() {
   localStorage.setItem('pln_rss_feeds', JSON.stringify(rssFeeds));
 }
 
-function renderRssList() {
-  const list = document.getElementById('rssList');
-  if (!rssFeeds.length) { list.innerHTML = '<div style="font-size:11px;color:var(--muted)">Belum ada feed ditambahkan</div>'; return; }
-  list.innerHTML = rssFeeds.map((f, i) => `
-    <div class="rss-item">
-      <div class="rss-item-name" title="${f.url}">${f.name}</div>
-      <div style="display:flex;align-items:center;gap:5px">
-        <div class="rss-item-toggle ${f.enabled?'on':''}" onclick="toggleRss(${i})" title="${f.enabled?'Aktif - klik nonaktifkan':'Nonaktif - klik aktifkan'}"></div>
-        <button class="btn-danger" onclick="removeRss(${i})">✕</button>
-      </div>
-    </div>`).join('');
+function renderRssStatus() {
+  const el = document.getElementById('rssStatusList');
+  const active = rssFeeds.filter(f => f.enabled);
+  const total = rssFeeds.length;
+  if (!active.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--muted)">Tidak ada feed aktif. Klik ⚙ Kelola untuk tambah.</div>';
+    return;
+  }
+  const show = active.slice(0, 10);
+  const more = active.length - 10;
+  el.innerHTML = show.map(f => `
+    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--success);flex-shrink:0;display:inline-block"></span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
+    </div>`).join('')
+  + (more > 0 ? `<div style="font-size:11px;color:var(--accent2);cursor:pointer;margin-top:2px" onclick="openRssModal()">+${more} feed lainnya →</div>` : '')
+  + `<div style="font-size:10px;color:var(--muted);margin-top:4px">${active.length} aktif dari ${total} terdaftar</div>`;
+}
+
+function renderRssTable() {
+  const tbody = document.getElementById('rssTableBody');
+  if (!tbody) return;
+  if (!rssFeeds.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Belum ada feed. Tambahkan di bawah.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rssFeeds.map((f, i) => `
+    <tr>
+      <td class="rss-name-cell">${f.name}</td>
+      <td class="rss-url-cell" title="${f.url}">
+        <a href="${f.url.startsWith('http') ? f.url : 'https://'+f.url}" target="_blank" rel="noopener"
+           style="color:var(--accent2);text-decoration:none;font-size:11px">${f.url}</a>
+      </td>
+      <td>
+        <button class="rss-toggle ${f.enabled?'on':''}" onclick="toggleRss(${i})"
+          title="${f.enabled?'Aktif':'Nonaktif'}"></button>
+      </td>
+      <td class="rss-actions">
+        <button class="btn-danger-sm" onclick="removeRss(${i})">🗑 Hapus</button>
+      </td>
+    </tr>`).join('');
+}
+
+function openRssModal() {
+  renderRssTable();
+  document.getElementById('rssModal').classList.add('show');
+}
+
+function closeRssModal() {
+  document.getElementById('rssModal').classList.remove('show');
 }
 
 function toggleRss(i) {
   rssFeeds[i].enabled = !rssFeeds[i].enabled;
-  saveRssFeeds(); renderRssList();
+  saveRssFeeds(); renderRssStatus(); renderRssTable();
 }
 
 function removeRss(i) {
+  const name = rssFeeds[i].name;
   rssFeeds.splice(i, 1);
-  saveRssFeeds(); renderRssList();
+  saveRssFeeds(); renderRssStatus(); renderRssTable();
+  showToast(`🗑 ${name} dihapus`);
 }
 
 function addRssFeed() {
-  const name = document.getElementById('rssName').value.trim();
-  const url = document.getElementById('rssUrl').value.trim();
+  let name = document.getElementById('rssName').value.trim();
+  let url = document.getElementById('rssUrl').value.trim();
   if (!name || !url) return showToast('⚠ Isi nama dan URL feed');
-  if (!url.startsWith('http')) return showToast('⚠ URL harus dimulai dengan http');
+  if (!url.startsWith('http')) url = 'https://' + url;
   if (rssFeeds.some(f => f.url === url)) return showToast('⚠ Feed sudah ada');
   rssFeeds.push({ name, url, enabled: true });
-  saveRssFeeds(); renderRssList();
+  saveRssFeeds(); renderRssStatus(); renderRssTable();
   document.getElementById('rssName').value = '';
   document.getElementById('rssUrl').value = '';
   showToast(`✅ ${name} ditambahkan`);
@@ -688,12 +788,44 @@ async function generateBrief() {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ articles: payload, keyword })
     });
+
+    if (!res.ok) {
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err.detail || err.error || 'Server error ' + res.status);
+    }
+
     const data = await res.json();
-    if (data.brief) {
+    if (data.brief && data.brief.length > 20) {
       document.getElementById('briefContent').innerHTML = `<div class="brief-text">${data.brief.replace(/\n/g,'<br/>')}</div>`;
-    } else throw new Error('empty');
-  } catch {
-    document.getElementById('briefContent').innerHTML = `<div style="color:var(--neg);font-size:13px">Gagal generate brief. Coba lagi setelah analisis selesai.</div>`;
+    } else {
+      throw new Error('Respons AI kosong');
+    }
+  } catch(e) {
+    console.error('Brief error:', e);
+    // Fallback: generate brief manually from analyzed data
+    const analyzed = allArticles.filter(a => a._analyzed);
+    const pos = analyzed.filter(a=>a._tone==='positif').length;
+    const neg = analyzed.filter(a=>a._tone==='negatif').length;
+    const neu = analyzed.filter(a=>a._tone==='netral').length;
+
+    // Count media
+    const mediaCounts = {};
+    allArticles.forEach(a => {
+      const m = a.source?.name || 'Lainnya';
+      mediaCounts[m] = (mediaCounts[m] || 0) + 1;
+    });
+    const topMedia = Object.entries(mediaCounts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k} (${v})`).join(', ');
+
+    const pctPos = allArticles.length ? Math.round(pos/allArticles.length*100) : 0;
+    const pctNeg = allArticles.length ? Math.round(neg/allArticles.length*100) : 0;
+
+    document.getElementById('briefContent').innerHTML = `<div class="brief-text">
+      Monitoring pemberitaan "<strong>${keyword}</strong>" mencatat <strong>${allArticles.length} artikel</strong> hari ini.
+      Dari ${analyzed.length} artikel yang telah dianalisis, ${pos} (${pctPos}%) bertenor positif, ${neg} (${pctNeg}%) negatif, dan ${neu} netral.
+      ${neg > 0 ? `Terdapat ${neg} pemberitaan bernada negatif yang perlu mendapat perhatian tim komunikasi.` : 'Secara umum pemberitaan berjalan kondusif.'}
+      Media yang paling aktif memberitakan: ${topMedia || 'beragam sumber'}.
+      ${analyzed.length < allArticles.length ? `Catatan: ${allArticles.length - analyzed.length} artikel belum selesai dianalisis AI — generate ulang setelah progress bar selesai untuk brief yang lebih akurat.` : ''}
+    </div>`;
   }
   btn.disabled = false; btn.textContent = 'Generate';
 }
@@ -710,6 +842,11 @@ function showToast(msg) {
 
 document.getElementById('bookmarkCount').textContent = `${bookmarks.length} artikel ditandai`;
 initRssFeeds();
+
+// Close modal on overlay click
+document.getElementById('rssModal').addEventListener('click', function(e) {
+  if (e.target === this) closeRssModal();
+});
 </script>
 </body>
 </html>
