@@ -6,7 +6,6 @@ async function fetchUrl(urlStr, rejectUnauthorized = false) {
     const url = new URL(urlStr);
     const isHttps = url.protocol === 'https:';
     const lib = isHttps ? https : http;
-
     const options = {
       hostname: url.hostname,
       port: url.port || (isHttps ? 443 : 80),
@@ -19,7 +18,6 @@ async function fetchUrl(urlStr, rejectUnauthorized = false) {
       },
       timeout: 8000
     };
-
     const req = lib.request(options, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         return fetchUrl(res.headers.location, rejectUnauthorized).then(resolve).catch(reject);
@@ -28,7 +26,6 @@ async function fetchUrl(urlStr, rejectUnauthorized = false) {
       res.on('data', chunk => data += chunk);
       res.on('end', () => resolve(data));
     });
-
     req.on('error', reject);
     req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
     req.end();
@@ -36,20 +33,14 @@ async function fetchUrl(urlStr, rejectUnauthorized = false) {
 }
 
 async function fetchWithFallback(url) {
-  // Try as-is first
   try {
     return await fetchUrl(url, false);
   } catch (e1) {
-    // If https fails, try with rejectUnauthorized=false
     if (url.startsWith('https://')) {
-      try {
-        return await fetchUrl(url, false); // already false, try http fallback
-      } catch {}
-      // Try http version
       try {
         return await fetchUrl(url.replace('https://', 'http://'), false);
       } catch (e2) {
-        throw new Error(`fetch failed (tried https and http): ${e2.message}`);
+        throw new Error(`fetch failed: ${e2.message}`);
       }
     }
     throw e1;
@@ -66,7 +57,6 @@ export default async function handler(req, res) {
 
   try {
     const xml = await fetchWithFallback(url);
-
     const items = [];
     const itemRegex = /<item>([\s\S]*?)<\/item>/g;
     let match;
@@ -86,10 +76,11 @@ export default async function handler(req, res) {
 
       if (!title) continue;
 
+      // Filter: semua kata dari keyword harus ada (AND logic)
       if (q) {
-        const keywords = q.toLowerCase().split(/\s+/);
+        const keywords = q.toLowerCase().split(/\s+/).filter(k => k.length > 1);
         const text = (title + ' ' + description).toLowerCase();
-        if (!keywords.some(k => text.includes(k))) continue;
+        if (!keywords.every(k => text.includes(k))) continue;
       }
 
       items.push({
@@ -107,4 +98,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Failed to fetch RSS', detail: error.message });
   }
 }
-// Note: file already updated above
