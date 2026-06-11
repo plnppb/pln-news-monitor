@@ -10,182 +10,151 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
-    --bg: #f0f4f8;
-    --surface: #ffffff;
-    --surface2: #f8fafc;
-    --border: #e2e8f0;
-    --border2: #cbd5e1;
-    --accent: #003d8f;
-    --accent2: #0066cc;
-    --accent-light: #e8f0fe;
-    --danger: #dc2626;
-    --warn: #d97706;
-    --success: #059669;
-    --text: #1e293b;
-    --text2: #475569;
-    --muted: #94a3b8;
-    --pos: #059669;
-    --neg: #dc2626;
-    --neu: #64748b;
-    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
-    --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.04);
+    --bg:#f0f4f8; --surface:#fff; --surface2:#f8fafc; --border:#e2e8f0; --border2:#cbd5e1;
+    --accent:#003d8f; --accent2:#0066cc; --accent-light:#e8f0fe;
+    --danger:#dc2626; --warn:#d97706; --success:#059669;
+    --text:#1e293b; --text2:#475569; --muted:#94a3b8;
+    --pos:#059669; --neg:#dc2626; --neu:#64748b;
+    --shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md:0 4px 6px rgba(0,0,0,0.07),0 2px 4px rgba(0,0,0,0.04);
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; font-size: 14px; }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;font-size:14px;}
 
-  /* HEADER */
-  header {
-    background: var(--accent);
-    padding: 0 24px;
-    display: flex; align-items: center; justify-content: space-between;
-    height: 56px; position: sticky; top: 0; z-index: 100;
-    box-shadow: 0 2px 8px rgba(0,61,143,0.3);
-  }
-  .logo { display: flex; align-items: center; gap: 10px; }
-  .logo-icon { width: 30px; height: 30px; background: #FFD700; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
-  .logo-text { font-size: 15px; font-weight: 700; color: #fff; }
-  .logo-sub { font-size: 10px; color: rgba(255,255,255,0.7); margin-top: 1px; }
-  .header-stats { display: flex; gap: 16px; align-items: center; }
-  .stat-pill { font-size: 12px; color: rgba(255,255,255,0.8); display: flex; align-items: center; gap: 5px; }
-  .stat-pill strong { color: #fff; }
-  .dot { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; animation: pulse 2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+  header{background:var(--accent);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,61,143,0.3);}
+  .logo{display:flex;align-items:center;gap:10px;}
+  .logo-icon{width:30px;height:30px;background:#FFD700;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .logo-text{font-size:15px;font-weight:700;color:#fff;}
+  .logo-sub{font-size:10px;color:rgba(255,255,255,0.7);margin-top:1px;}
+  .header-stats{display:flex;gap:16px;align-items:center;}
+  .stat-pill{font-size:12px;color:rgba(255,255,255,0.8);display:flex;align-items:center;gap:5px;}
+  .stat-pill strong{color:#fff;}
+  .dot{width:6px;height:6px;border-radius:50%;background:#4ade80;animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
 
-  /* LAYOUT */
-  .app { display: flex; height: calc(100vh - 56px); }
-  .sidebar {
-    width: 260px; min-width: 260px;
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-    padding: 16px;
-    overflow-y: auto;
-    display: flex; flex-direction: column; gap: 20px;
-  }
-  .main { flex: 1; overflow-y: auto; padding: 20px 24px; background: var(--bg); }
+  .app{display:flex;height:calc(100vh - 56px);}
+  .sidebar{width:268px;min-width:268px;background:var(--surface);border-right:1px solid var(--border);padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:18px;}
+  .main{flex:1;overflow-y:auto;padding:20px 24px;background:var(--bg);}
 
-  /* SIDEBAR */
-  .sidebar-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
-  .keyword-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-  .chip { background: var(--surface2); border: 1px solid var(--border2); border-radius: 16px; padding: 4px 10px; font-size: 12px; cursor: pointer; transition: all 0.15s; color: var(--text2); }
-  .chip:hover { border-color: var(--accent2); color: var(--accent2); }
-  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .sidebar-label{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+  .keyword-chips{display:flex;flex-wrap:wrap;gap:5px;}
+  .chip{background:var(--surface2);border:1px solid var(--border2);border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer;transition:all 0.15s;color:var(--text2);}
+  .chip:hover{border-color:var(--accent2);color:var(--accent2);}
+  .chip.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
 
-  .input-group { display: flex; flex-direction: column; gap: 7px; }
-  input[type=text], input[type=date] {
-    background: var(--surface2); border: 1px solid var(--border2); border-radius: 7px;
-    color: var(--text); font-size: 13px; padding: 8px 11px; width: 100%;
-    transition: border 0.15s; font-family: 'Inter', sans-serif;
-  }
-  input[type=text]:focus, input[type=date]:focus { outline: none; border-color: var(--accent2); box-shadow: 0 0 0 3px rgba(0,102,204,0.1); }
+  .input-group{display:flex;flex-direction:column;gap:7px;}
+  input[type=text],input[type=date]{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:13px;padding:8px 11px;width:100%;transition:border 0.15s;font-family:'Inter',sans-serif;}
+  input[type=text]:focus,input[type=date]:focus{outline:none;border-color:var(--accent2);box-shadow:0 0 0 3px rgba(0,102,204,0.1);}
 
-  .btn { border: none; border-radius: 7px; cursor: pointer; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; padding: 9px 16px; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 6px; }
-  .btn-primary { background: var(--accent); color: #fff; width: 100%; }
-  .btn-primary:hover { background: var(--accent2); }
-  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-ghost { background: transparent; border: 1px solid var(--border2); color: var(--text2); font-size: 12px; padding: 6px 10px; }
-  .btn-ghost:hover { border-color: var(--accent2); color: var(--accent2); }
+  .btn{border:none;border-radius:7px;cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;font-size:13px;padding:9px 16px;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:6px;}
+  .btn-primary{background:var(--accent);color:#fff;width:100%;}
+  .btn-primary:hover{background:var(--accent2);}
+  .btn-primary:disabled{opacity:0.5;cursor:not-allowed;}
+  .btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text2);font-size:12px;padding:6px 10px;}
+  .btn-ghost:hover{border-color:var(--accent2);color:var(--accent2);}
+  .btn-danger{background:transparent;border:1px solid #fecaca;color:var(--danger);font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:'Inter',sans-serif;}
+  .btn-danger:hover{background:#fee2e2;}
 
-  .filter-row { display: flex; gap: 5px; }
-  .filter-btn { flex: 1; padding: 6px 4px; font-size: 11px; font-weight: 600; border-radius: 6px; cursor: pointer; border: 1px solid var(--border2); background: var(--surface2); color: var(--text2); transition: all 0.15s; text-align: center; }
-  .filter-btn:hover { border-color: var(--accent2); color: var(--accent2); }
-  .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .filter-row{display:flex;gap:5px;}
+  .filter-btn{flex:1;padding:6px 4px;font-size:11px;font-weight:600;border-radius:6px;cursor:pointer;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);transition:all 0.15s;text-align:center;}
+  .filter-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+  .filter-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+  /* RSS MANAGER */
+  .rss-list{display:flex;flex-direction:column;gap:5px;margin-bottom:8px;}
+  .rss-item{display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;}
+  .rss-item-name{font-weight:600;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;}
+  .rss-item-toggle{width:32px;height:18px;background:var(--border2);border-radius:9px;cursor:pointer;position:relative;transition:background 0.2s;flex-shrink:0;}
+  .rss-item-toggle.on{background:var(--accent);}
+  .rss-item-toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left 0.2s;}
+  .rss-item-toggle.on::after{left:16px;}
+  .rss-add-form{display:flex;flex-direction:column;gap:5px;}
+  .rss-add-row{display:flex;gap:5px;}
+  .rss-add-row input{flex:1;font-size:11px;padding:6px 8px;}
+  .btn-add{background:var(--success);color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif;}
+  .btn-add:hover{background:#047857;}
 
   /* PROGRESS */
-  .progress-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; display: none; box-shadow: var(--shadow); }
-  .progress-wrap.show { display: block; }
-  .progress-label { font-size: 12px; color: var(--text2); margin-bottom: 8px; display: flex; justify-content: space-between; }
-  .progress-label strong { color: var(--accent); }
-  .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
-  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 3px; transition: width 0.3s; width: 0%; }
+  .progress-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:none;box-shadow:var(--shadow);}
+  .progress-wrap.show{display:block;}
+  .progress-label{font-size:12px;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between;}
+  .progress-label strong{color:var(--accent);}
+  .progress-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+  .progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;transition:width 0.3s;width:0%;}
 
   /* STATS */
-  .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow); }
-  .stat-card .num { font-size: 28px; font-weight: 700; color: var(--text); }
-  .stat-card .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; font-weight: 500; }
-  .stat-card.pos .num { color: var(--pos); }
-  .stat-card.neg .num { color: var(--neg); }
-  .stat-card.neu .num { color: var(--neu); }
-  .stat-card .trend { font-size: 10px; margin-top: 4px; }
+  .stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);}
+  .stat-card .num{font-size:28px;font-weight:700;color:var(--text);}
+  .stat-card .lbl{font-size:11px;color:var(--muted);margin-top:2px;font-weight:500;}
+  .stat-card.pos .num{color:var(--pos);}
+  .stat-card.neg .num{color:var(--neg);}
+  .stat-card.neu .num{color:var(--neu);}
 
-  /* TOOLBAR */
-  .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-  .toolbar-left { display: flex; gap: 8px; align-items: center; }
-  .result-label { font-size: 13px; color: var(--text2); }
-  .sort-select { background: var(--surface); border: 1px solid var(--border2); color: var(--text); border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
-  .export-btn { background: var(--success); color: #fff; border: none; border-radius: 6px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: 'Inter', sans-serif; }
-  .export-btn:hover { background: #047857; }
+  .toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .toolbar-left{display:flex;gap:8px;align-items:center;}
+  .result-label{font-size:13px;color:var(--text2);}
+  .sort-select{background:var(--surface);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;}
+  .export-btn{background:var(--success);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;}
+  .export-btn:hover{background:#047857;}
 
   /* CARDS */
-  .news-grid { display: flex; flex-direction: column; gap: 8px; }
-  .article-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-left: 4px solid var(--border2);
-    border-radius: 10px; padding: 14px 16px;
-    transition: box-shadow 0.15s, border-color 0.15s;
-    box-shadow: var(--shadow);
-  }
-  .article-card:hover { box-shadow: var(--shadow-md); }
-  .article-card.positif { border-left-color: var(--pos); }
-  .article-card.negatif { border-left-color: var(--neg); }
-  .article-card.netral { border-left-color: var(--neu); }
-  .article-card.bookmarked { border-color: var(--warn); }
+  .news-grid{display:flex;flex-direction:column;gap:8px;}
+  .article-card{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--border2);border-radius:10px;padding:14px 16px;transition:box-shadow 0.15s;box-shadow:var(--shadow);}
+  .article-card:hover{box-shadow:var(--shadow-md);}
+  .article-card.positif{border-left-color:var(--pos);}
+  .article-card.negatif{border-left-color:var(--neg);}
+  .article-card.netral{border-left-color:var(--neu);}
 
-  .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
-  .card-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .source-badge { background: var(--accent-light); color: var(--accent); border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
-  .date-badge { font-size: 11px; color: var(--muted); }
-  .tone-badge { padding: 2px 9px; border-radius: 10px; font-size: 11px; font-weight: 600; text-transform: capitalize; }
-  .tone-badge.positif { background: #dcfce7; color: var(--pos); }
-  .tone-badge.negatif { background: #fee2e2; color: var(--neg); }
-  .tone-badge.netral { background: #f1f5f9; color: var(--neu); }
+  .card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;}
+  .card-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+  .source-badge{background:var(--accent-light);color:var(--accent);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;}
+  .date-badge{font-size:11px;color:var(--muted);}
+  .tone-badge{padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600;}
+  .tone-badge.positif{background:#dcfce7;color:var(--pos);}
+  .tone-badge.negatif{background:#fee2e2;color:var(--neg);}
+  .tone-badge.netral{background:#f1f5f9;color:var(--neu);}
 
-  .card-actions { display: flex; gap: 4px; flex-shrink: 0; }
-  .icon-btn { background: var(--surface2); border: 1px solid var(--border); cursor: pointer; color: var(--muted); font-size: 13px; padding: 4px 7px; transition: all 0.15s; border-radius: 5px; }
-  .icon-btn:hover { background: var(--accent-light); color: var(--accent); border-color: var(--accent2); }
-  .icon-btn.active { color: var(--warn); background: #fef3c7; border-color: var(--warn); }
+  .card-actions{display:flex;gap:4px;flex-shrink:0;}
+  .icon-btn{background:var(--surface2);border:1px solid var(--border);cursor:pointer;color:var(--muted);font-size:13px;padding:4px 7px;transition:all 0.15s;border-radius:5px;}
+  .icon-btn:hover{background:var(--accent-light);color:var(--accent);border-color:var(--accent2);}
+  .icon-btn.active{color:var(--warn);background:#fef3c7;border-color:var(--warn);}
 
-  .card-title { font-size: 14px; font-weight: 600; line-height: 1.5; margin-bottom: 6px; color: var(--text); }
-  .card-title a { color: var(--text); text-decoration: none; }
-  .card-title a:hover { color: var(--accent2); text-decoration: underline; }
+  .card-title{font-size:14px;font-weight:600;line-height:1.5;margin-bottom:6px;}
+  .card-title a{color:var(--text);text-decoration:none;}
+  .card-title a:hover{color:var(--accent2);text-decoration:underline;}
+  .card-resume{font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px;background:var(--surface2);border-radius:6px;padding:8px 10px;border-left:3px solid var(--border2);}
+  .card-footer{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+  .spk-badge{font-size:11px;border-radius:4px;padding:3px 8px;font-weight:500;}
+  .spk-badge.internal{background:#dbeafe;color:#1d4ed8;}
+  .spk-badge.external{background:#fef3c7;color:#92400e;}
 
-  .card-resume { font-size: 12px; color: var(--text2); line-height: 1.6; margin-bottom: 8px; background: var(--surface2); border-radius: 6px; padding: 8px 10px; border-left: 3px solid var(--border2); }
+  .ai-analyzing{font-size:11px;color:var(--accent2);display:flex;align-items:center;gap:5px;padding:6px 10px;background:var(--accent-light);border-radius:6px;margin-bottom:8px;}
+  .spinner{width:10px;height:10px;border:1.5px solid transparent;border-top-color:var(--accent2);border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
 
-  .card-footer { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-  .spk-badge { font-size: 11px; border-radius: 4px; padding: 3px 8px; font-weight: 500; }
-  .spk-badge.internal { background: #dbeafe; color: #1d4ed8; }
-  .spk-badge.external { background: #fef3c7; color: #92400e; }
+  .brief-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px;box-shadow:var(--shadow);border-top:3px solid var(--accent);}
+  .brief-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+  .brief-title{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent);}
+  .brief-text{font-size:13px;line-height:1.8;color:var(--text);}
+  .brief-placeholder{font-size:12px;color:var(--muted);font-style:italic;}
 
-  .ai-analyzing { font-size: 11px; color: var(--accent2); display: flex; align-items: center; gap: 5px; padding: 6px 10px; background: var(--accent-light); border-radius: 6px; margin-bottom: 8px; }
-  .spinner { width: 10px; height: 10px; border: 1.5px solid transparent; border-top-color: var(--accent2); border-radius: 50%; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center;gap:12px;}
+  .empty-icon{font-size:48px;opacity:0.3;}
+  .empty-state h3{font-size:16px;color:var(--text2);}
+  .empty-state p{font-size:13px;color:var(--muted);max-width:300px;line-height:1.6;}
 
-  /* BRIEF */
-  .brief-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; box-shadow: var(--shadow); border-top: 3px solid var(--accent); }
-  .brief-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-  .brief-title { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
-  .brief-text { font-size: 13px; line-height: 1.8; color: var(--text); }
-  .brief-placeholder { font-size: 12px; color: var(--muted); font-style: italic; }
+  .skeleton{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;animation:shimmer 1.5s infinite;}
+  .skel-line{background:var(--border);border-radius:4px;height:12px;margin-bottom:8px;}
+  @keyframes shimmer{0%,100%{opacity:1;}50%{opacity:0.5;}}
 
-  /* EMPTY / LOADING */
-  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 20px; text-align: center; gap: 12px; }
-  .empty-icon { font-size: 48px; opacity: 0.3; }
-  .empty-state h3 { font-size: 16px; color: var(--text2); }
-  .empty-state p { font-size: 13px; color: var(--muted); max-width: 300px; line-height: 1.6; }
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--text);color:#fff;border-radius:8px;padding:10px 16px;font-size:13px;z-index:999;display:none;box-shadow:var(--shadow-md);}
+  .toast.show{display:block;animation:slideUp 0.3s ease;}
+  @keyframes slideUp{from{transform:translateY(10px);opacity:0;}to{transform:translateY(0);opacity:1;}}
 
-  .skeleton { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; animation: shimmer 1.5s infinite; }
-  .skel-line { background: var(--border); border-radius: 4px; height: 12px; margin-bottom: 8px; }
-  @keyframes shimmer { 0%,100%{opacity:1;} 50%{opacity:0.5;} }
-
-  /* TOAST */
-  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--text); color: #fff; border-radius: 8px; padding: 10px 16px; font-size: 13px; z-index: 999; display: none; box-shadow: var(--shadow-md); }
-  .toast.show { display: block; animation: slideUp 0.3s ease; }
-  @keyframes slideUp { from{transform:translateY(10px);opacity:0;} to{transform:translateY(0);opacity:1;} }
-
-  ::-webkit-scrollbar { width: 5px; }
-  ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  ::-webkit-scrollbar{width:5px;}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
 </style>
 </head>
 <body>
@@ -206,8 +175,8 @@
 </header>
 
 <div class="app">
-  <!-- SIDEBAR -->
   <div class="sidebar">
+    <!-- KEYWORDS -->
     <div>
       <div class="sidebar-label">Kata Kunci Cepat</div>
       <div class="keyword-chips">
@@ -221,14 +190,35 @@
       </div>
     </div>
 
+    <!-- SEARCH -->
     <div class="input-group">
       <div class="sidebar-label">Pencarian Kustom</div>
       <input type="text" id="searchInput" placeholder="Kata kunci..." value="PLN Papua"/>
-      <input type="date" id="dateFrom"/>
-      <input type="date" id="dateTo"/>
+      <input type="date" id="dateFrom" title="Dari tanggal"/>
+      <input type="date" id="dateTo" title="Sampai tanggal"/>
       <button class="btn btn-primary" onclick="fetchNews()" id="searchBtn">🔍 Cari Berita</button>
     </div>
 
+    <!-- RSS MANAGER -->
+    <div>
+      <div class="sidebar-label">Sumber RSS Tambahan</div>
+      <div class="rss-list" id="rssList"></div>
+      <div class="rss-add-form">
+        <input type="text" id="rssName" placeholder="Nama media (contoh: Koreri)" style="font-size:11px;padding:6px 8px;"/>
+        <div class="rss-add-row">
+          <input type="text" id="rssUrl" placeholder="URL RSS feed..."/>
+          <button class="btn-add" onclick="addRssFeed()">+ Tambah</button>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.5">
+        Contoh aktif:<br/>
+        antaranews.com/rss/terkini.xml<br/>
+        koreri.com/feed<br/>
+        kabarpapua.co/feed
+      </div>
+    </div>
+
+    <!-- FILTERS -->
     <div>
       <div class="sidebar-label">Filter Tone</div>
       <div class="filter-row">
@@ -238,16 +228,16 @@
         <div class="filter-btn" onclick="filterTone('netral',this)">— Net</div>
       </div>
     </div>
-
     <div>
       <div class="sidebar-label">Filter Sumber</div>
-      <div class="filter-row">
+      <div id="sourceFilters" class="filter-row">
         <div class="filter-btn active" onclick="filterSource('semua',this)">Semua</div>
         <div class="filter-btn" onclick="filterSource('newsapi',this)">NewsAPI</div>
         <div class="filter-btn" onclick="filterSource('gnews',this)">GNews</div>
       </div>
     </div>
 
+    <!-- BOOKMARKS -->
     <div>
       <div class="sidebar-label">Tersimpan</div>
       <div id="bookmarkCount" style="font-size:12px;color:var(--muted);margin-bottom:8px">0 artikel ditandai</div>
@@ -255,9 +245,8 @@
     </div>
   </div>
 
-  <!-- MAIN -->
   <div class="main">
-    <!-- DAILY BRIEF -->
+    <!-- BRIEF -->
     <div class="brief-card">
       <div class="brief-header">
         <span class="brief-title">✦ Daily Brief AI</span>
@@ -295,7 +284,6 @@
       <button class="export-btn" onclick="exportExcel()">📥 Export Excel</button>
     </div>
 
-    <!-- NEWS GRID -->
     <div id="newsGrid" class="news-grid">
       <div class="empty-state">
         <div class="empty-icon">📡</div>
@@ -305,16 +293,69 @@
     </div>
   </div>
 </div>
-
 <div class="toast" id="toast"></div>
 
 <script>
 let allArticles = [];
 let filteredArticles = [];
 let bookmarks = JSON.parse(localStorage.getItem('pln_bookmarks') || '[]');
+let rssFeeds = JSON.parse(localStorage.getItem('pln_rss_feeds') || '[]');
 let currentFilter = { tone: 'semua', source: 'semua' };
 let showingBookmarks = false;
 let analyzeController = null;
+
+// Default RSS feeds
+const DEFAULT_FEEDS = [
+  { name: 'ANTARA Papua', url: 'https://www.antaranews.com/rss/terkini.xml', enabled: true },
+];
+
+function initRssFeeds() {
+  if (rssFeeds.length === 0) {
+    rssFeeds = [...DEFAULT_FEEDS];
+    saveRssFeeds();
+  }
+  renderRssList();
+}
+
+function saveRssFeeds() {
+  localStorage.setItem('pln_rss_feeds', JSON.stringify(rssFeeds));
+}
+
+function renderRssList() {
+  const list = document.getElementById('rssList');
+  if (!rssFeeds.length) { list.innerHTML = '<div style="font-size:11px;color:var(--muted)">Belum ada feed ditambahkan</div>'; return; }
+  list.innerHTML = rssFeeds.map((f, i) => `
+    <div class="rss-item">
+      <div class="rss-item-name" title="${f.url}">${f.name}</div>
+      <div style="display:flex;align-items:center;gap:5px">
+        <div class="rss-item-toggle ${f.enabled?'on':''}" onclick="toggleRss(${i})" title="${f.enabled?'Aktif - klik nonaktifkan':'Nonaktif - klik aktifkan'}"></div>
+        <button class="btn-danger" onclick="removeRss(${i})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function toggleRss(i) {
+  rssFeeds[i].enabled = !rssFeeds[i].enabled;
+  saveRssFeeds(); renderRssList();
+}
+
+function removeRss(i) {
+  rssFeeds.splice(i, 1);
+  saveRssFeeds(); renderRssList();
+}
+
+function addRssFeed() {
+  const name = document.getElementById('rssName').value.trim();
+  const url = document.getElementById('rssUrl').value.trim();
+  if (!name || !url) return showToast('⚠ Isi nama dan URL feed');
+  if (!url.startsWith('http')) return showToast('⚠ URL harus dimulai dengan http');
+  if (rssFeeds.some(f => f.url === url)) return showToast('⚠ Feed sudah ada');
+  rssFeeds.push({ name, url, enabled: true });
+  saveRssFeeds(); renderRssList();
+  document.getElementById('rssName').value = '';
+  document.getElementById('rssUrl').value = '';
+  showToast(`✅ ${name} ditambahkan`);
+}
 
 function setKeyword(kw, el) {
   document.getElementById('searchInput').value = kw;
@@ -331,17 +372,17 @@ function getToneClass(tone) {
   return 'netral';
 }
 
-function getToneLabel(tone) {
-  const c = getToneClass(tone);
-  if (c === 'positif') return 'Positif';
-  if (c === 'negatif') return 'Negatif';
-  return 'Netral';
+function inDateRange(publishedAt, from, to) {
+  if (!from && !to) return true;
+  const d = new Date(publishedAt);
+  if (from && d < new Date(from)) return false;
+  if (to && d > new Date(to + 'T23:59:59')) return false;
+  return true;
 }
 
 async function fetchNews() {
   const q = document.getElementById('searchInput').value.trim();
-  if (!q) return showToast('⚠ Masukkan kata kunci terlebih dahulu');
-
+  if (!q) return showToast('⚠ Masukkan kata kunci');
   const from = document.getElementById('dateFrom').value;
   const to = document.getElementById('dateTo').value;
 
@@ -354,36 +395,66 @@ async function fetchNews() {
   allArticles = [];
   showingBookmarks = false;
 
-  try {
-    const [newsApiRes, gnewsRes] = await Promise.allSettled([
-      fetch(`/api/news?q=${encodeURIComponent(q)}&pageSize=50${from?'&from='+from:''}${to?'&to='+to:''}`).then(r=>r.json()),
-      fetch(`/api/gnews?q=${encodeURIComponent(q)}`).then(r=>r.json())
-    ]);
+  // Build fetch promises
+  const fetches = [
+    fetch(`/api/news?q=${encodeURIComponent(q)}&pageSize=50${from?'&from='+from:''}${to?'&to='+to:''}`).then(r=>r.json()).catch(()=>null),
+    fetch(`/api/gnews?q=${encodeURIComponent(q)}`).then(r=>r.json()).catch(()=>null),
+  ];
 
-    let articles = [];
-    if (newsApiRes.status === 'fulfilled' && newsApiRes.value?.articles) {
-      newsApiRes.value.articles.forEach(a => articles.push({...a, _source:'newsapi'}));
-    }
-    if (gnewsRes.status === 'fulfilled' && gnewsRes.value?.articles) {
-      gnewsRes.value.articles.forEach(a => {
+  // Add enabled RSS feeds
+  const enabledFeeds = rssFeeds.filter(f => f.enabled);
+  enabledFeeds.forEach(f => {
+    fetches.push(
+      fetch(`/api/rss?url=${encodeURIComponent(f.url)}&q=${encodeURIComponent(q)}`)
+        .then(r=>r.json())
+        .then(d => ({ ...d, _feedName: f.name }))
+        .catch(() => null)
+    );
+  });
+
+  const results = await Promise.allSettled(fetches);
+  let articles = [];
+
+  // NewsAPI
+  const newsApiData = results[0].status === 'fulfilled' ? results[0].value : null;
+  if (newsApiData?.articles) {
+    newsApiData.articles.forEach(a => articles.push({...a, _source:'newsapi'}));
+  }
+
+  // Google News RSS
+  const gnewsData = results[1].status === 'fulfilled' ? results[1].value : null;
+  if (gnewsData?.articles) {
+    gnewsData.articles.forEach(a => {
+      if (!articles.some(e => similarity(e.title, a.title) > 0.7))
+        articles.push({...a, _source:'gnews'});
+    });
+  }
+
+  // Custom RSS feeds
+  for (let i = 0; i < enabledFeeds.length; i++) {
+    const rssData = results[i+2].status === 'fulfilled' ? results[i+2].value : null;
+    if (rssData?.articles) {
+      rssData.articles.forEach(a => {
         if (!articles.some(e => similarity(e.title, a.title) > 0.7))
-          articles.push({...a, _source:'gnews'});
+          articles.push({...a, _source: 'rss_' + enabledFeeds[i].name, source: { name: enabledFeeds[i].name }});
       });
     }
-
-    articles.sort((a,b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-    allArticles = articles;
-
-    document.getElementById('hdr-total').textContent = articles.length;
-    document.getElementById('hdr-time').textContent = new Date().toLocaleTimeString('id-ID');
-
-    applyFilters();
-    renderArticles(filteredArticles);
-    startAnalyzeAll();
-
-  } catch(err) {
-    showToast('❌ Gagal mengambil berita: ' + err.message);
   }
+
+  // Filter by date (applies to ALL sources)
+  if (from || to) {
+    articles = articles.filter(a => inDateRange(a.publishedAt, from, to));
+  }
+
+  articles.sort((a,b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+  allArticles = articles;
+
+  document.getElementById('hdr-total').textContent = articles.length;
+  document.getElementById('hdr-time').textContent = new Date().toLocaleTimeString('id-ID');
+
+  applyFilters();
+  renderArticles(filteredArticles);
+  startAnalyzeAll();
 
   btn.disabled = false;
   btn.innerHTML = '🔍 Cari Berita';
@@ -394,15 +465,6 @@ function similarity(a, b) {
   const sb = new Set(b.toLowerCase().split(' '));
   const inter = [...sa].filter(x => sb.has(x)).length;
   return inter / Math.max(sa.size, sb.size);
-}
-
-async function resolveGNewsUrl(url) {
-  if (!url || !url.includes('news.google.com')) return url;
-  try {
-    const res = await fetch(`/api/resolve?url=${encodeURIComponent(url)}`);
-    const data = await res.json();
-    return data.resolved || url;
-  } catch { return url; }
 }
 
 async function startAnalyzeAll() {
@@ -418,20 +480,6 @@ async function startAnalyzeAll() {
   analyzeController = new AbortController();
   const signal = analyzeController.signal;
 
-  // Resolve Google News URLs in background
-  articles.forEach(async (a, i) => {
-    if (a._source === 'gnews') {
-      const resolved = await resolveGNewsUrl(a.url);
-      if (resolved !== a.url) {
-        a._resolvedUrl = resolved;
-        const el = document.getElementById(`link-${i}`);
-        if (el) el.href = resolved;
-        const tl = document.getElementById(`title-link-${i}`);
-        if (tl) tl.href = resolved;
-      }
-    }
-  });
-
   for (let i = 0; i < articles.length; i++) {
     if (signal.aborted) break;
     const a = articles[i];
@@ -444,10 +492,7 @@ async function startAnalyzeAll() {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          title: a.title || '',
-          description: (a.description || '').replace(/<[^>]+>/g,'')
-        }),
+        body: JSON.stringify({ title: a.title||'', description: (a.description||'').replace(/<[^>]+>/g,'') }),
         signal
       });
       const data = await res.json();
@@ -458,21 +503,19 @@ async function startAnalyzeAll() {
       a._analyzed = true;
     } catch(e) {
       if (e.name === 'AbortError') break;
-      a._tone = 'netral';
-      a._analyzed = true;
+      a._tone = 'netral'; a._analyzed = true;
     }
 
     a._analyzing = false;
     done++;
 
-    const pct = Math.round(done / total * 100);
-    document.getElementById('progressFill').style.width = pct + '%';
+    const pct = Math.round(done/total*100);
+    document.getElementById('progressFill').style.width = pct+'%';
     document.getElementById('progressCount').textContent = `${done}/${total}`;
     document.getElementById('progressText').textContent = `Menganalisis artikel... ${pct}%`;
 
     updateCard(i);
     updateStats(filteredArticles);
-
     if (i % 5 === 4) await new Promise(r => setTimeout(r, 400));
   }
 
@@ -481,59 +524,54 @@ async function startAnalyzeAll() {
 }
 
 function renderArticles(articles) {
-  const grid = document.getElementById('newsGrid');
   updateStats(articles);
   document.getElementById('resultLabel').textContent = `Menampilkan ${articles.length} artikel`;
-
+  const grid = document.getElementById('newsGrid');
   if (!articles.length) {
     grid.innerHTML = `<div class="empty-state"><div class="empty-icon">🔎</div><h3>Tidak ada hasil</h3><p>Coba kata kunci lain atau ubah filter.</p></div>`;
     return;
   }
-  grid.innerHTML = articles.map((a,i) => renderCard(a, i)).join('');
+  grid.innerHTML = articles.map((a,i) => renderCard(a,i)).join('');
 }
 
 function renderCard(a, i) {
-  const globalIdx = allArticles.indexOf(a);
+  const gi = allArticles.indexOf(a);
   const date = a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '—';
   const tc = a._tone ? getToneClass(a._tone) : '';
-  const url = a._resolvedUrl || a.url || '#';
-  const srcName = a.source?.name || (a._source === 'gnews' ? 'Google News' : 'NewsAPI');
+  const url = a.url || '#';
+  const srcName = a.source?.name || 'RSS';
   const isBookmarked = bookmarks.some(b => b.url === a.url);
 
   const resumeHtml = a._analyzing
     ? `<div class="ai-analyzing"><div class="spinner"></div> AI menganalisis...</div>`
     : a._resume
       ? `<div class="card-resume">${a._resume}</div>`
-      : a._analyzed
-        ? ''
-        : `<div class="card-resume" style="font-style:italic;color:var(--muted)">${(a.description||'').replace(/<[^>]+>/g,'').substring(0,150) || '—'}</div>`;
+      : a._analyzed ? ''
+      : `<div class="card-resume" style="font-style:italic;color:var(--muted)">${(a.description||'').replace(/<[^>]+>/g,'').substring(0,150)||'—'}</div>`;
 
   const spkHtml = [
     a._spkInternal ? `<span class="spk-badge internal">🏢 ${a._spkInternal}</span>` : '',
     a._spkExternal ? `<span class="spk-badge external">👤 ${a._spkExternal}</span>` : ''
   ].filter(Boolean).join('');
 
-  return `
-    <div class="article-card ${tc} ${isBookmarked?'bookmarked':''}" id="card-${globalIdx}">
-      <div class="card-top">
-        <div class="card-meta">
-          <span class="source-badge">${srcName}</span>
-          <span class="date-badge">${date}</span>
-          ${tc ? `<span class="tone-badge ${tc}">${getToneLabel(a._tone)}</span>` : ''}
-        </div>
-        <div class="card-actions">
-          <button class="icon-btn ${isBookmarked?'active':''}" onclick="toggleBookmark(${globalIdx})" title="Simpan">📌</button>
-          <a href="${url}" id="link-${globalIdx}" target="_blank" rel="noopener" style="text-decoration:none">
-            <button class="icon-btn" title="Buka artikel">↗</button>
-          </a>
-        </div>
+  return `<div class="article-card ${tc}" id="card-${gi}">
+    <div class="card-top">
+      <div class="card-meta">
+        <span class="source-badge">${srcName}</span>
+        <span class="date-badge">${date}</span>
+        ${tc ? `<span class="tone-badge ${tc}">${tc.charAt(0).toUpperCase()+tc.slice(1)}</span>` : ''}
       </div>
-      <div class="card-title">
-        <a href="${url}" id="title-link-${globalIdx}" target="_blank" rel="noopener">${a.title||'Tanpa judul'}</a>
+      <div class="card-actions">
+        <button class="icon-btn ${isBookmarked?'active':''}" onclick="toggleBookmark(${gi})" title="Simpan">📌</button>
+        <a href="${url}" target="_blank" rel="noopener" style="text-decoration:none">
+          <button class="icon-btn" title="Buka artikel">↗</button>
+        </a>
       </div>
-      ${resumeHtml}
-      ${spkHtml ? `<div class="card-footer">${spkHtml}</div>` : ''}
-    </div>`;
+    </div>
+    <div class="card-title"><a href="${url}" target="_blank" rel="noopener">${a.title||'Tanpa judul'}</a></div>
+    ${resumeHtml}
+    ${spkHtml ? `<div class="card-footer">${spkHtml}</div>` : ''}
+  </div>`;
 }
 
 function updateCard(idx) {
@@ -541,23 +579,22 @@ function updateCard(idx) {
   if (!el) return;
   const a = allArticles[idx];
   if (!a) return;
-  const fi = filteredArticles.indexOf(a);
-  el.outerHTML = renderCard(a, fi >= 0 ? fi : idx);
+  el.outerHTML = renderCard(a, filteredArticles.indexOf(a));
 }
 
 function updateStats(articles) {
-  const analyzed = articles.filter(a => a._analyzed);
+  const an = articles.filter(a=>a._analyzed);
   document.getElementById('statTotal').textContent = articles.length;
-  document.getElementById('statPos').textContent = analyzed.filter(a=>a._tone==='positif').length;
-  document.getElementById('statNeg').textContent = analyzed.filter(a=>a._tone==='negatif').length;
-  document.getElementById('statNeu').textContent = analyzed.filter(a=>a._tone==='netral').length;
+  document.getElementById('statPos').textContent = an.filter(a=>a._tone==='positif').length;
+  document.getElementById('statNeg').textContent = an.filter(a=>a._tone==='negatif').length;
+  document.getElementById('statNeu').textContent = an.filter(a=>a._tone==='netral').length;
 }
 
 function applyFilters() {
-  let articles = [...allArticles];
-  if (currentFilter.tone !== 'semua') articles = articles.filter(a => a._tone === currentFilter.tone);
-  if (currentFilter.source !== 'semua') articles = articles.filter(a => a._source === currentFilter.source);
-  filteredArticles = articles;
+  let a = [...allArticles];
+  if (currentFilter.tone !== 'semua') a = a.filter(x => x._tone === currentFilter.tone);
+  if (currentFilter.source !== 'semua') a = a.filter(x => x._source === currentFilter.source || (currentFilter.source === 'rss' && x._source?.startsWith('rss_')));
+  filteredArticles = a;
 }
 
 function filterTone(val, el) {
@@ -569,17 +606,14 @@ function filterTone(val, el) {
 
 function filterSource(val, el) {
   currentFilter.source = val;
-  document.querySelectorAll('.filter-row')[1].querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.filter-row')[1]?.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
   applyFilters(); renderArticles(filteredArticles);
 }
 
 function sortArticles(by) {
   if (by === 'date') filteredArticles.sort((a,b)=>new Date(b.publishedAt)-new Date(a.publishedAt));
-  if (by === 'tone') {
-    const ord = {positif:0,netral:1,negatif:2};
-    filteredArticles.sort((a,b)=>(ord[a._tone]??3)-(ord[b._tone]??3));
-  }
+  if (by === 'tone') { const o={positif:0,netral:1,negatif:2}; filteredArticles.sort((a,b)=>(o[a._tone]??3)-(o[b._tone]??3)); }
   renderArticles(filteredArticles);
 }
 
@@ -601,22 +635,19 @@ function toggleBookmarks() {
 
 function exportExcel() {
   const articles = showingBookmarks ? bookmarks : filteredArticles;
-  if (!articles.length) return showToast('⚠ Tidak ada artikel untuk diekspor');
-
+  if (!articles.length) return showToast('⚠ Tidak ada artikel');
   const rows = articles.map(a => ({
     'Tanggal': a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('id-ID') : '',
-    'Judul Berita': a.title || '',
-    'Link': a._resolvedUrl || a.url || '',
-    'Nama Media': a.source?.name || '',
-    'Tone Pemberitaan': getToneLabel(a._tone) || '',
-    'Spokesperson Internal': a._spkInternal || '',
-    'Spokesperson Eksternal': a._spkExternal || '',
-    'Resume': a._resume || ''
+    'Judul Berita': a.title||'',
+    'Link': a.url||'',
+    'Nama Media': a.source?.name||'',
+    'Tone Pemberitaan': a._tone ? a._tone.charAt(0).toUpperCase()+a._tone.slice(1) : '',
+    'Spokesperson Internal': a._spkInternal||'',
+    'Spokesperson Eksternal': a._spkExternal||'',
+    'Resume': a._resume||''
   }));
-
   const ws = XLSX.utils.json_to_sheet(rows);
   ws['!cols'] = [{wch:12},{wch:65},{wch:50},{wch:22},{wch:16},{wch:35},{wch:35},{wch:80}];
-
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Monitoring Berita');
   XLSX.writeFile(wb, `PLN-News-${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -630,10 +661,7 @@ async function generateBrief() {
   document.getElementById('briefContent').innerHTML = '<div class="ai-analyzing"><div class="spinner"></div> AI sedang menganalisis seluruh pemberitaan...</div>';
 
   const keyword = document.getElementById('searchInput').value;
-  const payload = allArticles.map(a => ({
-    title: a.title || '',
-    tone: a._tone || ''
-  }));
+  const payload = allArticles.map(a => ({ title: a.title||'', tone: a._tone||'' }));
 
   try {
     const res = await fetch('/api/brief', {
@@ -644,21 +672,15 @@ async function generateBrief() {
     const data = await res.json();
     if (data.brief) {
       document.getElementById('briefContent').innerHTML = `<div class="brief-text">${data.brief.replace(/\n/g,'<br/>')}</div>`;
-    } else {
-      throw new Error('empty');
-    }
+    } else throw new Error('empty');
   } catch {
-    document.getElementById('briefContent').innerHTML = `<div class="brief-text" style="color:var(--neg)">Gagal generate brief. Pastikan Gemini API key sudah dikonfigurasi di Vercel.</div>`;
+    document.getElementById('briefContent').innerHTML = `<div style="color:var(--neg);font-size:13px">Gagal generate brief. Coba lagi setelah analisis selesai.</div>`;
   }
-
   btn.disabled = false; btn.textContent = 'Generate';
 }
 
 function showLoading() {
-  document.getElementById('newsGrid').innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:8px">
-      ${[...Array(4)].map(()=>`<div class="skeleton"><div class="skel-line" style="width:25%;margin-bottom:10px"></div><div class="skel-line" style="width:85%"></div><div class="skel-line" style="width:70%"></div></div>`).join('')}
-    </div>`;
+  document.getElementById('newsGrid').innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">${[...Array(4)].map(()=>`<div class="skeleton"><div class="skel-line" style="width:25%;margin-bottom:10px"></div><div class="skel-line" style="width:85%"></div><div class="skel-line" style="width:70%"></div></div>`).join('')}</div>`;
 }
 
 function showToast(msg) {
@@ -668,6 +690,7 @@ function showToast(msg) {
 }
 
 document.getElementById('bookmarkCount').textContent = `${bookmarks.length} artikel ditandai`;
+initRssFeeds();
 </script>
 </body>
 </html>
