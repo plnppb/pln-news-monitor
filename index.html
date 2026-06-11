@@ -627,35 +627,28 @@ async function generateBrief() {
   if (!allArticles.length) return showToast('⚠ Cari berita dulu');
   const btn = document.getElementById('briefBtn');
   btn.disabled = true; btn.textContent = 'Generating...';
-  document.getElementById('briefContent').innerHTML = '<div class="ai-analyzing"><div class="spinner"></div> AI sedang merangkum semua berita...</div>';
+  document.getElementById('briefContent').innerHTML = '<div class="ai-analyzing"><div class="spinner"></div> AI sedang menganalisis seluruh pemberitaan...</div>';
 
-  const analyzed = allArticles.filter(a=>a._analyzed);
-  const pos = analyzed.filter(a=>a._tone==='positif').length;
-  const neg = analyzed.filter(a=>a._tone==='negatif').length;
-  const neu = analyzed.filter(a=>a._tone==='netral').length;
-  const titles = allArticles.slice(0,20).map(a=>`- ${a.title}`).join('\n');
-
-  const prompt = `Kamu adalah analis media senior untuk PLN UIW Papua & Papua Barat. Berdasarkan ${allArticles.length} artikel berita (${pos} positif, ${neg} negatif, ${neu} netral), tulis daily media brief dalam 3-4 kalimat bahasa Indonesia yang ringkas, informatif, dan profesional. Sertakan: tema utama pemberitaan, tone umum, dan isu kritis yang perlu diperhatikan jika ada.
-
-Daftar judul berita:
-${titles}`;
+  const keyword = document.getElementById('searchInput').value;
+  const payload = allArticles.map(a => ({
+    title: a.title || '',
+    tone: a._tone || ''
+  }));
 
   try {
-    const res = await fetch('/api/analyze', {
+    const res = await fetch('/api/brief', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ title: prompt, description: 'BRIEF_REQUEST' })
+      body: JSON.stringify({ articles: payload, keyword })
     });
     const data = await res.json();
-    const brief = data.resume || data.summary || '';
-    if (brief && brief !== 'Gagal menganalisis artikel ini.') {
-      document.getElementById('briefContent').innerHTML = `<div class="brief-text">${brief}</div>`;
+    if (data.brief) {
+      document.getElementById('briefContent').innerHTML = `<div class="brief-text">${data.brief.replace(/\n/g,'<br/>')}</div>`;
     } else {
       throw new Error('empty');
     }
   } catch {
-    const kw = document.getElementById('searchInput').value;
-    document.getElementById('briefContent').innerHTML = `<div class="brief-text">Monitoring pemberitaan "<strong>${kw}</strong>" hari ini mencatat <strong>${allArticles.length} artikel</strong> dari berbagai media. Dari jumlah tersebut, ${pos} artikel bertenor positif, ${neg} negatif, dan ${neu} netral. ${neg > pos ? 'Terdapat sejumlah pemberitaan bernada kritis yang perlu mendapat perhatian tim komunikasi.' : 'Secara umum pemberitaan berjalan kondusif.'}</div>`;
+    document.getElementById('briefContent').innerHTML = `<div class="brief-text" style="color:var(--neg)">Gagal generate brief. Pastikan Gemini API key sudah dikonfigurasi di Vercel.</div>`;
   }
 
   btn.disabled = false; btn.textContent = 'Generate';
