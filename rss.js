@@ -1,7 +1,7 @@
 import https from 'https';
 import http from 'http';
 
-async function fetchUrl(urlStr) {
+async function fetchUrl(urlStr, rejectUnauthorized = false) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlStr);
     const isHttps = url.protocol === 'https:';
@@ -12,7 +12,7 @@ async function fetchUrl(urlStr) {
       port: url.port || (isHttps ? 443 : 80),
       path: url.pathname + url.search,
       method: 'GET',
-      rejectUnauthorized: false, // bypass SSL cert errors
+      rejectUnauthorized,
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; NewsBot/1.0)',
         'Accept': 'application/rss+xml, application/xml, text/xml, */*',
@@ -21,11 +21,9 @@ async function fetchUrl(urlStr) {
     };
 
     const req = lib.request(options, (res) => {
-      // Follow redirects
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return fetchUrl(res.headers.location).then(resolve).catch(reject);
+        return fetchUrl(res.headers.location, rejectUnauthorized).then(resolve).catch(reject);
       }
-
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => resolve(data));
@@ -37,6 +35,27 @@ async function fetchUrl(urlStr) {
   });
 }
 
+async function fetchWithFallback(url) {
+  // Try as-is first
+  try {
+    return await fetchUrl(url, false);
+  } catch (e1) {
+    // If https fails, try with rejectUnauthorized=false
+    if (url.startsWith('https://')) {
+      try {
+        return await fetchUrl(url, false); // already false, try http fallback
+      } catch {}
+      // Try http version
+      try {
+        return await fetchUrl(url.replace('https://', 'http://'), false);
+      } catch (e2) {
+        throw new Error(`fetch failed (tried https and http): ${e2.message}`);
+      }
+    }
+    throw e1;
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -46,7 +65,7 @@ export default async function handler(req, res) {
   if (!url) return res.status(400).json({ error: 'URL required' });
 
   try {
-    const xml = await fetchUrl(url);
+    const xml = await fetchWithFallback(url);
 
     const items = [];
     const itemRegex = /<item>([\s\S]*?)<\/item>/g;
@@ -67,7 +86,6 @@ export default async function handler(req, res) {
 
       if (!title) continue;
 
-      // Filter by keyword if provided
       if (q) {
         const keywords = q.toLowerCase().split(/\s+/);
         const text = (title + ' ' + description).toLowerCase();
@@ -89,3 +107,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Failed to fetch RSS', detail: error.message });
   }
 }
+// Note: file already updated above
