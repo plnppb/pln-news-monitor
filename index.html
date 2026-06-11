@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PLN News Monitor — UIW Papua & Papua Barat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e2d45;
+    --accent: #00d4aa;
+    --accent2: #0088ff;
+    --danger: #ff4d6d;
+    --warn: #ffb703;
+    --text: #e8edf5;
+    --muted: #6b7a99;
+    --positif: #00d4aa;
+    --negatif: #ff4d6d;
+    --netral: #6b7a99;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* HEADER */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .logo-text { font-size: 15px; font-weight: 600; letter-spacing: 0.01em; }
+  .logo-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .header-stats {
+    display: flex; gap: 20px; align-items: center;
+  }
+  .stat-pill {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .stat-pill span { color: var(--text); font-weight: 600; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  /* LAYOUT */
+  .app { display: flex; height: calc(100vh - 60px); }
+  .sidebar {
+    width: 280px; min-width: 280px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 20px 16px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .main { flex: 1; overflow-y: auto; padding: 24px; }
+
+  /* SIDEBAR SECTIONS */
+  .sidebar-label {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 10px;
+  }
+  .keyword-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 600; }
+
+  .input-group { display: flex; flex-direction: column; gap: 8px; }
+  input[type=text], input[type=date] {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 9px 12px;
+    width: 100%;
+    transition: border 0.15s;
+    font-family: 'Inter', sans-serif;
+  }
+  input[type=text]:focus, input[type=date]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.6); }
+
+  .btn {
+    border: none; border-radius: 8px; cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600; font-size: 13px;
+    padding: 10px 16px;
+    transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #000;
+    width: 100%;
+  }
+  .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* FILTER TOGGLES */
+  .filter-row { display: flex; gap: 6px; }
+  .filter-btn {
+    flex: 1; padding: 7px 4px; font-size: 11px; font-weight: 600;
+    border-radius: 6px; cursor: pointer; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--muted);
+    transition: all 0.15s; text-align: center;
+  }
+  .filter-btn:hover { border-color: var(--muted); color: var(--text); }
+  .filter-btn.active { background: var(--surface); border-color: var(--accent); color: var(--accent); }
+
+  /* STATS BAR */
+  .stats-bar {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 12px; margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .stat-card .num { font-size: 24px; font-weight: 700; font-family: 'Playfair Display', serif; }
+  .stat-card .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .stat-card.pos .num { color: var(--positif); }
+  .stat-card.neg .num { color: var(--negatif); }
+  .stat-card.neu .num { color: var(--netral); }
+
+  /* TOOLBAR */
+  .toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .toolbar-left { display: flex; gap: 8px; align-items: center; }
+  .sort-select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .export-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .export-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* NEWS GRID */
+  .news-grid { display: flex; flex-direction: column; gap: 10px; }
+
+  .article-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    transition: border-color 0.15s, transform 0.15s;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+  .article-card::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--border);
+    transition: background 0.15s;
+  }
+  .article-card:hover { border-color: #2a3a5a; transform: translateX(2px); }
+  .article-card.positif::before { background: var(--positif); }
+  .article-card.negatif::before { background: var(--negatif); }
+  .article-card.netral::before { background: var(--netral); }
+  .article-card.bookmarked { border-color: var(--warn); }
+
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+  .card-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .source-badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .date-badge { font-size: 11px; color: var(--muted); }
+  .sentiment-badge {
+    padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .sentiment-badge.positif { background: rgba(0,212,170,0.15); color: var(--positif); }
+  .sentiment-badge.negatif { background: rgba(255,77,109,0.15); color: var(--negatif); }
+  .sentiment-badge.netral { background: rgba(107,122,153,0.15); color: var(--netral); }
+
+  .card-actions { display: flex; gap: 6px; }
+  .icon-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 14px; padding: 2px 4px;
+    transition: color 0.15s;
+    border-radius: 4px;
+  }
+  .icon-btn:hover { color: var(--text); background: var(--surface2); }
+  .icon-btn.active { color: var(--warn); }
+
+  .card-title {
+    font-size: 14px; font-weight: 600; line-height: 1.4;
+    margin-bottom: 6px; color: var(--text);
+  }
+  .card-summary {
+    font-size: 12px; color: var(--muted); line-height: 1.6;
+    margin-bottom: 10px;
+  }
+  .card-footer { display: flex; justify-content: space-between; align-items: center; }
+  .tone-badge {
+    font-size: 10px; color: var(--muted);
+    background: var(--surface2);
+    padding: 2px 8px; border-radius: 4px;
+    text-transform: capitalize;
+  }
+  .score-bar { display: flex; align-items: center; gap: 6px; }
+  .score-label { font-size: 10px; color: var(--muted); }
+  .score-dots { display: flex; gap: 2px; }
+  .score-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); }
+  .score-dot.filled { background: var(--accent2); }
+
+  .ai-analyzing {
+    font-size: 11px; color: var(--accent);
+    display: flex; align-items: center; gap: 4px;
+  }
+  .spinner {
+    width: 10px; height: 10px; border: 1.5px solid transparent;
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* EMPTY / LOADING */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 80px 20px; text-align: center;
+    color: var(--muted); gap: 12px;
+  }
+  .empty-icon { font-size: 48px; opacity: 0.3; }
+  .empty-state h3 { font-size: 16px; color: var(--text); }
+  .empty-state p { font-size: 13px; max-width: 300px; line-height: 1.6; }
+
+  .loading-cards { display: flex; flex-direction: column; gap: 10px; }
+  .skeleton {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    animation: shimmer 1.5s infinite;
+  }
+  .skel-line {
+    background: var(--surface2);
+    border-radius: 4px;
+    height: 12px;
+    margin-bottom: 8px;
+  }
+  @keyframes shimmer {
+    0%,100% { opacity: 1; } 50% { opacity: 0.5; }
+  }
+
+  /* TOAST */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px;
+    font-size: 13px; z-index: 999;
+    animation: slideUp 0.3s ease;
+    display: none;
+  }
+  .toast.show { display: block; }
+  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  /* DAILY BRIEF */
+  .brief-card {
+    background: linear-gradient(135deg, rgba(0,212,170,0.08), rgba(0,136,255,0.08));
+    border: 1px solid rgba(0,212,170,0.2);
+    border-radius: 10px; padding: 16px; margin-bottom: 20px;
+  }
+  .brief-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .brief-title { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+  .brief-text { font-size: 13px; line-height: 1.7; color: var(--text); }
+  .brief-placeholder { font-size: 12px; color: var(--muted); font-style: italic; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .stats-bar { grid-template-columns: repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <div>
+      <div class="logo-text">PLN News Monitor</div>
+      <div class="logo-sub">UIW Papua & Papua Barat</div>
+    </div>
+  </div>
+  <div class="header-stats">
+    <div class="stat-pill"><div class="dot"></div> Live</div>
+    <div class="stat-pill" id="hdr-total">Total: <span>0</span> artikel</div>
+    <div class="stat-pill" id="hdr-time">—</div>
+  </div>
+</header>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div>
+      <div class="sidebar-label">Kata Kunci Cepat</div>
+      <div class="keyword-chips">
+        <div class="chip active" onclick="setKeyword('PLN Papua')">PLN Papua</div>
+        <div class="chip" onclick="setKeyword('PLN Sorong')">PLN Sorong</div>
+        <div class="chip" onclick="setKeyword('PLN Jayapura')">PLN Jayapura</div>
+        <div class="chip" onclick="setKeyword('listrik Papua')">Listrik Papua</div>
+        <div class="chip" onclick="setKeyword('PLN Manokwari')">PLN Manokwari</div>
+        <div class="chip" onclick="setKeyword('pemadaman Papua')">Pemadaman</div>
+        <div class="chip" onclick="setKeyword('energi Papua')">Energi Papua</div>
+      </div>
+    </div>
+
+    <div class="input-group">
+      <div class="sidebar-label">Pencarian Kustom</div>
+      <input type="text" id="searchInput" placeholder="Masukkan kata kunci..." value="PLN Papua"/>
+      <input type="date" id="dateFrom" title="Dari tanggal"/>
+      <input type="date" id="dateTo" title="Sampai tanggal"/>
+      <button class="btn btn-primary" onclick="fetchNews()" id="searchBtn">
+        🔍 Cari Berita
+      </button>
+    </div>
+
+    <div>
+      <div class="sidebar-label">Filter Sentimen</div>
+      <div class="filter-row">
+        <div class="filter-btn active" onclick="filterSentiment('semua', this)">Semua</div>
+        <div class="filter-btn" onclick="filterSentiment('positif', this)" style="color:var(--positif)">✓ Pos</div>
+        <div class="filter-btn" onclick="filterSentiment('negatif', this)" style="color:var(--negatif)">✗ Neg</div>
+        <div class="filter-btn" onclick="filterSentiment('netral', this)">– Net</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="sidebar-label">Filter Sumber</div>
+      <div class="filter-row">
+        <div class="filter-btn active" onclick="filterSource('semua', this)">Semua</div>
+        <div class="filter-btn" onclick="filterSource('newsapi', this)">NewsAPI</div>
+        <div class="filter-btn" onclick="filterSource('gnews', this)">GNews</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="sidebar-label">Tersimpan</div>
+      <div id="bookmarkCount" style="font-size:12px;color:var(--muted)">0 artikel ditandai</div>
+      <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="toggleBookmarks()">📌 Lihat Tersimpan</button>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main">
+
+    <!-- DAILY BRIEF -->
+    <div class="brief-card">
+      <div class="brief-header">
+        <span class="brief-title">✦ Daily Brief AI</span>
+        <button class="btn btn-ghost" onclick="generateBrief()" id="briefBtn">Generate</button>
+      </div>
+      <div id="briefContent" class="brief-placeholder">
+        Cari berita terlebih dahulu, lalu klik Generate untuk mendapatkan ringkasan harian dari AI.
+      </div>
+    </div>
+
+    <!-- STATS BAR -->
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div class="num" id="statTotal">0</div>
+        <div class="lbl">Total Artikel</div>
+      </div>
+      <div class="stat-card pos">
+        <div class="num" id="statPos">0</div>
+        <div class="lbl">Positif</div>
+      </div>
+      <div class="stat-card neg">
+        <div class="num" id="statNeg">0</div>
+        <div class="lbl">Negatif</div>
+      </div>
+      <div class="stat-card neu">
+        <div class="num" id="statNeu">0</div>
+        <div class="lbl">Netral</div>
+      </div>
+    </div>
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <span style="font-size:13px;color:var(--muted)" id="resultLabel">Menampilkan 0 artikel</span>
+        <select class="sort-select" onchange="sortArticles(this.value)">
+          <option value="date">Terbaru</option>
+          <option value="score">Relevansi</option>
+          <option value="sentiment">Sentimen</option>
+        </select>
+      </div>
+      <button class="export-btn" onclick="exportCSV()">⬇ Export CSV</button>
+    </div>
+
+    <!-- NEWS GRID -->
+    <div id="newsGrid" class="news-grid">
+      <div class="empty-state">
+        <div class="empty-icon">📡</div>
+        <h3>Belum ada berita</h3>
+        <p>Pilih kata kunci di sidebar atau ketik pencarian kustom, lalu klik Cari Berita.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let allArticles = [];
+let filteredArticles = [];
+let bookmarks = JSON.parse(localStorage.getItem('pln_bookmarks') || '[]');
+let currentFilter = { sentiment: 'semua', source: 'semua' };
+let showingBookmarks = false;
+
+function setKeyword(kw) {
+  document.getElementById('searchInput').value = kw;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  fetchNews();
+}
+
+async function fetchNews() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) return showToast('⚠ Masukkan kata kunci terlebih dahulu');
+
+  const from = document.getElementById('dateFrom').value;
+  const to = document.getElementById('dateTo').value;
+
+  document.getElementById('searchBtn').disabled = true;
+  document.getElementById('searchBtn').innerHTML = '<div class="spinner"></div> Mencari...';
+  showLoading();
+  allArticles = [];
+  showingBookmarks = false;
+
+  try {
+    const [newsApiData, gnewsData] = await Promise.allSettled([
+      fetchNewsAPI(q, from, to),
+      fetchGNews(q)
+    ]);
+
+    let articles = [];
+
+    if (newsApiData.status === 'fulfilled' && newsApiData.value?.articles) {
+      newsApiData.value.articles.forEach(a => {
+        articles.push({ ...a, _source: 'newsapi' });
+      });
+    }
+
+    if (gnewsData.status === 'fulfilled' && gnewsData.value?.articles) {
+      gnewsData.value.articles.forEach(a => {
+        // Deduplicate by title similarity
+        const exists = articles.some(e => similarity(e.title, a.title) > 0.7);
+        if (!exists) articles.push({ ...a, _source: 'gnews' });
+      });
+    }
+
+    // Sort by date
+    articles.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+    allArticles = articles;
+
+    updateHeader(articles.length);
+    applyFilters();
+    renderArticles(filteredArticles);
+
+    // Auto analyze first 10 articles
+    analyzeArticles(filteredArticles.slice(0, 10));
+
+  } catch (err) {
+    showToast('❌ Gagal mengambil berita. Cek koneksi.');
+    document.getElementById('newsGrid').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <h3>Gagal memuat</h3>
+        <p>${err.message}</p>
+      </div>`;
+  }
+
+  document.getElementById('searchBtn').disabled = false;
+  document.getElementById('searchBtn').innerHTML = '🔍 Cari Berita';
+}
+
+async function fetchNewsAPI(q, from, to) {
+  let url = `/api/news?q=${encodeURIComponent(q)}&pageSize=50`;
+  if (from) url += `&from=${from}`;
+  if (to) url += `&to=${to}`;
+  const res = await fetch(url);
+  return res.json();
+}
+
+async function fetchGNews(q) {
+  const res = await fetch(`/api/gnews?q=${encodeURIComponent(q)}`);
+  return res.json();
+}
+
+function similarity(a, b) {
+  const sa = new Set(a.toLowerCase().split(' '));
+  const sb = new Set(b.toLowerCase().split(' '));
+  const inter = [...sa].filter(x => sb.has(x)).length;
+  return inter / Math.max(sa.size, sb.size);
+}
+
+function renderArticles(articles) {
+  const grid = document.getElementById('newsGrid');
+  updateStats(articles);
+
+  if (articles.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🔎</div>
+        <h3>Tidak ada hasil</h3>
+        <p>Coba kata kunci lain atau ubah filter.</p>
+      </div>`;
+    return;
+  }
+
+  document.getElementById('resultLabel').textContent = `Menampilkan ${articles.length} artikel`;
+  grid.innerHTML = articles.map((a, i) => renderCard(a, i)).join('');
+}
+
+function renderCard(a, i) {
+  const date = a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' }) : '—';
+  const sentiment = a._sentiment || 'loading';
+  const isBookmarked = bookmarks.some(b => b.url === a.url);
+  const sentimentClass = ['positif','negatif','netral'].includes(sentiment) ? sentiment : '';
+  const srcLabel = a._source === 'gnews' ? 'Google News' : (a.source?.name || 'NewsAPI');
+
+  const scoreHtml = a._score ? `
+    <div class="score-bar">
+      <span class="score-label">Relevansi</span>
+      <div class="score-dots">
+        ${[...Array(10)].map((_,j) => `<div class="score-dot ${j < a._score ? 'filled' : ''}"></div>`).join('')}
+      </div>
+    </div>` : '';
+
+  const summaryHtml = a._summary
+    ? `<div class="card-summary">${a._summary}</div>`
+    : a._analyzing
+      ? `<div class="ai-analyzing"><div class="spinner"></div> AI sedang menganalisis...</div>`
+      : `<div class="card-summary" style="color:var(--muted);font-style:italic">${(a.description || '').replace(/<[^>]+>/g,'').substring(0,150) || 'Tidak ada deskripsi.'}</div>`;
+
+  return `
+    <div class="article-card ${sentimentClass} ${isBookmarked ? 'bookmarked' : ''}" id="card-${i}">
+      <div class="card-top">
+        <div class="card-meta">
+          <span class="source-badge">${srcLabel}</span>
+          <span class="date-badge">${date}</span>
+          ${sentimentClass ? `<span class="sentiment-badge ${sentimentClass}">${sentiment}</span>` : ''}
+          ${a._tone ? `<span class="tone-badge">${a._tone}</span>` : ''}
+        </div>
+        <div class="card-actions">
+          <button class="icon-btn ${isBookmarked ? 'active' : ''}" onclick="toggleBookmark(${i})" title="Simpan">📌</button>
+          <a href="${a.url}" target="_blank" style="text-decoration:none">
+            <button class="icon-btn" title="Buka artikel">↗</button>
+          </a>
+        </div>
+      </div>
+      <div class="card-title">${a.title || 'Tanpa judul'}</div>
+      ${summaryHtml}
+      <div class="card-footer">
+        ${a._tone ? `<span class="tone-badge">${a._tone}</span>` : '<span></span>'}
+        ${scoreHtml}
+      </div>
+    </div>`;
+}
+
+async function analyzeArticles(articles) {
+  for (let i = 0; i < articles.length; i++) {
+    const a = articles[i];
+    const idx = allArticles.indexOf(a);
+    if (a._sentiment) continue;
+
+    a._analyzing = true;
+    updateCard(idx);
+
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: a.title, description: a.description || '' })
+      });
+      const data = await res.json();
+      a._sentiment = data.sentiment || 'netral';
+      a._tone = data.tone || 'informatif';
+      a._summary = data.summary || '';
+      a._score = data.score || 5;
+      a._analyzing = false;
+      updateCard(idx);
+      updateStats(filteredArticles);
+    } catch {
+      a._sentiment = 'netral';
+      a._analyzing = false;
+    }
+  }
+}
+
+function updateCard(idx) {
+  const el = document.getElementById(`card-${idx}`);
+  if (!el) return;
+  const a = filteredArticles[idx];
+  if (!a) return;
+  el.outerHTML = renderCard(a, idx);
+}
+
+function updateStats(articles) {
+  const pos = articles.filter(a => a._sentiment === 'positif').length;
+  const neg = articles.filter(a => a._sentiment === 'negatif').length;
+  const neu = articles.filter(a => a._sentiment === 'netral').length;
+  document.getElementById('statTotal').textContent = articles.length;
+  document.getElementById('statPos').textContent = pos;
+  document.getElementById('statNeg').textContent = neg;
+  document.getElementById('statNeu').textContent = neu;
+}
+
+function updateHeader(total) {
+  document.getElementById('hdr-total').innerHTML = `Total: <span>${total}</span> artikel`;
+  document.getElementById('hdr-time').textContent = new Date().toLocaleTimeString('id-ID');
+}
+
+function applyFilters() {
+  let articles = [...allArticles];
+  if (currentFilter.sentiment !== 'semua') {
+    articles = articles.filter(a => a._sentiment === currentFilter.sentiment);
+  }
+  if (currentFilter.source !== 'semua') {
+    articles = articles.filter(a => a._source === currentFilter.source);
+  }
+  filteredArticles = articles;
+}
+
+function filterSentiment(val, el) {
+  currentFilter.sentiment = val;
+  document.querySelectorAll('.filter-row')[0].querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  applyFilters();
+  renderArticles(filteredArticles);
+}
+
+function filterSource(val, el) {
+  currentFilter.source = val;
+  document.querySelectorAll('.filter-row')[1].querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  applyFilters();
+  renderArticles(filteredArticles);
+}
+
+function sortArticles(by) {
+  if (by === 'date') filteredArticles.sort((a,b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+  if (by === 'score') filteredArticles.sort((a,b) => (b._score||0) - (a._score||0));
+  if (by === 'sentiment') {
+    const order = {positif:0, netral:1, negatif:2};
+    filteredArticles.sort((a,b) => (order[a._sentiment]??3) - (order[b._sentiment]??3));
+  }
+  renderArticles(filteredArticles);
+}
+
+function toggleBookmark(i) {
+  const a = filteredArticles[i];
+  const idx = bookmarks.findIndex(b => b.url === a.url);
+  if (idx >= 0) {
+    bookmarks.splice(idx, 1);
+    showToast('📌 Artikel dihapus dari tersimpan');
+  } else {
+    bookmarks.push(a);
+    showToast('📌 Artikel disimpan!');
+  }
+  localStorage.setItem('pln_bookmarks', JSON.stringify(bookmarks));
+  document.getElementById('bookmarkCount').textContent = `${bookmarks.length} artikel ditandai`;
+  renderArticles(showingBookmarks ? bookmarks : filteredArticles);
+}
+
+function toggleBookmarks() {
+  showingBookmarks = !showingBookmarks;
+  if (showingBookmarks) {
+    renderArticles(bookmarks);
+    showToast(`📌 Menampilkan ${bookmarks.length} artikel tersimpan`);
+  } else {
+    renderArticles(filteredArticles);
+    showToast('Kembali ke semua artikel');
+  }
+}
+
+async function generateBrief() {
+  if (allArticles.length === 0) return showToast('⚠ Cari berita dulu sebelum generate brief');
+  const btn = document.getElementById('briefBtn');
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  document.getElementById('briefContent').innerHTML = '<div class="ai-analyzing"><div class="spinner"></div> AI sedang merangkum...</div>';
+
+  const titles = allArticles.slice(0, 15).map(a => `- ${a.title}`).join('\n');
+  const prompt = `Kamu adalah analis media untuk PLN UIW Papua & Papua Barat. Berdasarkan ${allArticles.length} artikel berita berikut, tulis daily brief dalam 3-4 kalimat bahasa Indonesia yang ringkas dan profesional. Sebutkan tema utama, sentimen umum, dan isu kritis jika ada.\n\nArtikel:\n${titles}`;
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'DAILY BRIEF REQUEST: ' + prompt, description: '' })
+    });
+    // We'll use a direct Gemini call via a different approach
+    // Actually re-use analyze but pass the brief request as title
+    const data = await res.json();
+
+    // Generate via separate brief endpoint - use the summary field creatively
+    const briefRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${window.__GEMINI_KEY || 'KEY_NOT_SET'}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 300 }
+      })
+    });
+
+    if (!briefRes.ok) throw new Error('Gemini tidak tersedia dari client');
+    const briefData = await briefRes.json();
+    const text = briefData.candidates?.[0]?.content?.parts?.[0]?.text || 'Gagal generate brief.';
+    document.getElementById('briefContent').innerHTML = `<div class="brief-text">${text}</div>`;
+  } catch {
+    // Fallback: generate brief from analyzed articles
+    const pos = allArticles.filter(a => a._sentiment === 'positif').length;
+    const neg = allArticles.filter(a => a._sentiment === 'negatif').length;
+    const total = allArticles.length;
+    document.getElementById('briefContent').innerHTML = `
+      <div class="brief-text">
+        Monitoring hari ini menemukan <strong>${total} artikel</strong> terkait PLN Papua. 
+        Sebanyak ${pos} artikel bersentimen positif dan ${neg} artikel bersentimen negatif. 
+        Untuk brief AI yang lebih detail, brief ini memerlukan Gemini API key dikonfigurasi di Vercel.
+      </div>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Generate';
+}
+
+function exportCSV() {
+  if (filteredArticles.length === 0) return showToast('⚠ Tidak ada artikel untuk diekspor');
+  const headers = ['Judul','Sumber','Tanggal','Sentimen','Tone','Skor','URL'];
+  const rows = filteredArticles.map(a => [
+    `"${(a.title||'').replace(/"/g,'""')}"`,
+    `"${a.source?.name||''}"`,
+    a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('id-ID') : '',
+    a._sentiment || '',
+    a._tone || '',
+    a._score || '',
+    `"${a.url||''}"`
+  ].join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `pln-news-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  showToast('✅ CSV berhasil diunduh');
+}
+
+function showLoading() {
+  document.getElementById('newsGrid').innerHTML = `
+    <div class="loading-cards">
+      ${[...Array(5)].map(() => `
+        <div class="skeleton">
+          <div class="skel-line" style="width:30%;margin-bottom:12px"></div>
+          <div class="skel-line" style="width:90%"></div>
+          <div class="skel-line" style="width:75%"></div>
+          <div class="skel-line" style="width:50%;margin-top:12px"></div>
+        </div>`).join('')}
+    </div>`;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// Init bookmark count
+document.getElementById('bookmarkCount').textContent = `${bookmarks.length} artikel ditandai`;
+</script>
+</body>
+</html>
