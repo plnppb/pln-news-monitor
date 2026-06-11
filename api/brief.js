@@ -9,31 +9,38 @@ export default async function handler(req, res) {
   const { articles, keyword } = req.body;
   const geminiKey = process.env.GEMINI_API_KEY;
 
-  if (!articles || !articles.length) return res.status(400).json({ error: 'No articles' });
+  if (!articles?.length) return res.status(400).json({ error: 'No articles' });
+  if (!geminiKey) return res.status(500).json({ error: 'Gemini API key not configured' });
 
   const total = articles.length;
   const pos = articles.filter(a => a.tone === 'positif').length;
   const neg = articles.filter(a => a.tone === 'negatif').length;
   const neu = articles.filter(a => a.tone === 'netral').length;
+  const unanalyzed = total - pos - neg - neu;
 
-  // Send up to 40 titles for analysis
+  // Group by topic keywords for theme analysis
   const titleList = articles.slice(0, 40).map((a, i) => `${i+1}. ${a.title}`).join('\n');
 
-  const prompt = `Kamu adalah analis media senior untuk PLN UIW Papua & Papua Barat. 
-Berikut adalah ${total} judul berita terkait "${keyword}" yang dikumpulkan hari ini:
+  const prompt = `Kamu adalah analis media senior PLN UIW Papua & Papua Barat.
 
+Data monitoring hari ini untuk keyword "${keyword}":
+- Total artikel: ${total}
+- Tone positif: ${pos} artikel
+- Tone negatif: ${neg} artikel  
+- Tone netral: ${neu} artikel
+- Belum dianalisis: ${unanalyzed} artikel
+
+Daftar judul berita (${Math.min(40, total)} dari ${total}):
 ${titleList}
 
-Statistik tone: ${pos} positif, ${neg} negatif, ${neu} netral.
-
-Tulis Daily Media Brief dalam bahasa Indonesia yang DETAIL dan INFORMATIF mencakup:
-1. Gambaran umum volume dan tone pemberitaan
-2. Tema/isu utama yang paling banyak diangkat (sebutkan persentase atau jumlah spesifik)
-3. Isu-isu kritis atau negatif yang perlu perhatian (jika ada)
+Tulis Daily Media Brief dalam bahasa Indonesia, format paragraf mengalir (BUKAN bullet point), 4-5 kalimat, mencakup:
+1. Volume dan komposisi tone pemberitaan hari ini
+2. Tema atau isu dominan yang paling banyak diangkat (sebutkan persentase atau jumlah spesifik jika bisa)
+3. Isu negatif atau kritis yang perlu perhatian tim komunikasi (jika ada)
 4. Media yang paling aktif memberitakan
-5. Rekomendasi singkat untuk tim komunikasi
+5. Rekomendasi singkat untuk tim humas
 
-Format: paragraf mengalir, 4-6 kalimat, profesional dan ringkas. JANGAN gunakan bullet point.`;
+Tulis langsung briefnya tanpa judul atau heading.`;
 
   try {
     const response = await fetch(
@@ -43,14 +50,23 @@ Format: paragraf mengalir, 4-6 kalimat, profesional dan ringkas. JANGAN gunakan 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 600 }
+          generationConfig: { temperature: 0.3, maxOutputTokens: 800 }
         })
       }
     );
+
+    if (!response.ok) {
+      const err = await response.text();
+      return res.status(500).json({ error: 'Gemini API error', detail: err });
+    }
+
     const data = await response.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return res.status(200).json({ brief: text });
+
+    if (!text) return res.status(500).json({ error: 'Empty response from Gemini' });
+
+    return res.status(200).json({ brief: text.trim() });
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to generate brief' });
+    return res.status(500).json({ error: 'Failed to generate brief', detail: error.message });
   }
 }
