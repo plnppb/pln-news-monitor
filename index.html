@@ -204,7 +204,7 @@
     <div>
       <div class="sidebar-label">Kata Kunci Cepat</div>
       <div class="keyword-chips">
-        <div class="chip active" onclick="setKeyword('PLN Papua',this)">PLN Papua</div>
+        <div class="chip active" onclick="setKeyword('PLN Wilayah Papua',this)">PLN Wilayah Papua</div>
         <div class="chip" onclick="setKeyword('PLN Sorong',this)">PLN Sorong</div>
         <div class="chip" onclick="setKeyword('PLN Jayapura',this)">PLN Jayapura</div>
         <div class="chip" onclick="setKeyword('listrik Papua',this)">Listrik Papua</div>
@@ -217,19 +217,10 @@
     <!-- SEARCH -->
     <div class="input-group">
       <div class="sidebar-label">Pencarian Kustom</div>
-      <input type="text" id="searchInput" placeholder="Kata kunci..." value="PLN Papua"/>
+      <input type="text" id="searchInput" placeholder="Kata kunci..." value="PLN Wilayah Papua"/>
       <input type="date" id="dateFrom" title="Dari tanggal"/>
       <input type="date" id="dateTo" title="Sampai tanggal"/>
       <button class="btn btn-primary" onclick="fetchNews()" id="searchBtn">🔍 Cari Berita</button>
-    </div>
-
-    <!-- RSS MANAGER -->
-    <div>
-      <div class="rss-section-header">
-        <div class="sidebar-label" style="margin-bottom:0">Sumber RSS</div>
-        <button class="btn-manage" onclick="openRssModal()">⚙ Kelola</button>
-      </div>
-      <div id="rssStatusList" style="display:flex;flex-direction:column;gap:4px;margin-top:6px"></div>
     </div>
 
   <!-- RSS MODAL -->
