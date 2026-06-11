@@ -50,6 +50,14 @@
   .btn-primary{background:var(--accent);color:#fff;width:100%;}
   .btn-primary:hover{background:var(--accent2);}
   .btn-primary:disabled{opacity:0.5;cursor:not-allowed;}
+  /* INFONESIA TOGGLE */
+  .infonesia-toggle-wrap{background:var(--accent-light);border:1px solid rgba(0,61,143,0.15);border-radius:8px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .infonesia-toggle-label{font-size:11px;font-weight:600;color:var(--accent);}
+  .infonesia-toggle-sub{font-size:10px;color:var(--muted);margin-top:1px;}
+  .toggle-switch{width:36px;height:20px;background:var(--border2);border-radius:10px;cursor:pointer;position:relative;transition:background 0.2s;border:none;flex-shrink:0;}
+  .toggle-switch.on{background:var(--accent);}
+  .toggle-switch::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);}
+  .toggle-switch.on::after{left:18px;}
   .rss-progress-wrap{margin-top:6px;display:none;}
   .rss-progress-wrap.show{display:block;}
   .rss-progress-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
@@ -125,6 +133,12 @@
   .result-label{font-size:13px;color:var(--text2);}
   .sort-select{background:var(--surface);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;}
   .export-btn{background:var(--success);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;}
+  .pagination{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:20px;padding:16px 0;}
+  .page-btn{background:var(--surface);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s;}
+  .page-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+  .page-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+  .page-btn:disabled{opacity:0.4;cursor:not-allowed;}
+  .page-info{font-size:12px;color:var(--muted);}
   .export-btn:hover{background:#047857;}
 
   /* CARDS */
@@ -225,6 +239,14 @@
       <input type="text" id="searchInput" placeholder="Kata kunci..." value="PLN Wilayah Papua"/>
       <input type="date" id="dateFrom" title="Dari tanggal"/>
       <input type="date" id="dateTo" title="Sampai tanggal"/>
+      <!-- INFONESIA TOGGLE -->
+      <div class="infonesia-toggle-wrap">
+        <div>
+          <div class="infonesia-toggle-label">⚡ Feed Infonesia.net</div>
+          <div class="infonesia-toggle-sub" id="infoneisaCount">549 subdomain</div>
+        </div>
+        <button class="toggle-switch on" id="infoneisaToggle" onclick="toggleInfonesia()" title="Toggle semua feed infonesia.net"></button>
+      </div>
       <button class="btn btn-primary" onclick="fetchNews()" id="searchBtn">🔍 Cari Berita</button>
       <div class="rss-progress-wrap" id="rssProgressWrap">
         <div class="rss-progress-bar"><div class="rss-progress-fill" id="rssProgressFill"></div></div>
@@ -366,11 +388,16 @@
       </div>
     </div>
   </div>
+    <div class="pagination" id="pagination" style="display:none"></div>
+  </div>
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
 let allArticles = [];
+let currentPage = 1;
+const PAGE_SIZE = 50;
+let infoneisaEnabled = true;
 let filteredArticles = [];
 let bookmarks = JSON.parse(localStorage.getItem('pln_bookmarks') || '[]');
 let rssFeeds = JSON.parse(localStorage.getItem('pln_rss_feeds') || '[]');
@@ -390,6 +417,11 @@ function initRssFeeds() {
   }
   renderRssStatus();
   renderRssTable();
+  // Update infonesia count
+  const infCount = rssFeeds.filter(f => f.url.includes('infonesia.net')).length;
+  if (infCount > 0) {
+    document.getElementById('infoneisaCount').textContent = `${infCount} subdomain — aktif`;
+  }
 }
 
 function saveRssFeeds() {
@@ -537,7 +569,13 @@ async function fetchNews() {
   }
 
   // Batch fetch RSS feeds (30 per batch to avoid overload)
-  const enabledFeeds = rssFeeds.filter(f => f.enabled);
+  const infoneisaFeeds = getInfoneisaFeeds();
+  const otherRssFeeds = getNonInfoneisaFeeds();
+  const enabledFeeds = [...infoneisaFeeds, ...otherRssFeeds];
+  
+  // Update infonesia count display
+  document.getElementById('infoneisaCount').textContent = 
+    infoneisaEnabled ? `${infoneisaFeeds.length} subdomain — aktif` : `${rssFeeds.filter(f=>f.url.includes('infonesia.net')).length} subdomain — nonaktif`;
   if (enabledFeeds.length > 0) {
     const BATCH_SIZE = 30;
     const totalBatches = Math.ceil(enabledFeeds.length / BATCH_SIZE);
@@ -676,10 +714,12 @@ function renderArticles(articles) {
   document.getElementById('resultLabel').textContent = `Menampilkan ${articles.length} artikel`;
   const grid = document.getElementById('newsGrid');
   if (!articles.length) {
+    document.getElementById('pagination').style.display = 'none';
     grid.innerHTML = `<div class="empty-state"><div class="empty-icon">🔎</div><h3>Tidak ada hasil</h3><p>Coba kata kunci lain atau ubah filter.</p></div>`;
     return;
   }
-  grid.innerHTML = articles.map((a,i) => renderCard(a,i)).join('');
+  currentPage = 1;
+  renderPage(1);
 }
 
 function renderCard(a, i) {
@@ -727,7 +767,15 @@ function updateCard(idx) {
   if (!el) return;
   const a = allArticles[idx];
   if (!a) return;
-  el.outerHTML = renderCard(a, filteredArticles.indexOf(a));
+  const fi = filteredArticles.indexOf(a);
+  // Only update if on current page
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageEnd = pageStart + PAGE_SIZE;
+  if (fi >= pageStart && fi < pageEnd) {
+    el.outerHTML = renderCard(a, fi);
+  }
+  // Always update stats
+  updateStats(filteredArticles);
 }
 
 function updateStats(articles) {
@@ -937,6 +985,69 @@ function extractDomain(url) {
     const u = new URL(url.startsWith('http') ? url : 'http://'+url);
     return u.hostname.replace('www.', '');
   } catch { return url.substring(0, 30); }
+}
+
+function toggleInfonesia() {
+  infoneisaEnabled = !infoneisaEnabled;
+  const btn = document.getElementById('infoneisaToggle');
+  const count = rssFeeds.filter(f => f.url.includes('infonesia.net')).length;
+  if (infoneisaEnabled) {
+    btn.classList.add('on');
+    document.getElementById('infoneisaCount').textContent = `${count} subdomain — aktif`;
+  } else {
+    btn.classList.remove('on');
+    document.getElementById('infoneisaCount').textContent = `${count} subdomain — nonaktif`;
+  }
+}
+
+function getInfoneisaFeeds() {
+  if (!infoneisaEnabled) return [];
+  return rssFeeds.filter(f => f.enabled && f.url.includes('infonesia.net'));
+}
+
+function getNonInfoneisaFeeds() {
+  return rssFeeds.filter(f => f.enabled && !f.url.includes('infonesia.net'));
+}
+
+// PAGINATION
+function renderPage(page) {
+  currentPage = page;
+  const start = (page - 1) * PAGE_SIZE;
+  const end = start + PAGE_SIZE;
+  const pageArticles = filteredArticles.slice(start, end);
+  const grid = document.getElementById('newsGrid');
+  grid.innerHTML = pageArticles.map((a, i) => renderCard(a, start + i)).join('');
+  renderPagination();
+  grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderPagination() {
+  const total = filteredArticles.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const pag = document.getElementById('pagination');
+
+  if (totalPages <= 1) { pag.style.display = 'none'; return; }
+  pag.style.display = 'flex';
+
+  let html = `<button class="page-btn" onclick="renderPage(${currentPage-1})" ${currentPage===1?'disabled':''}>← Prev</button>`;
+
+  // Show max 7 page buttons
+  let startP = Math.max(1, currentPage - 3);
+  let endP = Math.min(totalPages, startP + 6);
+  if (endP - startP < 6) startP = Math.max(1, endP - 6);
+
+  if (startP > 1) html += `<button class="page-btn" onclick="renderPage(1)">1</button><span class="page-info">...</span>`;
+
+  for (let p = startP; p <= endP; p++) {
+    html += `<button class="page-btn ${p===currentPage?'active':''}" onclick="renderPage(${p})">${p}</button>`;
+  }
+
+  if (endP < totalPages) html += `<span class="page-info">...</span><button class="page-btn" onclick="renderPage(${totalPages})">${totalPages}</button>`;
+
+  html += `<button class="page-btn" onclick="renderPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>Next →</button>`;
+  html += `<span class="page-info">${total} artikel, halaman ${currentPage}/${totalPages}</span>`;
+
+  pag.innerHTML = html;
 }
 
 function showLoading() {
