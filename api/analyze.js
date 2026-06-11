@@ -11,16 +11,25 @@ export default async function handler(req, res) {
 
   if (!title) return res.status(400).json({ error: 'Title is required' });
 
-  const prompt = `Analisis berita berikut dan berikan respons HANYA dalam format JSON ini (tanpa teks lain):
+  const prompt = `Kamu adalah analis media untuk PLN UIW Papua & Papua Barat. Analisis berita berikut dan berikan respons HANYA dalam format JSON ini (tanpa teks lain, tanpa markdown):
 {
-  "sentiment": "positif" | "negatif" | "netral",
-  "tone": "informatif" | "kritis" | "aspiratif" | "investigatif" | "promosi",
-  "summary": "ringkasan 1-2 kalimat dalam bahasa Indonesia",
-  "score": angka 1-10 (tingkat relevansi untuk PLN Papua)
+  "tone": "positif" | "negatif" | "netral",
+  "spokesperson_internal": "Nama, Jabatan (pisah semicolon jika lebih dari satu, kosongkan jika tidak ada)",
+  "spokesperson_eksternal": "Nama, Jabatan (pisah semicolon jika lebih dari satu, kosongkan jika tidak ada)",
+  "resume": "Ringkasan 2-3 kalimat dalam bahasa Indonesia"
 }
 
+Panduan tone:
+- positif: berita menguntungkan/memuji PLN atau program PLN
+- negatif: berita kritik, keluhan, masalah, atau merugikan PLN
+- netral: berita informatif/faktual tanpa tendensi tertentu
+
+Spokesperson internal PLN: pegawai/pejabat PLN (GM, Manajer, Direktur, dll)
+Spokesperson eksternal: pihak luar PLN (pejabat pemerintah, tokoh masyarakat, dll)
+Jika tidak ada nama narasumber yang jelas, kosongkan field tersebut.
+
 Judul: ${title}
-Deskripsi: ${description || '(tidak ada)'}`;
+Deskripsi: ${(description || '').replace(/<[^>]+>/g, '').substring(0, 300)}`;
 
   try {
     const response = await fetch(
@@ -30,7 +39,7 @@ Deskripsi: ${description || '(tidak ada)'}`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 300 }
+          generationConfig: { temperature: 0.1, maxOutputTokens: 400 }
         })
       }
     );
@@ -41,10 +50,10 @@ Deskripsi: ${description || '(tidak ada)'}`;
     return res.status(200).json(parsed);
   } catch (error) {
     return res.status(200).json({
-      sentiment: 'netral',
-      tone: 'informatif',
-      summary: 'Gagal menganalisis artikel ini.',
-      score: 5
+      tone: 'netral',
+      spokesperson_internal: '',
+      spokesperson_eksternal: '',
+      resume: 'Gagal menganalisis artikel ini.'
     });
   }
 }
