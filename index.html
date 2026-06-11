@@ -399,6 +399,7 @@ async function fetchNews() {
   const fetches = [
     fetch(`/api/news?q=${encodeURIComponent(q)}&pageSize=50${from?'&from='+from:''}${to?'&to='+to:''}`).then(r=>r.json()).catch(()=>null),
     fetch(`/api/gnews?q=${encodeURIComponent(q)}`).then(r=>r.json()).catch(()=>null),
+    fetch(`/api/gnewsio?q=${encodeURIComponent(q)}${from?'&from='+from:''}${to?'&to='+to:''}`).then(r=>r.json()).catch(()=>null),
   ];
 
   // Add enabled RSS feeds
@@ -421,22 +422,40 @@ async function fetchNews() {
     newsApiData.articles.forEach(a => articles.push({...a, _source:'newsapi'}));
   }
 
-  // Google News RSS
+  // Google News RSS - deduplicate hanya jika judul sama DAN media sama
   const gnewsData = results[1].status === 'fulfilled' ? results[1].value : null;
   if (gnewsData?.articles) {
     gnewsData.articles.forEach(a => {
-      if (!articles.some(e => similarity(e.title, a.title) > 0.7))
-        articles.push({...a, _source:'gnews'});
+      const isDup = articles.some(e =>
+        similarity(e.title, a.title) > 0.85 &&
+        (e.source?.name || '') === (a.source?.name || '')
+      );
+      if (!isDup) articles.push({...a, _source:'gnews'});
     });
   }
 
-  // Custom RSS feeds
+  // GNews.io - deduplicate hanya jika judul sama DAN media sama
+  const gnewsioData = results[2].status === 'fulfilled' ? results[2].value : null;
+  if (gnewsioData?.articles) {
+    gnewsioData.articles.forEach(a => {
+      const isDup = articles.some(e =>
+        similarity(e.title, a.title) > 0.85 &&
+        (e.source?.name || '') === (a.source?.name || '')
+      );
+      if (!isDup) articles.push({...a, _source:'gnewsio'});
+    });
+  }
+
+  // Custom RSS feeds - deduplicate hanya jika judul sama DAN media sama
   for (let i = 0; i < enabledFeeds.length; i++) {
-    const rssData = results[i+2].status === 'fulfilled' ? results[i+2].value : null;
+    const rssData = results[i+3].status === 'fulfilled' ? results[i+3].value : null;
     if (rssData?.articles) {
       rssData.articles.forEach(a => {
-        if (!articles.some(e => similarity(e.title, a.title) > 0.7))
-          articles.push({...a, _source: 'rss_' + enabledFeeds[i].name, source: { name: enabledFeeds[i].name }});
+        const isDup = articles.some(e =>
+          similarity(e.title, a.title) > 0.85 &&
+          (e.source?.name || '') === (enabledFeeds[i].name || '')
+        );
+        if (!isDup) articles.push({...a, _source: 'rss_' + enabledFeeds[i].name, source: { name: enabledFeeds[i].name }});
       });
     }
   }
