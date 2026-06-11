@@ -50,6 +50,11 @@
   .btn-primary{background:var(--accent);color:#fff;width:100%;}
   .btn-primary:hover{background:var(--accent2);}
   .btn-primary:disabled{opacity:0.5;cursor:not-allowed;}
+  .rss-progress-wrap{margin-top:6px;display:none;}
+  .rss-progress-wrap.show{display:block;}
+  .rss-progress-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
+  .rss-progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width 0.3s;width:0%;}
+  .rss-progress-label{font-size:10px;color:var(--muted);margin-top:4px;text-align:center;}
   .btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text2);font-size:12px;padding:6px 10px;}
   .btn-ghost:hover{border-color:var(--accent2);color:var(--accent2);}
   .btn-danger{background:transparent;border:1px solid #fecaca;color:var(--danger);font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:'Inter',sans-serif;}
@@ -221,6 +226,10 @@
       <input type="date" id="dateFrom" title="Dari tanggal"/>
       <input type="date" id="dateTo" title="Sampai tanggal"/>
       <button class="btn btn-primary" onclick="fetchNews()" id="searchBtn">🔍 Cari Berita</button>
+      <div class="rss-progress-wrap" id="rssProgressWrap">
+        <div class="rss-progress-bar"><div class="rss-progress-fill" id="rssProgressFill"></div></div>
+        <div class="rss-progress-label" id="rssProgressLabel">Mengambil berita...</div>
+      </div>
     </div>
 
   <!-- RSS MODAL -->
@@ -533,12 +542,16 @@ async function fetchNews() {
     const BATCH_SIZE = 30;
     const totalBatches = Math.ceil(enabledFeeds.length / BATCH_SIZE);
     
-    document.getElementById('searchBtn').innerHTML = `<div class="spinner" style="border-top-color:#fff"></div> Fetching RSS (0/${enabledFeeds.length})...`;
+    document.getElementById('rssProgressWrap').classList.add('show');
+    document.getElementById('rssProgressFill').style.width = '0%';
+    document.getElementById('rssProgressLabel').textContent = 'Mengambil berita dari sumber RSS...';
 
     for (let b = 0; b < totalBatches; b++) {
       const batch = enabledFeeds.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
       const fetched = b * BATCH_SIZE;
-      document.getElementById('searchBtn').innerHTML = `<div class="spinner" style="border-top-color:#fff"></div> RSS ${fetched}/${enabledFeeds.length}...`;
+      const rssPct = Math.round((fetched / enabledFeeds.length) * 100);
+      document.getElementById('rssProgressFill').style.width = rssPct + '%';
+      document.getElementById('rssProgressLabel').textContent = `Memproses sumber berita... ${rssPct}%`;
 
       const batchResults = await Promise.allSettled(
         batch.map(f =>
@@ -587,6 +600,12 @@ async function fetchNews() {
 
   btn.disabled = false;
   btn.innerHTML = '🔍 Cari Berita';
+  document.getElementById('rssProgressFill').style.width = '100%';
+  document.getElementById('rssProgressLabel').textContent = '✓ Selesai';
+  setTimeout(() => {
+    document.getElementById('rssProgressWrap').classList.remove('show');
+    document.getElementById('rssProgressFill').style.width = '0%';
+  }, 2000);
 }
 
 function similarity(a, b) {
