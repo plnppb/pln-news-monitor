@@ -455,7 +455,7 @@ function addRssFeed() {
   let name = document.getElementById('rssName').value.trim();
   let url = document.getElementById('rssUrl').value.trim();
   if (!name || !url) return showToast('⚠ Isi nama dan URL feed');
-  if (!url.startsWith('http')) url = 'https://' + url;
+  url = normalizeUrl(url);
   if (rssFeeds.some(f => f.url === url)) return showToast('⚠ Feed sudah ada');
   rssFeeds.push({ name, url, enabled: true });
   saveRssFeeds(); renderRssStatus(); renderRssTable();
@@ -837,6 +837,17 @@ async function generateBrief() {
   btn.disabled = false; btn.textContent = 'Generate';
 }
 
+function normalizeUrl(url) {
+  url = url.trim();
+  if (!url) return '';
+  // Remove protocol if present, then re-add correct one
+  const noProto = url.replace(/^https?:\/\//, '');
+  // Domains that need http:// (SSL issues)
+  const httpOnlyDomains = ['infonesia.net'];
+  const needsHttp = httpOnlyDomains.some(d => noProto.includes(d));
+  return (needsHttp ? 'http://' : 'https://') + noProto;
+}
+
 function importRssFile(input) {
   const file = input.files[0];
   if (!file) return;
@@ -858,22 +869,22 @@ function importRssFile(input) {
         const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
         if (parts.length >= 2) {
           name = parts[0];
-          url = parts[1];
-        } else if (parts.length === 1 && parts[0].startsWith('http')) {
-          url = parts[0];
+          url = normalizeUrl(parts[1]);
+        } else if (parts.length === 1 && parts[0]) {
+          url = normalizeUrl(parts[0]);
           name = extractDomain(url);
         }
       } else {
-        // TXT: one URL per line
-        url = line;
+        url = normalizeUrl(line);
         name = extractDomain(url);
       }
 
       if (!url) { invalid++; return; }
-      if (!url.startsWith('http')) url = 'https://' + url;
       if (!name) name = extractDomain(url);
 
-      if (rssFeeds.some(f => f.url === url)) {
+      // Check duplicate by domain+path (ignore http/https difference)
+      const noProto = url.replace(/^https?:\/\//, '');
+      if (rssFeeds.some(f => f.url.replace(/^https?:\/\//, '') === noProto)) {
         skipped++;
         return;
       }
@@ -901,7 +912,7 @@ function importRssFile(input) {
 
 function extractDomain(url) {
   try {
-    const u = new URL(url.startsWith('http') ? url : 'https://'+url);
+    const u = new URL(url.startsWith('http') ? url : 'http://'+url);
     return u.hostname.replace('www.', '');
   } catch { return url.substring(0, 30); }
 }
