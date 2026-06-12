@@ -3,6 +3,7 @@ const http = require('http');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 async function fetchUrl(urlStr) {
   return new Promise((resolve, reject) => {
@@ -68,16 +69,65 @@ async function getFeedsFromDB() {
   return await response.json();
 }
 
+async function analyzeArticle(title, description) {
+  if (!GEMINI_API_KEY) return { tone: 'netral', resume: '', spokesperson_internal: '', spokesperson_eksternal: '' };
+  try {
+    const prompt = `Kamu adalah analis media untuk PLN UIW Papua & Papua Barat. Analisis berita berikut dan berikan respons HANYA dalam format JSON ini (tanpa teks lain, tanpa markdown):
+{
+  "tone": "positif" | "negatif" | "netral",
+  "spokesperson_internal": "Nama, Jabatan (pisah semicolon jika lebih dari satu, kosongkan jika tidak ada)",
+  "spokesperson_eksternal": "Nama, Jabatan (pisah semicolon jika lebih dari satu, kosongkan jika tidak ada)",
+  "resume": "Ringkasan 2-3 kalimat dalam bahasa Indonesia"
+}
+Panduan tone:
+- positif: berita menguntungkan/memuji PLN atau program PLN
+- negatif: berita kritik, keluhan, masalah, atau merugikan PLN
+- netral: berita informatif/faktual tanpa tendensi tertentu
+Judul: ${title}
+Deskripsi: ${(description || '').replace(/<[^>]+>/g, '').substring(0, 300)}`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 400 }
+        })
+      }
+    );
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    const clean = text.replace(/```json|```/g, '').trim();
+    return JSON.parse(clean);
+  } catch (e) {
+    return { tone: 'netral', resume: '', spokesperson_internal: '', spokesperson_eksternal: '' };
+  }
+}
+
 async function saveToSupabase(articles, keyword) {
-  if (!articles.length) return { saved: 0 };
-  const rows = articles.map(a => ({
-    title: a.title,
-    url: a.url,
-    source: a.source,
-    published_at: a.published_at,
-    description: a.description || '',
-    keyword: keyword
-  }));
+  if (!articles.length) return { saved: 0, newIds: [] };
+
+  // Analyze dulu setiap artikel sebelum disimpan
+  const rows = [];
+  for (const a of articles) {
+    const analysis = await analyzeArticle(a.title, a.description);
+    rows.push({
+      title: a.title,
+      url: a.url,
+      source: a.source,
+      published_at: a.published_at,
+      description: a.description || '',
+      keyword: keyword,
+      tone: analysis.tone || 'netral',
+      resume: analysis.resume || '',
+      spokesperson_internal: analysis.spokesperson_internal || '',
+      spokesperson_eksternal: analysis.spokesperson_eksternal || ''
+    });
+    // Delay 200ms antar artikel agar tidak kena rate limit Gemini
+    await new Promise(r => setTimeout(r, 200));
+  }
 
   const response = await fetch(`${SUPABASE_URL}/rest/v1/articles`, {
     method: 'POST',
@@ -96,7 +146,6 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // Auth check
   const secret = req.headers['x-cron-secret'] || req.query.secret;
   if (secret !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -107,13 +156,11 @@ module.exports = async function handler(req, res) {
   const batchIndex = parseInt(req.query.batchIndex) || 0;
 
   try {
-    // Ambil feeds dari DB
     const allFeeds = await getFeedsFromDB();
     if (!allFeeds.length) {
       return res.status(200).json({ success: true, message: 'No feeds in DB. Please sync feeds first.' });
     }
 
-    // Proses batch
     const start = batchIndex * batchSize;
     const batch = allFeeds.slice(start, start + batchSize);
     if (!batch.length) {
@@ -128,7 +175,6 @@ module.exports = async function handler(req, res) {
         const xml = await fetchUrl(feed.url);
         const articles = parseRSS(xml, feed.url);
 
-        // Filter keyword - infonesia cukup "pln", lainnya AND semua keyword
         const filtered = articles.filter(a => {
           const text = (a.title + ' ' + a.description).toLowerCase();
           if (feed.is_infonesia) return text.includes('pln');
