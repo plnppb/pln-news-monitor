@@ -1328,8 +1328,12 @@ async function loadFromDB() {
         publishedAt: a.published_at,
         source: { name: a.source },
         description: a.description,
-        _tone: null,
-        _analyzed: false
+        keyword: a.keyword,
+        _tone: a.tone || 'netral',
+        _resume: a.resume || '',
+        _spkInternal: a.spokesperson_internal || '',
+        _spkExternal: a.spokesperson_eksternal || '',
+        _analyzed: !!(a.resume)
       }));
     }
   } catch(e) {
@@ -1557,12 +1561,17 @@ async function autoLoadFromDB() {
       publishedAt: a.published_at,
       source: { name: a.source },
       description: a.description,
-      _tone: null,
-      _analyzed: false
+      keyword: a.keyword,
+      _tone: a.tone && a.tone !== 'netral' ? a.tone : (a.resume ? a.tone : null),
+      _resume: a.resume || '',
+      _spkInternal: a.spokesperson_internal || '',
+      _spkExternal: a.spokesperson_eksternal || '',
+      _analyzed: !!(a.resume)
     }));
 
     allArticles = articles;
     filteredArticles = [...articles];
+    document.getElementById('hdr-total').textContent = articles.length;
     document.getElementById('resultLabel').textContent = `Menampilkan ${articles.length} artikel (dari database)`;
     updateStats(articles);
     currentPage = 1;
