@@ -626,6 +626,29 @@ function openRssModal() {
   document.getElementById('rssModal').classList.add('show');
 }
 
+async function syncFeedsToDB() {
+  const btn = document.getElementById('syncBtn');
+  btn.textContent = '⏳ Syncing...';
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/api/feeds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feeds: rssFeeds })
+    });
+    const data = await resp.json();
+    if (data.success) {
+      showToast(`✅ ${data.synced} feed berhasil disync ke database!`);
+    } else {
+      showToast('⚠ Gagal sync: ' + (data.error || 'Unknown error'));
+    }
+  } catch(e) {
+    showToast('⚠ Error: ' + e.message);
+  }
+  btn.textContent = '☁ Sync ke DB';
+  btn.disabled = false;
+}
+
 function closeRssModal() {
   document.getElementById('rssModal').classList.remove('show');
 }
