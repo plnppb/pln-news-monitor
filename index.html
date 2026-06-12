@@ -418,6 +418,15 @@
       <div id="briefContent" class="brief-placeholder">Cari berita terlebih dahulu, lalu klik Generate untuk ringkasan harian dari AI.</div>
     </div>
 
+    <!-- TAB NAVIGATION -->
+    <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border1);padding-bottom:0;">
+      <button id="tab-monitor" onclick="switchTab('monitor')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📡 Monitor</button>
+      <button id="tab-dashboard" onclick="switchTab('dashboard')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📊 Dashboard</button>
+    </div>
+
+    <!-- PANEL MONITOR -->
+    <div id="panel-monitor-wrap">
+
     <!-- STATS -->
     <div class="stats-bar">
       <div class="stat-card"><div class="num" id="statTotal">0</div><div class="lbl">Total Artikel</div></div>
@@ -457,9 +466,10 @@
   </div>
     <div class="pagination" id="pagination" style="display:none"></div>
   </div><!-- end panel-monitor -->
-  </div><!-- end tab-panel -->
+  </div><!-- end panel-monitor-wrap -->
 
   <!-- TAB: DASHBOARD -->
+  <div id="panel-dashboard-wrap" style="display:none;">
   <div class="tab-panel" id="panel-dashboard">
 
     <!-- Sumber Data Toggle -->
@@ -550,6 +560,7 @@
       <button class="export-btn" onclick="exportDashboardExcel()">⬇ Export Semua Data ke Excel</button>
     </div>
   </div><!-- end panel-dashboard -->
+  </div><!-- end panel-dashboard-wrap -->
 
 </div>
 <div class="toast" id="toast"></div>
@@ -1290,6 +1301,17 @@ function renderPagination() {
 
 // ==================== TAB SYSTEM ====================
 function switchTab(tab) {
+  // Update tab buttons
+  document.getElementById('tab-monitor').style.color = tab === 'monitor' ? 'var(--accent)' : 'var(--muted)';
+  document.getElementById('tab-monitor').style.borderBottomColor = tab === 'monitor' ? 'var(--accent)' : 'transparent';
+  document.getElementById('tab-dashboard').style.color = tab === 'dashboard' ? 'var(--accent)' : 'var(--muted)';
+  document.getElementById('tab-dashboard').style.borderBottomColor = tab === 'dashboard' ? 'var(--accent)' : 'transparent';
+  // Show/hide panels
+  document.getElementById('panel-monitor-wrap').style.display = tab === 'monitor' ? 'block' : 'none';
+  document.getElementById('panel-dashboard-wrap').style.display = tab === 'dashboard' ? 'block' : 'none';
+  if (tab === 'dashboard') renderDashboard();
+  return; // skip old logic below
+  /*
   document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
