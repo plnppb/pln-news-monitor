@@ -473,13 +473,11 @@
         <p>Pilih kata kunci di sidebar atau masukkan pencarian kustom, lalu klik Cari Berita.</p>
       </div>
     </div>
-  </div>
     <div class="pagination" id="pagination" style="display:none"></div>
-  </div><!-- end panel-monitor -->
   </div><!-- end panel-monitor-wrap -->
 
   <!-- TAB: DASHBOARD -->
-  <div id="panel-dashboard-wrap" style="display:none;">
+  <div id="panel-dashboard-wrap" style="display:none;min-height:200px;">
   <div class="tab-panel" id="panel-dashboard">
 
     <!-- Filter Bar -->
@@ -573,7 +571,8 @@
   </div><!-- end panel-dashboard -->
   </div><!-- end panel-dashboard-wrap -->
 
-</div>
+  </div><!-- end .main -->
+</div><!-- end .app -->
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1330,6 +1329,8 @@ function switchTab(tab) {
     dashAllArticles = []; // force fresh load setiap buka tab
     renderDashboard();
   }
+  // Scroll ke atas
+  document.querySelector('.main').scrollTop = 0;
 }
 
 // ==================== DASHBOARD ====================
