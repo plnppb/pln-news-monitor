@@ -1549,6 +1549,43 @@ function showToast(msg) {
 document.getElementById('bookmarkCount').textContent = `${bookmarks.length} artikel ditandai`;
 initRssFeeds();
 
+// Auto-load artikel dari database saat halaman dibuka
+async function autoLoadFromDB() {
+  try {
+    const resp = await fetch('/api/articles?limit=100&order=published_at.desc');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (!data.articles || !data.articles.length) return;
+
+    // Convert DB format ke app format
+    const articles = data.articles.map(a => ({
+      title: a.title,
+      url: a.url,
+      publishedAt: a.published_at,
+      source: { name: a.source },
+      description: a.description,
+      _tone: null,
+      _analyzed: false
+    }));
+
+    allArticles = articles;
+    filteredArticles = [...articles];
+    document.getElementById('resultLabel').textContent = `Menampilkan ${articles.length} artikel (dari database)`;
+    updateStats(articles);
+    currentPage = 1;
+    renderPage(1);
+
+    // Update header
+    const kw = articles[0]?.keyword || 'PLN Papua';
+    document.querySelector('.header-keyword') && (document.querySelector('.header-keyword').textContent = kw);
+  } catch(e) {
+    console.log('Auto-load DB:', e.message);
+  }
+}
+
+// Jalankan saat halaman siap
+setTimeout(autoLoadFromDB, 500);
+
 // Close modal on overlay click
 document.getElementById('rssModal').addEventListener('click', function(e) {
   if (e.target === this) closeRssModal();
