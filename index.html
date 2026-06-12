@@ -308,7 +308,7 @@
         <div style="font-size:11px;font-weight:600;color:#0369a1;margin-bottom:4px;">🤖 Auto-Crawl Aktif</div>
         <div style="font-size:10px;color:#0369a1;line-height:1.6;">
           ✅ Artikel dikumpulkan otomatis tiap <strong>30 menit</strong>.<br>
-          Buka tab <strong>Dashboard → 🗄 Database</strong> untuk lihat semua hasil.
+          Buka tab <strong>Dashboard &rarr; 🗄 Database</strong> untuk lihat semua hasil.
         </div>
       </div>
       <button class="btn btn-primary" onclick="fetchNews()" id="searchBtn">🔍 Cari Berita</button>
@@ -615,7 +615,7 @@ function renderRssStatus() {
       <span style="width:6px;height:6px;border-radius:50%;background:var(--success);flex-shrink:0;display:inline-block"></span>
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
     </div>`).join('')
-  + (more > 0 ? `<div style="font-size:11px;color:var(--accent2);cursor:pointer;margin-top:2px" onclick="openRssModal()">+${more} feed lainnya →</div>` : '')
+  + (more > 0 ? `<div style="font-size:11px;color:var(--accent2);cursor:pointer;margin-top:2px" onclick="openRssModal()">+${more} feed lainnya &rarr;</div>` : '')
   + `<div style="font-size:10px;color:var(--muted);margin-top:4px">${active.length} aktif dari ${total} terdaftar</div>`;
 }
 
@@ -1278,7 +1278,7 @@ function renderPagination() {
   if (totalPages <= 1) { pag.style.display = 'none'; return; }
   pag.style.display = 'flex';
 
-  let html = `<button class="page-btn" onclick="renderPage(${currentPage-1})" ${currentPage===1?'disabled':''}>← Prev</button>`;
+  let html = `<button class="page-btn" onclick="renderPage(${currentPage-1})" ${currentPage===1?'disabled':''}>&lt; Prev</button>`;
 
   // Show max 7 page buttons
   let startP = Math.max(1, currentPage - 3);
@@ -1293,7 +1293,7 @@ function renderPagination() {
 
   if (endP < totalPages) html += `<span class="page-info">...</span><button class="page-btn" onclick="renderPage(${totalPages})">${totalPages}</button>`;
 
-  html += `<button class="page-btn" onclick="renderPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>Next →</button>`;
+  html += `<button class="page-btn" onclick="renderPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>Next &gt;</button>`;
   html += `<span class="page-info">${total} artikel, halaman ${currentPage}/${totalPages}</span>`;
 
   pag.innerHTML = html;
@@ -1309,13 +1309,6 @@ function switchTab(tab) {
   // Show/hide panels
   document.getElementById('panel-monitor-wrap').style.display = tab === 'monitor' ? 'block' : 'none';
   document.getElementById('panel-dashboard-wrap').style.display = tab === 'dashboard' ? 'block' : 'none';
-  if (tab === 'dashboard') renderDashboard();
-  return; // skip old logic below
-  /*
-  document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('tab-' + tab).classList.add('active');
-  document.getElementById('panel-' + tab).classList.add('active');
   if (tab === 'dashboard') renderDashboard();
 }
 
@@ -1430,7 +1423,7 @@ async function renderDashboard() {
   const bulanIni = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][thisMonth];
   const bulanLalu = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][lastMonth];
   const diff = thisMonthArts.length - lastMonthArts.length;
-  const arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '→';
+  const arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '&rarr;';
   const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '';
   document.getElementById('dashCompare').innerHTML = `
     <div class="compare-row"><span class="compare-label">${bulanIni} ${thisYear}</span><span class="compare-val">${thisMonthArts.length || articles.length} artikel</span></div>
