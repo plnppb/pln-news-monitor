@@ -251,9 +251,19 @@
   .toast.show{display:block;animation:slideUp 0.3s ease;}
   @keyframes slideUp{from{transform:translateY(10px);opacity:0;}to{transform:translateY(0);opacity:1;}}
 
+  .dash-period-btn{background:var(--surface2);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s;}
+  .dash-period-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+  .dash-period-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .dash-stat-row{display:grid;gap:10px;margin-bottom:14px;}
+  .dash-stat{background:var(--surface2);border-radius:8px;padding:12px;text-align:center;border:1px solid var(--border);}
+  .dash-stat .num{font-size:22px;font-weight:700;color:var(--accent);}
+  .dash-stat .lbl{font-size:10px;color:var(--muted);margin-top:2px;}
   ::-webkit-scrollbar{width:5px;}
   ::-webkit-scrollbar-track{background:var(--bg);}
   ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+  .dash-period-btn{background:var(--surface);border:1px solid var(--border2);color:var(--text2);border-radius:5px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s;}
+  .dash-period-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+  .dash-period-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
 </style>
 </head>
 <body>
@@ -472,74 +482,74 @@
   <div id="panel-dashboard-wrap" style="display:none;">
   <div class="tab-panel" id="panel-dashboard">
 
-    <!-- Sumber Data Toggle -->
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:10px 14px;background:var(--accent-light);border-radius:8px;border:1px solid rgba(0,61,143,0.15);">
-      <span style="font-size:12px;font-weight:600;color:var(--accent);">Sumber Data:</span>
-      <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
-        <input type="radio" name="dashSource" value="live" checked onchange="renderDashboard()">
-        <span>📡 Artikel Live (hasil cari sekarang)</span>
+    <!-- Filter Bar -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      <span style="font-size:12px;font-weight:700;color:var(--accent);">📅 Periode:</span>
+      <button class="dash-period-btn active" onclick="setDashPeriod(7,this)">7 Hari</button>
+      <button class="dash-period-btn" onclick="setDashPeriod(30,this)">30 Hari</button>
+      <button class="dash-period-btn" onclick="setDashPeriod(90,this)">3 Bulan</button>
+      <button class="dash-period-btn" onclick="setDashPeriod(0,this)">Semua</button>
+      <div style="display:flex;align-items:center;gap:6px;margin-left:8px;">
+        <input type="date" id="dashFrom" style="font-size:11px;padding:5px 8px;" onchange="setDashCustomRange()"/>
+        <span style="font-size:11px;color:var(--muted)">s/d</span>
+        <input type="date" id="dashTo" style="font-size:11px;padding:5px 8px;" onchange="setDashCustomRange()"/>
+      </div>
+      <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:auto;">
+        <input type="checkbox" id="dashExcludeInfonesia" onchange="renderDashboard()">
+        <span>Exclude Infonesia.net</span>
       </label>
-      <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
-        <input type="radio" name="dashSource" value="db" onchange="renderDashboard()">
-        <span>🗄 Database (semua yang pernah terjaring)</span>
-      </label>
-      <span id="dashDbStatus" style="font-size:11px;color:var(--muted);margin-left:auto;"></span>
+      <span id="dashDbStatus" style="font-size:11px;color:var(--muted);"></span>
     </div>
 
     <!-- Stats Row -->
-    <div class="dash-stat-row">
-      <div class="dash-stat"><div class="num" id="dashTotalMonth">-</div><div class="lbl">Artikel Bulan Ini</div></div>
+    <div class="dash-stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;">
+      <div class="dash-stat"><div class="num" id="dashTotalPeriod">-</div><div class="lbl">Artikel Periode Ini</div></div>
+      <div class="dash-stat"><div class="num" id="dashTotalMonth">-</div><div class="lbl">Bulan Ini</div></div>
       <div class="dash-stat"><div class="num" id="dashTotalLastMonth">-</div><div class="lbl">Bulan Lalu</div></div>
       <div class="dash-stat"><div class="num" id="dashTotalMedia">-</div><div class="lbl">Media Aktif</div></div>
-      <div class="dash-stat"><div class="num" id="dashTotalAll">-</div><div class="lbl">Total Database</div></div>
     </div>
 
     <div class="dash-grid">
-      <!-- Top Media -->
-      <div class="dash-card dash-full">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-          <h4 style="margin:0;">🏆 Top Media Pemberitaan</h4>
-          <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;">
-            <input type="checkbox" id="dashExcludeInfonesia" onchange="renderDashboard()"> 
-            <span>Exclude Infonesia.net</span>
-          </label>
-        </div>
-        <div id="dashMediaList" style="margin-top:12px;"></div>
-      </div>
 
       <!-- Tone Distribution -->
       <div class="dash-card">
         <h4>🎭 Distribusi Tone</h4>
-        <div class="tone-bar" id="dashToneBar"></div>
+        <div class="tone-bar" id="dashToneBar" style="margin-bottom:10px;"></div>
         <div class="tone-legend" id="dashToneLegend"></div>
-        <div style="margin-top:12px;" id="dashToneDetail"></div>
+        <div style="margin-top:10px;" id="dashToneDetail"></div>
       </div>
 
       <!-- Perbandingan Bulan -->
       <div class="dash-card">
-        <h4>📅 Perbandingan Bulan</h4>
+        <h4>📅 Bulan Ini vs Bulan Lalu</h4>
         <div id="dashCompare"></div>
       </div>
 
       <!-- Trend Harian -->
       <div class="dash-card dash-full">
-        <h4>📈 Tren Pemberitaan 30 Hari Terakhir</h4>
-        <div class="heatmap-wrap">
-          <div id="dashTrend" style="display:flex;gap:4px;align-items:flex-end;height:80px;"></div>
-          <div id="dashTrendLabels" style="display:flex;gap:4px;margin-top:4px;"></div>
+        <h4>📈 Tren Pemberitaan Harian</h4>
+        <div style="overflow-x:auto;">
+          <div id="dashTrend" style="display:flex;gap:3px;align-items:flex-end;height:90px;min-width:400px;"></div>
+          <div id="dashTrendLabels" style="display:flex;gap:3px;margin-top:4px;min-width:400px;"></div>
         </div>
+      </div>
+
+      <!-- Top Media -->
+      <div class="dash-card dash-full">
+        <h4>🏆 Top 15 Media Pemberitaan</h4>
+        <div id="dashMediaList" style="margin-top:8px;"></div>
       </div>
 
       <!-- Kalender Heatmap -->
       <div class="dash-card dash-full">
-        <h4>📆 Kalender Pemberitaan (3 Bulan Terakhir)</h4>
+        <h4>📆 Kalender Pemberitaan</h4>
         <div id="dashCalendar" style="overflow-x:auto;"></div>
       </div>
 
       <!-- Keyword Cloud -->
       <div class="dash-card dash-full">
         <h4>🔤 Kata Kunci Populer di Judul</h4>
-        <div id="dashKeywords"></div>
+        <div id="dashKeywords" style="padding:4px 0;"></div>
       </div>
 
       <!-- Media Baru -->
@@ -556,9 +566,10 @@
 
     </div>
 
-    <div style="text-align:center;padding:8px 0;">
-      <button class="export-btn" onclick="exportDashboardExcel()">⬇ Export Semua Data ke Excel</button>
+    <div style="text-align:center;padding:8px 0 16px;">
+      <button class="export-btn" onclick="exportDashboardExcel()" style="display:inline-flex;align-items:center;gap:6px;padding:9px 20px;font-size:13px;">📥 Export Dashboard ke Excel</button>
     </div>
+
   </div><!-- end panel-dashboard -->
   </div><!-- end panel-dashboard-wrap -->
 
@@ -1309,11 +1320,42 @@ function switchTab(tab) {
   // Show/hide panels
   document.getElementById('panel-monitor-wrap').style.display = tab === 'monitor' ? 'block' : 'none';
   document.getElementById('panel-dashboard-wrap').style.display = tab === 'dashboard' ? 'block' : 'none';
-  if (tab === 'dashboard') renderDashboard();
+  if (tab === 'dashboard') {
+    if (!dashAllArticles.length) {
+      renderDashboard();
+    } else {
+      renderDashboard();
+    }
+  }
 }
 
 // ==================== DASHBOARD ====================
-// Load articles from Supabase DB
+let dashPeriodDays = 30;
+let dashAllArticles = [];
+let dashCustomFrom = '';
+let dashCustomTo = '';
+
+function setDashPeriod(days, el) {
+  dashPeriodDays = days;
+  dashCustomFrom = '';
+  dashCustomTo = '';
+  document.getElementById('dashFrom').value = '';
+  document.getElementById('dashTo').value = '';
+  document.querySelectorAll('.dash-period-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderDashboard();
+}
+
+function setDashCustomRange() {
+  dashCustomFrom = document.getElementById('dashFrom').value;
+  dashCustomTo = document.getElementById('dashTo').value;
+  if (dashCustomFrom || dashCustomTo) {
+    dashPeriodDays = -1; // custom
+    document.querySelectorAll('.dash-period-btn').forEach(b => b.classList.remove('active'));
+  }
+  renderDashboard();
+}
+
 async function loadFromDB() {
   const statusEl = document.getElementById('dashDbStatus');
   statusEl.textContent = 'Memuat dari database...';
@@ -1321,7 +1363,7 @@ async function loadFromDB() {
     const resp = await fetch('/api/articles?limit=2000');
     const data = await resp.json();
     if (data.articles) {
-      // Convert DB format to app format
+      statusEl.textContent = `${data.articles.length} artikel di database`;
       return data.articles.map(a => ({
         title: a.title,
         url: a.url,
@@ -1337,36 +1379,34 @@ async function loadFromDB() {
       }));
     }
   } catch(e) {
-    statusEl.textContent = 'Gagal load database: ' + e.message;
+    statusEl.textContent = 'Gagal load: ' + e.message;
   }
   return [];
 }
 
+function filterByPeriod(articles) {
+  if (dashCustomFrom || dashCustomTo) {
+    return articles.filter(a => {
+      const d = new Date(a.publishedAt);
+      if (dashCustomFrom && d < new Date(dashCustomFrom)) return false;
+      if (dashCustomTo && d > new Date(dashCustomTo + 'T23:59:59')) return false;
+      return true;
+    });
+  }
+  if (dashPeriodDays === 0) return articles;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - dashPeriodDays);
+  return articles.filter(a => new Date(a.publishedAt) >= cutoff);
+}
+
 async function renderDashboard() {
-  const sourceMode = document.querySelector('input[name="dashSource"]:checked')?.value || 'live';
-  const statusEl = document.getElementById('dashDbStatus');
-  
-  let articles = [];
-  if (sourceMode === 'db') {
-    const dbArts = await loadFromDB();
-    if (!dbArts.length) {
-      document.getElementById('dashMediaList').innerHTML = '<p style="color:var(--muted);font-size:12px;">Database kosong. Pastikan crawl sudah berjalan.</p>';
-      return;
-    }
-    articles = dbArts;
-    statusEl.textContent = `${dbArts.length} artikel dari database`;
-    document.getElementById('dashTotalAll').textContent = dbArts.length;
-  } else {
-    if (!allArticles.length) {
-      document.getElementById('dashMediaList').innerHTML = '<p style="color:var(--muted);font-size:12px;">Cari berita dulu di tab Monitor, lalu buka Dashboard.</p>';
-      return;
-    }
-    articles = [...allArticles];
-    statusEl.textContent = `${allArticles.length} artikel dari pencarian terakhir`;
-    document.getElementById('dashTotalAll').textContent = allArticles.length;
+  if (!dashAllArticles.length) {
+    dashAllArticles = await loadFromDB();
   }
 
-  const excludeInfonesia = document.getElementById('dashExcludeInfonesia').checked;
+  let articles = filterByPeriod(dashAllArticles);
+
+  const excludeInfonesia = document.getElementById('dashExcludeInfonesia')?.checked;
   if (excludeInfonesia) articles = articles.filter(a => !a.source?.name?.toLowerCase().includes('infonesia'));
 
   const now = new Date();
@@ -1375,68 +1415,59 @@ async function renderDashboard() {
   const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
   const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
 
-  const thisMonthArts = articles.filter(a => {
+  const thisMonthArts = dashAllArticles.filter(a => {
     const d = new Date(a.publishedAt);
     return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
   });
-  const lastMonthArts = articles.filter(a => {
+  const lastMonthArts = dashAllArticles.filter(a => {
     const d = new Date(a.publishedAt);
     return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
   });
 
   // Stats
   const mediaSet = new Set(articles.map(a => a.source?.name || 'Unknown'));
-  document.getElementById('dashTotalMonth').textContent = thisMonthArts.length || articles.length;
+  document.getElementById('dashTotalPeriod').textContent = articles.length;
+  document.getElementById('dashTotalMonth').textContent = thisMonthArts.length;
   document.getElementById('dashTotalLastMonth').textContent = lastMonthArts.length;
   document.getElementById('dashTotalMedia').textContent = mediaSet.size;
 
-  // Top Media
-  const mediaCounts = {};
-  articles.forEach(a => {
-    const name = a.source?.name || 'Unknown';
-    mediaCounts[name] = (mediaCounts[name] || 0) + 1;
-  });
-  const sortedMedia = Object.entries(mediaCounts).sort((a,b) => b[1]-a[1]).slice(0, 15);
-  const maxCount = sortedMedia[0]?.[1] || 1;
-  document.getElementById('dashMediaList').innerHTML = sortedMedia.map(([name, count]) => `
-    <div class="media-item">
-      <span class="media-name">${name}</span>
-      <div class="media-bar-wrap"><div class="media-bar" style="width:${Math.round(count/maxCount*100)}%"></div></div>
-      <span class="media-count">${count}</span>
-    </div>`).join('');
-
   // Tone Distribution
-  const tones = { positif: 0, negatif: 0, netral: 0, '-': 0 };
-  articles.forEach(a => { tones[a._tone || '-'] = (tones[a._tone || '-'] || 0) + 1; });
-  const total = articles.length;
-  const pPos = Math.round(tones.positif/total*100);
-  const pNeg = Math.round(tones.negatif/total*100);
-  const pNet = Math.round(tones.netral/total*100);
+  const tones = { positif: 0, negatif: 0, netral: 0 };
+  articles.forEach(a => {
+    const t = a._tone || 'netral';
+    tones[t] = (tones[t] || 0) + 1;
+  });
+  const total = articles.length || 1;
+  const pPos = Math.round(tones.positif / total * 100);
+  const pNeg = Math.round(tones.negatif / total * 100);
+  const pNet = Math.round(tones.netral / total * 100);
   document.getElementById('dashToneBar').innerHTML = `
     <div class="tone-seg" style="width:${pPos}%;background:var(--pos)"></div>
     <div class="tone-seg" style="width:${pNeg}%;background:var(--neg)"></div>
     <div class="tone-seg" style="width:${pNet}%;background:var(--neu)"></div>
-    <div class="tone-seg" style="width:${100-pPos-pNeg-pNet}%;background:var(--border2)"></div>`;
+    <div class="tone-seg" style="width:${Math.max(0,100-pPos-pNeg-pNet)}%;background:var(--border2)"></div>`;
   document.getElementById('dashToneLegend').innerHTML = `
     <span class="tone-legend-item"><span class="tone-dot" style="background:var(--pos)"></span>Positif ${pPos}% (${tones.positif})</span>
     <span class="tone-legend-item"><span class="tone-dot" style="background:var(--neg)"></span>Negatif ${pNeg}% (${tones.negatif})</span>
     <span class="tone-legend-item"><span class="tone-dot" style="background:var(--neu)"></span>Netral ${pNet}% (${tones.netral})</span>`;
-  document.getElementById('dashToneDetail').innerHTML = `<p style="font-size:11px;color:var(--muted);">${articles.filter(a=>a._analyzed).length} dari ${total} artikel sudah dianalisis AI</p>`;
+  const analyzed = articles.filter(a => a._analyzed).length;
+  document.getElementById('dashToneDetail').innerHTML = `<p style="font-size:11px;color:var(--muted);margin-top:6px;">${analyzed} dari ${articles.length} artikel sudah dianalisis AI</p>`;
 
   // Perbandingan Bulan
   const bulanIni = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][thisMonth];
   const bulanLalu = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][lastMonth];
   const diff = thisMonthArts.length - lastMonthArts.length;
-  const arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '&rarr;';
+  const arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '→';
   const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '';
   document.getElementById('dashCompare').innerHTML = `
-    <div class="compare-row"><span class="compare-label">${bulanIni} ${thisYear}</span><span class="compare-val">${thisMonthArts.length || articles.length} artikel</span></div>
+    <div class="compare-row"><span class="compare-label">${bulanIni} ${thisYear}</span><span class="compare-val">${thisMonthArts.length} artikel</span></div>
     <div class="compare-row"><span class="compare-label">${bulanLalu}</span><span class="compare-val">${lastMonthArts.length} artikel</span></div>
     <div class="compare-row"><span class="compare-label">Selisih</span><span class="compare-val ${cls}">${arrow} ${Math.abs(diff)}</span></div>`;
 
-  // Trend 30 Hari
+  // Trend Harian - sesuai periode
+  const trendDays = dashPeriodDays > 0 ? dashPeriodDays : 30;
   const days = [];
-  for (let i = 29; i >= 0; i--) {
+  for (let i = trendDays - 1; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     days.push(d.toISOString().split('T')[0]);
@@ -1448,48 +1479,50 @@ async function renderDashboard() {
     if (d && dayCounts[d] !== undefined) dayCounts[d]++;
   });
   const maxDay = Math.max(...Object.values(dayCounts), 1);
-  const trendEl = document.getElementById('dashTrend');
-  const labelEl = document.getElementById('dashTrendLabels');
-  trendEl.innerHTML = days.map(d => {
-    const cnt = dayCounts[d];
-    const h = Math.max(4, Math.round(cnt/maxDay*76));
-    const color = cnt === 0 ? 'var(--border2)' : cnt < 3 ? '#93c5fd' : cnt < 6 ? '#3b82f6' : 'var(--accent)';
-    return `<div title="${d}: ${cnt} artikel" style="flex:1;height:${h}px;background:${color};border-radius:3px 3px 0 0;cursor:default;align-self:flex-end;"></div>`;
+  document.getElementById('dashTrend').innerHTML = days.map(d => {
+    const cnt = dayCounts[d] || 0;
+    const h = Math.max(3, Math.round(cnt / maxDay * 86));
+    const color = cnt === 0 ? 'var(--border2)' : cnt < 3 ? '#93c5fd' : cnt < 8 ? '#3b82f6' : 'var(--accent)';
+    return `<div title="${d}: ${cnt} artikel" style="flex:1;height:${h}px;background:${color};border-radius:3px 3px 0 0;cursor:default;align-self:flex-end;min-width:4px;"></div>`;
   }).join('');
-  labelEl.innerHTML = days.filter((d,i) => i % 5 === 0).map(d => {
+  // Labels every 5 days
+  document.getElementById('dashTrendLabels').innerHTML = days.map((d, i) => {
+    if (i % Math.ceil(trendDays / 10) !== 0) return `<div style="flex:1;min-width:4px;"></div>`;
     const dt = new Date(d);
-    return `<span style="font-size:9px;color:var(--muted);flex:5;">${dt.getDate()}/${dt.getMonth()+1}</span>`;
+    return `<div style="flex:1;font-size:9px;color:var(--muted);min-width:4px;">${dt.getDate()}/${dt.getMonth()+1}</div>`;
   }).join('');
 
-  // Keyword Cloud
-  const stopwords = new Set(['yang','dan','di','ke','dari','untuk','dengan','ini','itu','pada','dalam','oleh','akan','telah','sudah','juga','tidak','sebagai','adalah','pln','papua','listrik','kelistrikan','wilayah','barat','unit','induk','persero']);
-  const wordCount = {};
+  // Top Media
+  const mediaCounts = {};
   articles.forEach(a => {
-    const words = (a.title || '').toLowerCase().split(/\W+/).filter(w => w.length > 3 && !stopwords.has(w));
-    words.forEach(w => wordCount[w] = (wordCount[w]||0)+1);
+    const name = a.source?.name || 'Unknown';
+    mediaCounts[name] = (mediaCounts[name] || 0) + 1;
   });
-  const topWords = Object.entries(wordCount).sort((a,b)=>b[1]-a[1]).slice(0,30);
-  document.getElementById('dashKeywords').innerHTML = topWords.map(([w,c]) => 
-    `<span class="kw-tag" style="font-size:${Math.min(14, 10+c)}px">${w} <strong>${c}</strong></span>`
-  ).join('');
+  const sortedMedia = Object.entries(mediaCounts).sort((a,b) => b[1]-a[1]).slice(0,15);
+  const maxCount = sortedMedia[0]?.[1] || 1;
+  document.getElementById('dashMediaList').innerHTML = sortedMedia.length ? sortedMedia.map(([name, count]) => `
+    <div class="media-item">
+      <span class="media-name" style="min-width:140px;">${name}</span>
+      <div class="media-bar-wrap"><div class="media-bar" style="width:${Math.round(count/maxCount*100)}%"></div></div>
+      <span class="media-count">${count}</span>
+    </div>`).join('') : '<p style="color:var(--muted);font-size:12px;">Belum ada data</p>';
 
   // Kalender Heatmap 3 bulan terakhir
-  const calEl = document.getElementById('dashCalendar');
-  const calHtml = [];
   const allDayCounts = {};
-  articles.forEach(a => {
+  dashAllArticles.forEach(a => {
     const d = a.publishedAt?.split('T')[0];
     if (d) allDayCounts[d] = (allDayCounts[d] || 0) + 1;
   });
   const maxCalDay = Math.max(...Object.values(allDayCounts), 1);
-  const dayNames = ['S','S','R','K','J','S','M'];
+  const dayNames = ['M','S','S','R','K','J','S'];
+  const calHtml = [];
   for (let m = 2; m >= 0; m--) {
     const d = new Date();
     d.setDate(1);
     d.setMonth(d.getMonth() - m);
     const year = d.getFullYear();
     const month = d.getMonth();
-    const monthName = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][month];
+    const monthName = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][month];
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     let cells = '<div class="cal-days">';
@@ -1498,13 +1531,25 @@ async function renderDashboard() {
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
       const cnt = allDayCounts[dateStr] || 0;
-      const intensity = cnt === 0 ? '#f3f4f6' : cnt <= 2 ? '#bfdbfe' : cnt <= 5 ? '#60a5fa' : cnt <= 10 ? '#2563eb' : '#1e3a8a';
-      cells += `<div class="cal-day" style="background:${intensity}" title="${dateStr}: ${cnt} artikel">${day}</div>`;
+      const intensity = cnt === 0 ? '#f1f5f9' : cnt <= 2 ? '#bfdbfe' : cnt <= 5 ? '#60a5fa' : cnt <= 10 ? '#2563eb' : '#1e3a8a';
+      cells += `<div class="cal-day" style="background:${intensity};color:${cnt>5?'#fff':'var(--text2)'}" title="${dateStr}: ${cnt} artikel">${day}</div>`;
     }
     cells += '</div>';
     calHtml.push(`<div class="cal-month"><div class="cal-month-name">${monthName} ${year}</div>${cells}</div>`);
   }
-  calEl.innerHTML = `<div class="cal-grid">${calHtml.join('')}</div>`;
+  document.getElementById('dashCalendar').innerHTML = `<div class="cal-grid">${calHtml.join('')}</div>`;
+
+  // Keyword Cloud
+  const stopwords = new Set(['yang','dan','di','ke','dari','untuk','dengan','ini','itu','pada','dalam','oleh','akan','telah','sudah','juga','tidak','sebagai','adalah','pln','papua','listrik','kelistrikan','wilayah','barat','unit','induk','persero','news','antara']);
+  const wordCount = {};
+  articles.forEach(a => {
+    const words = (a.title || '').toLowerCase().split(/\W+/).filter(w => w.length > 3 && !stopwords.has(w));
+    words.forEach(w => wordCount[w] = (wordCount[w]||0)+1);
+  });
+  const topWords = Object.entries(wordCount).sort((a,b)=>b[1]-a[1]).slice(0,40);
+  document.getElementById('dashKeywords').innerHTML = topWords.length
+    ? topWords.map(([w,c]) => `<span class="kw-tag" style="font-size:${Math.min(15,10+Math.log2(c+1))}px;opacity:${Math.min(1,0.5+c/20)}">${w} <strong>${c}</strong></span>`).join('')
+    : '<p style="font-size:12px;color:var(--muted);">Belum ada data</p>';
 
   // Media Baru Bulan Ini
   const mediaThisMonth = new Set(thisMonthArts.map(a => a.source?.name || 'Unknown'));
@@ -1514,23 +1559,45 @@ async function renderDashboard() {
     ? newMedia.map(m => `<div class="new-media-item">📰 ${m}</div>`).join('')
     : '<p style="font-size:12px;color:var(--muted);">Tidak ada media baru bulan ini</p>';
 
-  // Top 5 Hari Paling Ramai
-  const topDays = Object.entries(allDayCounts)
-    .sort((a,b) => b[1]-a[1])
-    .slice(0, 5);
+  // Top 5 Hari Paling Ramai (dari periode aktif)
+  const periodDayCounts = {};
+  articles.forEach(a => {
+    const d = a.publishedAt?.split('T')[0];
+    if (d) periodDayCounts[d] = (periodDayCounts[d] || 0) + 1;
+  });
+  const topDays = Object.entries(periodDayCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
   document.getElementById('dashTopDays').innerHTML = topDays.length
     ? topDays.map(([date, cnt], i) => {
         const d = new Date(date);
         const label = `${d.getDate()} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][d.getMonth()]} ${d.getFullYear()}`;
-        return `<div class="top-day-item"><span>${['🥇','🥈','🥉','4️⃣','5️⃣'][i]} ${label}</span><strong>${cnt} artikel</strong></div>`;
+        return `<div class="top-day-item"><span>${['🥇','🥈','🥉','4️⃣','5️⃣'][i]} ${label}</span><strong>${cnt}</strong></div>`;
       }).join('')
     : '<p style="font-size:12px;color:var(--muted);">Belum ada data</p>';
 }
 
 function exportDashboardExcel() {
-  if (!allArticles.length) return showToast('⚠ Tidak ada data');
-  // Reuse existing export function
-  exportExcel();
+  if (!dashAllArticles.length) return showToast('⚠ Belum ada data dashboard');
+  const articles = filterByPeriod(dashAllArticles);
+  const excludeInfonesia = document.getElementById('dashExcludeInfonesia')?.checked;
+  const filtered = excludeInfonesia ? articles.filter(a => !a.source?.name?.toLowerCase().includes('infonesia')) : articles;
+
+  const rows = filtered.map(a => ({
+    'Tanggal': a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('id-ID') : '',
+    'Judul Berita': a.title || '',
+    'Link': a.url || '',
+    'Nama Media': a.source?.name || '',
+    'Tone': a._tone ? a._tone.charAt(0).toUpperCase() + a._tone.slice(1) : '',
+    'Spokesperson Internal': a._spkInternal || '',
+    'Spokesperson Eksternal': a._spkExternal || '',
+    'Resume': a._resume || ''
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:12},{wch:65},{wch:50},{wch:25},{wch:14},{wch:35},{wch:35},{wch:80}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Dashboard PLN Papua');
+  XLSX.writeFile(wb, `PLN-Dashboard-${new Date().toISOString().split('T')[0]}.xlsx`);
+  showToast('✅ Excel dashboard berhasil diunduh');
 }
 
 function showLoading() {
@@ -1549,7 +1616,7 @@ initRssFeeds();
 // Auto-load artikel dari database saat halaman dibuka
 async function autoLoadFromDB() {
   try {
-    const resp = await fetch('/api/articles?limit=100&order=published_at.desc');
+    const resp = await fetch('/api/articles?limit=100');
     if (!resp.ok) return;
     const data = await resp.json();
     if (!data.articles || !data.articles.length) return;
@@ -1562,7 +1629,7 @@ async function autoLoadFromDB() {
       source: { name: a.source },
       description: a.description,
       keyword: a.keyword,
-      _tone: a.tone && a.tone !== 'netral' ? a.tone : (a.resume ? a.tone : null),
+      _tone: a.tone || 'netral',
       _resume: a.resume || '',
       _spkInternal: a.spokesperson_internal || '',
       _spkExternal: a.spokesperson_eksternal || '',
@@ -1571,7 +1638,7 @@ async function autoLoadFromDB() {
 
     allArticles = articles;
     filteredArticles = [...articles];
-    document.getElementById('hdr-total').textContent = articles.length;
+    document.getElementById('hdr-total').textContent = data.total || articles.length;
     document.getElementById('resultLabel').textContent = `Menampilkan ${articles.length} artikel (dari database)`;
     updateStats(articles);
     currentPage = 1;
