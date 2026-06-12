@@ -577,6 +577,12 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// Dashboard state - harus di atas karena switchTab membutuhkan ini
+let dashAllArticles = [];
+let dashPeriodDays = 30;
+let dashCustomFrom = '';
+let dashCustomTo = '';
+
 let allArticles = [];
 let currentPage = 1;
 const PAGE_SIZE = 50;
@@ -1321,19 +1327,12 @@ function switchTab(tab) {
   document.getElementById('panel-monitor-wrap').style.display = tab === 'monitor' ? 'block' : 'none';
   document.getElementById('panel-dashboard-wrap').style.display = tab === 'dashboard' ? 'block' : 'none';
   if (tab === 'dashboard') {
-    if (!dashAllArticles.length) {
-      renderDashboard();
-    } else {
-      renderDashboard();
-    }
+    dashAllArticles = []; // force fresh load setiap buka tab
+    renderDashboard();
   }
 }
 
 // ==================== DASHBOARD ====================
-let dashPeriodDays = 30;
-let dashAllArticles = [];
-let dashCustomFrom = '';
-let dashCustomTo = '';
 
 function setDashPeriod(days, el) {
   dashPeriodDays = days;
