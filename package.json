@@ -2,7 +2,6 @@
   "name": "pln-news-monitor",
   "version": "1.0.0",
   "description": "Media monitoring dashboard PLN UIW Papua & Papua Barat",
-  "type": "module",
   "engines": {
     "node": ">=18"
   }
