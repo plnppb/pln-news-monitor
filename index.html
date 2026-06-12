@@ -303,6 +303,18 @@
         </div>
         <button class="toggle-switch on" id="infoneisaToggle" onclick="toggleInfonesia()" title="Toggle semua feed infonesia.net"></button>
       </div>
+      <!-- Auto Crawl Status -->
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:8px 10px;margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:600;color:#0369a1;margin-bottom:4px;">🤖 Auto-Crawl Database</div>
+        <div style="font-size:10px;color:#0369a1;line-height:1.5;">
+          Artikel dikumpulkan otomatis tiap 5 menit.<br>
+          Buka tab <strong>Dashboard → Database</strong> untuk lihat hasil.
+        </div>
+        <div style="margin-top:6px;display:flex;gap:6px;">
+          <button onclick="testCrawlNow()" style="background:#0369a1;color:#fff;border:none;border-radius:4px;padding:4px 8px;font-size:10px;font-weight:600;cursor:pointer;">▶ Crawl Sekarang</button>
+          <span id="crawlStatus" style="font-size:10px;color:#0369a1;align-self:center;"></span>
+        </div>
+      </div>
       <button class="btn btn-primary" onclick="fetchNews()" id="searchBtn">🔍 Cari Berita</button>
       <div class="rss-progress-wrap" id="rssProgressWrap">
         <div class="rss-progress-bar"><div class="rss-progress-fill" id="rssProgressFill"></div></div>
@@ -315,7 +327,10 @@
     <div class="modal">
       <div class="modal-header">
         <h3>⚙ Kelola Sumber RSS</h3>
-        <button class="modal-close" onclick="closeRssModal()">✕</button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button id="syncBtn" onclick="syncFeedsToDB()" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;">☁ Sync ke DB</button>
+          <button class="modal-close" onclick="closeRssModal()">✕</button>
+        </div>
       </div>
       <div class="modal-body">
         <table class="rss-table" id="rssTable">
@@ -605,17 +620,22 @@ function renderRssTable() {
     return;
   }
   tbody.innerHTML = rssFeeds.map((f, i) => `
-    <tr>
-      <td class="rss-name-cell">${f.name}</td>
+    <tr id="rss-row-${i}">
+      <td class="rss-name-cell">
+        <span id="rss-name-${i}">${f.name}</span>
+      </td>
       <td class="rss-url-cell" title="${f.url}">
-        <a href="${f.url.startsWith('http') ? f.url : 'https://'+f.url}" target="_blank" rel="noopener"
-           style="color:var(--accent2);text-decoration:none;font-size:11px">${f.url}</a>
+        <span id="rss-url-${i}">
+          <a href="${f.url.startsWith('http') ? f.url : 'https://'+f.url}" target="_blank" rel="noopener"
+             style="color:var(--accent2);text-decoration:none;font-size:11px">${f.url}</a>
+        </span>
       </td>
       <td>
         <button class="rss-toggle ${f.enabled?'on':''}" onclick="toggleRss(${i})"
           title="${f.enabled?'Aktif':'Nonaktif'}"></button>
       </td>
       <td class="rss-actions">
+        <button style="background:#f0f4ff;color:var(--accent);border:1px solid var(--accent2);border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;" onclick="editRss(${i})">✏ Edit</button>
         <button class="btn-danger-sm" onclick="removeRss(${i})">🗑 Hapus</button>
       </td>
     </tr>`).join('');
@@ -647,6 +667,34 @@ async function syncFeedsToDB() {
   }
   btn.textContent = '☁ Sync ke DB';
   btn.disabled = false;
+}
+
+function editRss(i) {
+  const feed = rssFeeds[i];
+  const row = document.getElementById(`rss-row-${i}`);
+  
+  // Replace cells with input fields
+  document.getElementById(`rss-name-${i}`).innerHTML = 
+    `<input id="edit-name-${i}" value="${feed.name}" style="width:100%;padding:3px 6px;border:1px solid var(--accent2);border-radius:4px;font-size:12px;">`;
+  document.getElementById(`rss-url-${i}`).innerHTML = 
+    `<input id="edit-url-${i}" value="${feed.url}" style="width:100%;padding:3px 6px;border:1px solid var(--accent2);border-radius:4px;font-size:11px;">`;
+  
+  // Replace action buttons
+  row.querySelector('.rss-actions').innerHTML = `
+    <button style="background:var(--success);color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;" onclick="saveEditRss(${i})">💾 Simpan</button>
+    <button style="background:#f3f4f6;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;" onclick="renderRssTable()">✕ Batal</button>
+  `;
+}
+
+function saveEditRss(i) {
+  const newName = document.getElementById(`edit-name-${i}`)?.value?.trim();
+  const newUrl = document.getElementById(`edit-url-${i}`)?.value?.trim();
+  if (!newName || !newUrl) return showToast('⚠ Nama dan URL tidak boleh kosong');
+  rssFeeds[i].name = newName;
+  rssFeeds[i].url = newUrl;
+  saveRssFeeds();
+  renderRssTable();
+  showToast('✅ Feed berhasil diperbarui');
 }
 
 function closeRssModal() {
@@ -1158,6 +1206,27 @@ function extractDomain(url) {
     const u = new URL(url.startsWith('http') ? url : 'http://'+url);
     return u.hostname.replace('www.', '');
   } catch { return url.substring(0, 30); }
+}
+
+async function testCrawlNow() {
+  const statusEl = document.getElementById('crawlStatus');
+  statusEl.textContent = '⏳ Crawling...';
+  try {
+    const resp = await fetch('/api/crawl?secret=Tiunojoyo123&keyword=PLN+Papua&batchIndex=0', {
+      method: 'GET'
+    });
+    const data = await resp.json();
+    if (data.success) {
+      statusEl.textContent = `✅ ${data.saved} artikel baru tersimpan`;
+    } else if (resp.status === 401) {
+      statusEl.textContent = '⚠ Unauthorized';
+    } else {
+      statusEl.textContent = '⚠ ' + (data.error || data.message || 'Selesai');
+    }
+  } catch(e) {
+    statusEl.textContent = '⚠ Error: ' + e.message;
+  }
+  setTimeout(() => statusEl.textContent = '', 5000);
 }
 
 function toggleInfonesia() {
