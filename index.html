@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PLN News Monitor</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%23003d8f'/><text y='.9em' font-size='72' x='12'>⚡</text></svg>"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg:#f0f4f8; --surface:#fff; --surface2:#f8fafc; --border:#e2e8f0; --border2:#cbd5e1;
+    --accent:#003d8f; --accent2:#0066cc; --accent-light:#e8f0fe;
+    --danger:#dc2626; --warn:#d97706; --success:#059669;
+    --text:#1e293b; --text2:#475569; --muted:#94a3b8;
+    --pos:#059669; --neg:#dc2626; --neu:#64748b;
+    --shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md:0 4px 6px rgba(0,0,0,0.07),0 2px 4px rgba(0,0,0,0.04);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;font-size:14px;}
+
+  header{background:var(--accent);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,61,143,0.3);}
+  .logo{display:flex;align-items:center;gap:10px;}
+  .logo-icon{width:30px;height:30px;background:#FFD700;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .logo-text{font-size:15px;font-weight:700;color:#fff;}
+  .logo-sub{font-size:10px;color:rgba(255,255,255,0.7);margin-top:1px;}
+  .header-stats{display:flex;gap:16px;align-items:center;}
+  .stat-pill{font-size:12px;color:rgba(255,255,255,0.8);display:flex;align-items:center;gap:5px;}
+  .stat-pill strong{color:#fff;}
+  .dot{width:6px;height:6px;border-radius:50%;background:#4ade80;animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+
+  .app{display:flex;height:calc(100vh - 56px);}
+  .sidebar{width:268px;min-width:268px;background:var(--surface);border-right:1px solid var(--border);padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:18px;}
+  .main{flex:1;overflow-y:auto;padding:20px 24px;background:var(--bg);}
+
+  .sidebar-label{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+  .keyword-chips{display:flex;flex-wrap:wrap;gap:5px;}
+  .chip{background:var(--surface2);border:1px solid var(--border2);border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer;transition:all 0.15s;color:var(--text2);}
+  .chip:hover{border-color:var(--accent2);color:var(--accent2);}
+  .chip.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+
+  .input-group{display:flex;flex-direction:column;gap:7px;}
+  input[type=text],input[type=date]{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:13px;padding:8px 11px;width:100%;transition:border 0.15s;font-family:'Inter',sans-serif;}
+  input[type=text]:focus,input[type=date]:focus{outline:none;border-color:var(--accent2);box-shadow:0 0 0 3px rgba(0,102,204,0.1);}
+
+  .btn{border:none;border-radius:7px;cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;font-size:13px;padding:9px 16px;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:6px;}
+  .btn-primary{background:var(--accent);color:#fff;width:100%;}
+  .btn-primary:hover{background:var(--accent2);}
+  .btn-primary:disabled{opacity:0.5;cursor:not-allowed;}
+  /* INFONESIA TOGGLE */
+  .infonesia-toggle-wrap{background:var(--accent-light);border:1px solid rgba(0,61,143,0.15);border-radius:8px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .infonesia-toggle-label{font-size:11px;font-weight:600;color:var(--accent);}
+  .infonesia-toggle-sub{font-size:10px;color:var(--muted);margin-top:1px;}
+  .toggle-switch{width:36px;height:20px;background:var(--border2);border-radius:10px;cursor:pointer;position:relative;transition:background 0.2s;border:none;flex-shrink:0;}
+  .toggle-switch.on{background:var(--accent);}
+  .toggle-switch::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);}
+  .toggle-switch.on::after{left:18px;}
+  .rss-progress-wrap{margin-top:6px;display:none;}
+  .rss-progress-wrap.show{display:block;}
+  .rss-progress-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
+  .rss-progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width 0.3s;width:0%;}
+  .rss-progress-label{font-size:10px;color:var(--muted);margin-top:4px;text-align:center;}
+  .btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text2);font-size:12px;padding:6px 10px;}
+  .btn-ghost:hover{border-color:var(--accent2);color:var(--accent2);}
+  .btn-danger{background:transparent;border:1px solid #fecaca;color:var(--danger);font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:'Inter',sans-serif;}
+  .btn-danger:hover{background:#fee2e2;}
+
+  .filter-row{display:flex;gap:5px;}
+  .filter-btn{flex:1;padding:6px 4px;font-size:11px;font-weight:600;border-radius:6px;cursor:pointer;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);transition:all 0.15s;text-align:center;}
+  .filter-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+  .filter-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+  /* RSS MANAGER */
+  .rss-section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  .rss-count{font-size:11px;color:var(--muted);}
+  .btn-manage{background:var(--accent-light);color:var(--accent);border:1px solid rgba(0,61,143,0.2);border-radius:5px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;}
+  .btn-manage:hover{background:var(--accent);color:#fff;}
+
+  /* RSS MODAL */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;display:none;align-items:center;justify-content:center;}
+  .modal-overlay.show{display:flex;}
+  .modal{background:var(--surface);border-radius:12px;width:520px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 40px rgba(0,0,0,0.15);}
+  .modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+  .modal-header h3{font-size:15px;font-weight:700;color:var(--text);}
+  .modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted);padding:2px 6px;border-radius:4px;}
+  .modal-close:hover{background:var(--surface2);color:var(--text);}
+  .modal-body{padding:16px 20px;overflow-y:auto;flex:1;}
+  .modal-footer{padding:12px 20px;border-top:1px solid var(--border);background:var(--surface2);border-radius:0 0 12px 12px;}
+
+  .rss-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px;}
+  .rss-table th{text-align:left;padding:8px 10px;background:var(--surface2);border-bottom:2px solid var(--border);font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);}
+  .rss-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  .rss-table tr:hover td{background:var(--surface2);}
+  .rss-name-cell{font-weight:600;color:var(--text);}
+  .rss-url-cell{color:var(--muted);font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .rss-toggle{width:32px;height:18px;background:var(--border2);border-radius:9px;cursor:pointer;position:relative;transition:background 0.2s;border:none;flex-shrink:0;display:inline-block;}
+  .rss-toggle.on{background:var(--accent);}
+  .rss-toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left 0.2s;}
+  .rss-toggle.on::after{left:16px;}
+  .rss-actions{display:flex;gap:4px;align-items:center;}
+
+  .add-feed-form{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;}
+  .add-feed-form h4{font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px;}
+  .add-feed-grid{display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px;}
+  .add-feed-grid input{font-size:12px;}
+  .btn-add-feed{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;width:100%;font-family:'Inter',sans-serif;}
+  .btn-add-feed:hover{background:var(--accent2);}
+  .btn-danger-sm{background:none;border:1px solid #fecaca;color:var(--danger);font-size:11px;padding:3px 7px;border-radius:4px;cursor:pointer;font-family:'Inter',sans-serif;}
+  .btn-danger-sm:hover{background:#fee2e2;}
+
+  /* PROGRESS */
+  .progress-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:none;box-shadow:var(--shadow);}
+  .progress-wrap.show{display:block;}
+  .progress-label{font-size:12px;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between;}
+  .progress-label strong{color:var(--accent);}
+  .progress-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+  .progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;transition:width 0.3s;width:0%;}
+
+  /* STATS */
+  .stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);}
+  .stat-card .num{font-size:28px;font-weight:700;color:var(--text);}
+  .stat-card .lbl{font-size:11px;color:var(--muted);margin-top:2px;font-weight:500;}
+  .stat-card.pos .num{color:var(--pos);}
+  .stat-card.neg .num{color:var(--neg);}
+  .stat-card.neu .num{color:var(--neu);}
+
+  .toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .toolbar-left{display:flex;gap:8px;align-items:center;}
+  .result-label{font-size:13px;color:var(--text2);}
+  .sort-select{background:var(--surface);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;}
+  .export-btn{background:var(--success);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;}
+  /* Dashboard extras */
+  .dash-stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+  .cal-grid{display:flex;gap:16px;overflow-x:auto;padding-bottom:4px;}
+  .cal-month{flex-shrink:0;}
+  .cal-month-name{font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px;text-align:center;}
+  .cal-days{display:grid;grid-template-columns:repeat(7,20px);gap:2px;}
+  .cal-day{width:20px;height:20px;border-radius:3px;font-size:9px;display:flex;align-items:center;justify-content:center;cursor:default;}
+  .cal-day-header{font-size:9px;font-weight:600;color:var(--muted);text-align:center;}
+  .cal-day-empty{background:transparent;}
+  .top-day-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border1);font-size:12px;}
+  .top-day-item:last-child{border-bottom:none;}
+  .new-media-item{padding:5px 0;border-bottom:1px solid var(--border1);font-size:12px;}
+  .new-media-item:last-child{border-bottom:none;}
+
+  /* TABS */
+  .main-tabs{display:flex;gap:4px;margin-bottom:16px;background:var(--surface2);border-radius:10px;padding:4px;}
+  .main-tab{flex:1;background:none;border:none;padding:8px 12px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;border-radius:7px;font-family:'Inter',sans-serif;transition:all 0.15s;}
+  .main-tab.active{background:var(--accent);color:#fff;}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  /* DASHBOARD */
+  .dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;}
+  .dash-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:var(--shadow);}
+  .dash-card h4{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px;}
+  .dash-full{grid-column:1/-1;}
+  .media-item{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border2);}
+  .media-item:last-child{border-bottom:none;}
+  .media-name{font-size:12px;font-weight:600;color:var(--text);}
+  .media-bar-wrap{flex:1;margin:0 10px;height:6px;background:var(--border2);border-radius:3px;overflow:hidden;}
+  .media-bar{height:100%;background:var(--accent);border-radius:3px;transition:width 0.5s;}
+  .media-count{font-size:11px;color:var(--muted);font-weight:600;min-width:24px;text-align:right;}
+  .trend-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+  .trend-day{aspect-ratio:1;border-radius:3px;background:var(--border2);cursor:default;position:relative;}
+  .trend-day:hover::after{content:attr(title);position:absolute;bottom:110%;left:50%;transform:translateX(-50%);background:#222;color:#fff;font-size:10px;padding:3px 6px;border-radius:4px;white-space:nowrap;z-index:10;}
+  .tone-bar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin-bottom:8px;}
+  .tone-seg{height:100%;transition:width 0.5s;}
+  .tone-legend{display:flex;gap:12px;flex-wrap:wrap;}
+  .tone-legend-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);}
+  .tone-dot{width:8px;height:8px;border-radius:50%;}
+  .compare-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2);}
+  .compare-row:last-child{border-bottom:none;}
+  .compare-label{font-size:12px;color:var(--text);}
+  .compare-vals{display:flex;gap:12px;}
+  .compare-val{font-size:12px;font-weight:700;}
+  .compare-val.up{color:var(--pos);}
+  .compare-val.down{color:var(--neg);}
+  .heatmap-wrap{overflow-x:auto;}
+  .heatmap{display:flex;gap:3px;min-width:600px;}
+  .heatmap-col{display:flex;flex-direction:column;gap:3px;}
+  .heatmap-cell{width:14px;height:14px;border-radius:2px;}
+  .kw-tag{display:inline-block;padding:3px 8px;background:var(--accent-light);color:var(--accent);border-radius:20px;font-size:11px;font-weight:600;margin:2px;}
+  .dash-stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
+  .dash-stat{background:var(--surface2);border-radius:8px;padding:12px;text-align:center;}
+  .dash-stat .num{font-size:22px;font-weight:700;color:var(--accent);}
+  .dash-stat .lbl{font-size:10px;color:var(--muted);margin-top:2px;}
+  .pagination{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:20px;padding:16px 0;}
+  .page-btn{background:var(--surface);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s;}
+  .page-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+  .page-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+  .page-btn:disabled{opacity:0.4;cursor:not-allowed;}
+  .page-info{font-size:12px;color:var(--muted);}
+  .export-btn:hover{background:#047857;}
+
+  /* CARDS */
+  .news-grid{display:flex;flex-direction:column;gap:8px;}
+  .article-card{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--border2);border-radius:10px;padding:14px 16px;transition:box-shadow 0.15s;box-shadow:var(--shadow);}
+  .article-card:hover{box-shadow:var(--shadow-md);}
+  .article-card.positif{border-left-color:var(--pos);}
+  .article-card.negatif{border-left-color:var(--neg);}
+  .article-card.netral{border-left-color:var(--neu);}
+
+  .card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;}
+  .card-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+  .source-badge{background:var(--accent-light);color:var(--accent);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;}
+  .date-badge{font-size:11px;color:var(--muted);}
+  .tone-badge{padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600;}
+  .tone-badge.positif{background:#dcfce7;color:var(--pos);}
+  .tone-badge.negatif{background:#fee2e2;color:var(--neg);}
+  .tone-badge.netral{background:#f1f5f9;color:var(--neu);}
+
+  .card-actions{display:flex;gap:4px;flex-shrink:0;}
+  .icon-btn{background:var(--surface2);border:1px solid var(--border);cursor:pointer;color:var(--muted);font-size:13px;padding:4px 7px;transition:all 0.15s;border-radius:5px;}
+  .icon-btn:hover{background:var(--accent-light);color:var(--accent);border-color:var(--accent2);}
+  .icon-btn.active{color:var(--warn);background:#fef3c7;border-color:var(--warn);}
+
+  .card-title{font-size:14px;font-weight:600;line-height:1.5;margin-bottom:6px;}
+  .card-title a{color:var(--text);text-decoration:none;}
+  .card-title a:hover{color:var(--accent2);text-decoration:underline;}
+  .card-resume{font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px;background:var(--surface2);border-radius:6px;padding:8px 10px;border-left:3px solid var(--border2);}
+  .card-footer{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+  .spk-badge{font-size:11px;border-radius:4px;padding:3px 8px;font-weight:500;}
+  .spk-badge.internal{background:#dbeafe;color:#1d4ed8;}
+  .spk-badge.external{background:#fef3c7;color:#92400e;}
+
+  .ai-analyzing{font-size:11px;color:var(--accent2);display:flex;align-items:center;gap:5px;padding:6px 10px;background:var(--accent-light);border-radius:6px;margin-bottom:8px;}
+  .spinner{width:10px;height:10px;border:1.5px solid transparent;border-top-color:var(--accent2);border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .brief-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px;box-shadow:var(--shadow);border-top:3px solid var(--accent);}
+  .brief-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+  .brief-title{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent);}
+  .brief-text{font-size:13px;line-height:1.8;color:var(--text);}
+  .brief-placeholder{font-size:12px;color:var(--muted);font-style:italic;}
+
+  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center;gap:12px;}
+  .empty-icon{font-size:48px;opacity:0.3;}
+  .empty-state h3{font-size:16px;color:var(--text2);}
+  .empty-state p{font-size:13px;color:var(--muted);max-width:300px;line-height:1.6;}
+
+  .skeleton{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;animation:shimmer 1.5s infinite;}
+  .skel-line{background:var(--border);border-radius:4px;height:12px;margin-bottom:8px;}
+  @keyframes shimmer{0%,100%{opacity:1;}50%{opacity:0.5;}}
+
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--text);color:#fff;border-radius:8px;padding:10px 16px;font-size:13px;z-index:999;display:none;box-shadow:var(--shadow-md);}
+  .toast.show{display:block;animation:slideUp 0.3s ease;}
+  @keyframes slideUp{from{transform:translateY(10px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+
+  ::-webkit-scrollbar{width:5px;}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <div>
+      <div class="logo-text">PLN News Monitor</div>
+      <div class="logo-sub">UIW Papua & Papua Barat</div>
+    </div>
+  </div>
+  <div class="header-stats">
+    <div class="stat-pill"><div class="dot"></div> Live</div>
+    <div class="stat-pill">Total: <strong id="hdr-total">0</strong> artikel</div>
+    <div class="stat-pill" id="hdr-time">—</div>
+  </div>
+</header>
+
+<div class="app">
+  <div class="sidebar">
+    <!-- KEYWORDS -->
+    <div>
+      <div class="sidebar-label">Kata Kunci Cepat</div>
+      <div class="keyword-chips">
+        <div class="chip active" onclick="setKeyword('PLN Wilayah Papua',this)">PLN Wilayah Papua</div>
+        <div class="chip" onclick="setKeyword('PLN Sorong',this)">PLN Sorong</div>
+        <div class="chip" onclick="setKeyword('PLN Jayapura',this)">PLN Jayapura</div>
+        <div class="chip" onclick="setKeyword('listrik Papua',this)">Listrik Papua</div>
+        <div class="chip" onclick="setKeyword('PLN Manokwari',this)">PLN Manokwari</div>
+        <div class="chip" onclick="setKeyword('pemadaman Papua',this)">Pemadaman</div>
+        <div class="chip" onclick="setKeyword('energi Papua',this)">Energi Papua</div>
+      </div>
+    </div>
+
+    <!-- SEARCH -->
+    <div class="input-group">
+      <div class="sidebar-label">Pencarian Kustom</div>
+      <input type="text" id="searchInput" placeholder="Kata kunci..." value="PLN Wilayah Papua"/>
+      <input type="date" id="dateFrom" title="Dari tanggal"/>
+      <input type="date" id="dateTo" title="Sampai tanggal"/>
+      <!-- INFONESIA TOGGLE -->
+      <div class="infonesia-toggle-wrap">
+        <div>
+          <div class="infonesia-toggle-label">⚡ Feed Infonesia.net</div>
+          <div class="infonesia-toggle-sub" id="infoneisaCount">549 subdomain</div>
+        </div>
+        <button class="toggle-switch on" id="infoneisaToggle" onclick="toggleInfonesia()" title="Toggle semua feed infonesia.net"></button>
+      </div>
+      <!-- Auto Crawl Status -->
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:8px 10px;margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:600;color:#0369a1;margin-bottom:4px;">🤖 Auto-Crawl Database</div>
+        <div style="font-size:10px;color:#0369a1;line-height:1.5;">
+          Artikel dikumpulkan otomatis tiap 5 menit.<br>
+          Buka tab <strong>Dashboard → Database</strong> untuk lihat hasil.
+        </div>
+        <div style="margin-top:6px;display:flex;gap:6px;">
+          <button onclick="testCrawlNow()" style="background:#0369a1;color:#fff;border:none;border-radius:4px;padding:4px 8px;font-size:10px;font-weight:600;cursor:pointer;">▶ Crawl Sekarang</button>
+          <span id="crawlStatus" style="font-size:10px;color:#0369a1;align-self:center;"></span>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="fetchNews()" id="searchBtn">🔍 Cari Berita</button>
+      <div class="rss-progress-wrap" id="rssProgressWrap">
+        <div class="rss-progress-bar"><div class="rss-progress-fill" id="rssProgressFill"></div></div>
+        <div class="rss-progress-label" id="rssProgressLabel">Mengambil berita...</div>
+      </div>
+    </div>
+
+  <!-- RSS MODAL -->
+  <div class="modal-overlay" id="rssModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>⚙ Kelola Sumber RSS</h3>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button id="syncBtn" onclick="syncFeedsToDB()" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;">☁ Sync ke DB</button>
+          <button class="modal-close" onclick="closeRssModal()">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <table class="rss-table" id="rssTable">
+          <thead>
+            <tr>
+              <th>Nama Media</th>
+              <th>URL Feed</th>
+              <th>Status</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="rssTableBody"></tbody>
+        </table>
+
+        <div class="add-feed-form">
+          <h4>+ Tambah Feed Baru</h4>
+          <div class="add-feed-grid">
+            <input type="text" id="rssName" placeholder="Nama media (contoh: Koreri)"/>
+            <input type="text" id="rssUrl" placeholder="URL RSS (contoh: koreri.com/feed)"/>
+          </div>
+          <button class="btn-add-feed" onclick="addRssFeed()">+ Tambah Manual</button>
+
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+            <h4 style="margin-bottom:8px">📂 Upload File (CSV atau TXT)</h4>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.6">
+              Format CSV: <code style="background:var(--border);padding:1px 4px;border-radius:3px">Nama Media,URL Feed</code> (satu baris = satu feed)<br/>
+              Format TXT: satu URL per baris (nama diambil dari domain otomatis)
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="file" id="rssFileInput" accept=".csv,.txt" style="display:none" onchange="importRssFile(this)"/>
+              <button class="btn-add-feed" style="background:var(--accent2)" onclick="document.getElementById('rssFileInput').click()">
+                📂 Pilih File CSV/TXT
+              </button>
+              <span id="rssFileLabel" style="font-size:11px;color:var(--muted)">Belum ada file dipilih</span>
+            </label>
+            <div id="rssImportPreview" style="margin-top:8px"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="font-size:11px;color:var(--muted)">
+        Feed aktif: antaranews.com/rss/terkini.xml · koreri.com/feed · kabarpapua.co/feed · jubi.id/feed
+      </div>
+    </div>
+  </div>
+
+    <!-- FILTERS -->
+    <div>
+      <div class="sidebar-label">Filter Tone</div>
+      <div class="filter-row">
+        <div class="filter-btn active" onclick="filterTone('semua',this)">Semua</div>
+        <div class="filter-btn" onclick="filterTone('positif',this)">✓ Pos</div>
+        <div class="filter-btn" onclick="filterTone('negatif',this)">✗ Neg</div>
+        <div class="filter-btn" onclick="filterTone('netral',this)">— Net</div>
+      </div>
+    </div>
+    <div>
+      <div class="sidebar-label">Filter Sumber</div>
+      <div id="sourceFilters" class="filter-row">
+        <div class="filter-btn active" onclick="filterSource('semua',this)">Semua</div>
+        <div class="filter-btn" onclick="filterSource('newsapi',this)">NewsAPI</div>
+        <div class="filter-btn" onclick="filterSource('gnews',this)">GNews</div>
+      </div>
+    </div>
+
+    <!-- BOOKMARKS -->
+    <div>
+      <div class="sidebar-label">Tersimpan</div>
+      <div id="bookmarkCount" style="font-size:12px;color:var(--muted);margin-bottom:8px">0 artikel ditandai</div>
+      <button class="btn btn-ghost" style="width:100%" onclick="toggleBookmarks()">📌 Lihat Tersimpan</button>
+    </div>
+
+    <!-- RSS MANAGER (bottom) -->
+    <div>
+      <div class="rss-section-header">
+        <div class="sidebar-label" style="margin-bottom:0">Sumber RSS</div>
+        <button class="btn-manage" onclick="openRssModal()">⚙ Kelola</button>
+      </div>
+      <div id="rssStatusList" style="display:flex;flex-direction:column;gap:4px;margin-top:6px"></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- BRIEF -->
+    <div class="brief-card">
+      <div class="brief-header">
+        <span class="brief-title">✦ Daily Brief AI</span>
+        <button class="btn btn-ghost" onclick="generateBrief()" id="briefBtn">Generate</button>
+      </div>
+      <div id="briefContent" class="brief-placeholder">Cari berita terlebih dahulu, lalu klik Generate untuk ringkasan harian dari AI.</div>
+    </div>
+
+    <!-- STATS -->
+    <div class="stats-bar">
+      <div class="stat-card"><div class="num" id="statTotal">0</div><div class="lbl">Total Artikel</div></div>
+      <div class="stat-card pos"><div class="num" id="statPos">0</div><div class="lbl">Tone Positif</div></div>
+      <div class="stat-card neg"><div class="num" id="statNeg">0</div><div class="lbl">Tone Negatif</div></div>
+      <div class="stat-card neu"><div class="num" id="statNeu">0</div><div class="lbl">Tone Netral</div></div>
+    </div>
+
+    <!-- PROGRESS -->
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label">
+        <span id="progressText">Menganalisis artikel dengan AI...</span>
+        <strong id="progressCount">0/0</strong>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <span class="result-label" id="resultLabel">Menampilkan 0 artikel</span>
+        <select class="sort-select" onchange="sortArticles(this.value)">
+          <option value="date">Terbaru</option>
+          <option value="tone">Tone</option>
+        </select>
+      </div>
+      <button class="export-btn" onclick="exportExcel()">📥 Export Excel</button>
+    </div>
+
+    <div id="newsGrid" class="news-grid">
+      <div class="empty-state">
+        <div class="empty-icon">📡</div>
+        <h3>Belum ada berita</h3>
+        <p>Pilih kata kunci di sidebar atau masukkan pencarian kustom, lalu klik Cari Berita.</p>
+      </div>
+    </div>
+  </div>
+    <div class="pagination" id="pagination" style="display:none"></div>
+  </div><!-- end panel-monitor -->
+  </div><!-- end tab-panel -->
+
+  <!-- TAB: DASHBOARD -->
+  <div class="tab-panel" id="panel-dashboard">
+
+    <!-- Sumber Data Toggle -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:10px 14px;background:var(--accent-light);border-radius:8px;border:1px solid rgba(0,61,143,0.15);">
+      <span style="font-size:12px;font-weight:600;color:var(--accent);">Sumber Data:</span>
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="radio" name="dashSource" value="live" checked onchange="renderDashboard()">
+        <span>📡 Artikel Live (hasil cari sekarang)</span>
+      </label>
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="radio" name="dashSource" value="db" onchange="renderDashboard()">
+        <span>🗄 Database (semua yang pernah terjaring)</span>
+      </label>
+      <span id="dashDbStatus" style="font-size:11px;color:var(--muted);margin-left:auto;"></span>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="dash-stat-row">
+      <div class="dash-stat"><div class="num" id="dashTotalMonth">-</div><div class="lbl">Artikel Bulan Ini</div></div>
+      <div class="dash-stat"><div class="num" id="dashTotalLastMonth">-</div><div class="lbl">Bulan Lalu</div></div>
+      <div class="dash-stat"><div class="num" id="dashTotalMedia">-</div><div class="lbl">Media Aktif</div></div>
+      <div class="dash-stat"><div class="num" id="dashTotalAll">-</div><div class="lbl">Total Database</div></div>
+    </div>
+
+    <div class="dash-grid">
+      <!-- Top Media -->
+      <div class="dash-card dash-full">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <h4 style="margin:0;">🏆 Top Media Pemberitaan</h4>
+          <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+            <input type="checkbox" id="dashExcludeInfonesia" onchange="renderDashboard()"> 
+            <span>Exclude Infonesia.net</span>
+          </label>
+        </div>
+        <div id="dashMediaList" style="margin-top:12px;"></div>
+      </div>
+
+      <!-- Tone Distribution -->
+      <div class="dash-card">
+        <h4>🎭 Distribusi Tone</h4>
+        <div class="tone-bar" id="dashToneBar"></div>
+        <div class="tone-legend" id="dashToneLegend"></div>
+        <div style="margin-top:12px;" id="dashToneDetail"></div>
+      </div>
+
+      <!-- Perbandingan Bulan -->
+      <div class="dash-card">
+        <h4>📅 Perbandingan Bulan</h4>
+        <div id="dashCompare"></div>
+      </div>
+
+      <!-- Trend Harian -->
+      <div class="dash-card dash-full">
+        <h4>📈 Tren Pemberitaan 30 Hari Terakhir</h4>
+        <div class="heatmap-wrap">
+          <div id="dashTrend" style="display:flex;gap:4px;align-items:flex-end;height:80px;"></div>
+          <div id="dashTrendLabels" style="display:flex;gap:4px;margin-top:4px;"></div>
+        </div>
+      </div>
+
+      <!-- Kalender Heatmap -->
+      <div class="dash-card dash-full">
+        <h4>📆 Kalender Pemberitaan (3 Bulan Terakhir)</h4>
+        <div id="dashCalendar" style="overflow-x:auto;"></div>
+      </div>
+
+      <!-- Keyword Cloud -->
+      <div class="dash-card dash-full">
+        <h4>🔤 Kata Kunci Populer di Judul</h4>
+        <div id="dashKeywords"></div>
+      </div>
+
+      <!-- Media Baru -->
+      <div class="dash-card">
+        <h4>🆕 Media Baru Bulan Ini</h4>
+        <div id="dashNewMedia"></div>
+      </div>
+
+      <!-- Hari Paling Ramai -->
+      <div class="dash-card">
+        <h4>🔥 Hari Paling Ramai</h4>
+        <div id="dashTopDays"></div>
+      </div>
+
+    </div>
+
+    <div style="text-align:center;padding:8px 0;">
+      <button class="export-btn" onclick="exportDashboardExcel()">⬇ Export Semua Data ke Excel</button>
+    </div>
+  </div><!-- end panel-dashboard -->
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+let allArticles = [];
+let currentPage = 1;
+const PAGE_SIZE = 50;
+let infoneisaEnabled = true;
+let filteredArticles = [];
+let bookmarks = JSON.parse(localStorage.getItem('pln_bookmarks') || '[]');
+let rssFeeds = JSON.parse(localStorage.getItem('pln_rss_feeds') || '[]');
+let currentFilter = { tone: 'semua', source: 'semua' };
+let showingBookmarks = false;
+let analyzeController = null;
+
+// Default RSS feeds
+const DEFAULT_FEEDS = [
+  { name: 'ANTARA Papua', url: 'https://www.antaranews.com/rss/terkini.xml', enabled: true },
+];
+
+function initRssFeeds() {
+  if (rssFeeds.length === 0) {
+    rssFeeds = [...DEFAULT_FEEDS];
+    saveRssFeeds();
+  }
+  renderRssStatus();
+  renderRssTable();
+  // Update infonesia count
+  const infCount = rssFeeds.filter(f => f.url.includes('infonesia.net')).length;
+  if (infCount > 0) {
+    document.getElementById('infoneisaCount').textContent = `${infCount} subdomain — aktif`;
+  }
+}
+
+function saveRssFeeds() {
+  localStorage.setItem('pln_rss_feeds', JSON.stringify(rssFeeds));
+}
+
+function renderRssStatus() {
+  const el = document.getElementById('rssStatusList');
+  const active = rssFeeds.filter(f => f.enabled);
+  const total = rssFeeds.length;
+  if (!active.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--muted)">Tidak ada feed aktif. Klik ⚙ Kelola untuk tambah.</div>';
+    return;
+  }
+  const show = active.slice(0, 10);
+  const more = active.length - 10;
+  el.innerHTML = show.map(f => `
+    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--success);flex-shrink:0;display:inline-block"></span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
+    </div>`).join('')
+  + (more > 0 ? `<div style="font-size:11px;color:var(--accent2);cursor:pointer;margin-top:2px" onclick="openRssModal()">+${more} feed lainnya →</div>` : '')
+  + `<div style="font-size:10px;color:var(--muted);margin-top:4px">${active.length} aktif dari ${total} terdaftar</div>`;
+}
+
+function renderRssTable() {
+  const tbody = document.getElementById('rssTableBody');
+  if (!tbody) return;
+  if (!rssFeeds.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Belum ada feed. Tambahkan di bawah.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rssFeeds.map((f, i) => `
+    <tr id="rss-row-${i}">
+      <td class="rss-name-cell">
+        <span id="rss-name-${i}">${f.name}</span>
+      </td>
+      <td class="rss-url-cell" title="${f.url}">
+        <span id="rss-url-${i}">
+          <a href="${f.url.startsWith('http') ? f.url : 'https://'+f.url}" target="_blank" rel="noopener"
+             style="color:var(--accent2);text-decoration:none;font-size:11px">${f.url}</a>
+        </span>
+      </td>
+      <td>
+        <button class="rss-toggle ${f.enabled?'on':''}" onclick="toggleRss(${i})"
+          title="${f.enabled?'Aktif':'Nonaktif'}"></button>
+      </td>
+      <td class="rss-actions">
+        <button style="background:#f0f4ff;color:var(--accent);border:1px solid var(--accent2);border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;" onclick="editRss(${i})">✏ Edit</button>
+        <button class="btn-danger-sm" onclick="removeRss(${i})">🗑 Hapus</button>
+      </td>
+    </tr>`).join('');
+}
+
+function openRssModal() {
+  renderRssTable();
+  document.getElementById('rssModal').classList.add('show');
+}
+
+async function syncFeedsToDB() {
+  const btn = document.getElementById('syncBtn');
+  btn.textContent = '⏳ Syncing...';
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/api/feeds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feeds: rssFeeds })
+    });
+    const data = await resp.json();
+    if (data.success) {
+      showToast(`✅ ${data.synced} feed berhasil disync ke database!`);
+    } else {
+      showToast('⚠ Gagal sync: ' + (data.error || 'Unknown error'));
+    }
+  } catch(e) {
+    showToast('⚠ Error: ' + e.message);
+  }
+  btn.textContent = '☁ Sync ke DB';
+  btn.disabled = false;
+}
+
+function editRss(i) {
+  const feed = rssFeeds[i];
+  const row = document.getElementById(`rss-row-${i}`);
+  
+  // Replace cells with input fields
+  document.getElementById(`rss-name-${i}`).innerHTML = 
+    `<input id="edit-name-${i}" value="${feed.name}" style="width:100%;padding:3px 6px;border:1px solid var(--accent2);border-radius:4px;font-size:12px;">`;
+  document.getElementById(`rss-url-${i}`).innerHTML = 
+    `<input id="edit-url-${i}" value="${feed.url}" style="width:100%;padding:3px 6px;border:1px solid var(--accent2);border-radius:4px;font-size:11px;">`;
+  
+  // Replace action buttons
+  row.querySelector('.rss-actions').innerHTML = `
+    <button style="background:var(--success);color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;" onclick="saveEditRss(${i})">💾 Simpan</button>
+    <button style="background:#f3f4f6;color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;" onclick="renderRssTable()">✕ Batal</button>
+  `;
+}
+
+function saveEditRss(i) {
+  const newName = document.getElementById(`edit-name-${i}`)?.value?.trim();
+  const newUrl = document.getElementById(`edit-url-${i}`)?.value?.trim();
+  if (!newName || !newUrl) return showToast('⚠ Nama dan URL tidak boleh kosong');
+  rssFeeds[i].name = newName;
+  rssFeeds[i].url = newUrl;
+  saveRssFeeds();
+  renderRssTable();
+  showToast('✅ Feed berhasil diperbarui');
+}
+
+function closeRssModal() {
+  document.getElementById('rssModal').classList.remove('show');
+}
+
+function toggleRss(i) {
+  rssFeeds[i].enabled = !rssFeeds[i].enabled;
+  saveRssFeeds(); renderRssStatus(); renderRssTable();
+}
+
+function removeRss(i) {
+  const name = rssFeeds[i].name;
+  rssFeeds.splice(i, 1);
+  saveRssFeeds(); renderRssStatus(); renderRssTable();
+  showToast(`🗑 ${name} dihapus`);
+}
+
+function addRssFeed() {
+  let name = document.getElementById('rssName').value.trim();
+  let url = document.getElementById('rssUrl').value.trim();
+  if (!name || !url) return showToast('⚠ Isi nama dan URL feed');
+  url = normalizeUrl(url);
+  if (rssFeeds.some(f => f.url === url)) return showToast('⚠ Feed sudah ada');
+  rssFeeds.push({ name, url, enabled: true });
+  saveRssFeeds(); renderRssStatus(); renderRssTable();
+  document.getElementById('rssName').value = '';
+  document.getElementById('rssUrl').value = '';
+  showToast(`✅ ${name} ditambahkan`);
+}
+
+function setKeyword(kw, el) {
+  document.getElementById('searchInput').value = kw;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  fetchNews();
+}
+
+function getToneClass(tone) {
+  if (!tone) return '';
+  const t = tone.toLowerCase();
+  if (t === 'positif' || t.startsWith('positif')) return 'positif';
+  if (t === 'negatif' || t.startsWith('negatif')) return 'negatif';
+  return 'netral';
+}
+
+function inDateRange(publishedAt, from, to) {
+  if (!from && !to) return true;
+  const d = new Date(publishedAt);
+  if (from && d < new Date(from)) return false;
+  if (to && d > new Date(to + 'T23:59:59')) return false;
+  return true;
+}
+
+async function fetchNews() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) return showToast('⚠ Masukkan kata kunci');
+  const from = document.getElementById('dateFrom').value;
+  const to = document.getElementById('dateTo').value;
+
+  if (analyzeController) analyzeController.abort();
+
+  const btn = document.getElementById('searchBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="border-top-color:#fff"></div> Mencari...';
+  showLoading();
+  allArticles = [];
+  showingBookmarks = false;
+
+  // Fetch NewsAPI + GNews + GNews.io concurrently
+  const [newsApiData, gnewsData, gnewsioData] = await Promise.all([
+    fetch(`/api/news?q=${encodeURIComponent(q)}&pageSize=50${from?'&from='+from:''}${to?'&to='+to:''}`).then(r=>r.json()).catch(()=>null),
+    fetch(`/api/gnews?q=${encodeURIComponent(q)}`).then(r=>r.json()).catch(()=>null),
+    fetch(`/api/gnewsio?q=${encodeURIComponent(q)}${from?'&from='+from:''}${to?'&to='+to:''}`).then(r=>r.json()).catch(()=>null),
+  ]);
+
+  let articles = [];
+
+  if (newsApiData?.articles) {
+    newsApiData.articles.forEach(a => articles.push({...a, _source:'newsapi'}));
+  }
+  if (gnewsData?.articles) {
+    gnewsData.articles.forEach(a => {
+      const isDup = articles.some(e => similarity(e.title,a.title)>0.85 && (e.source?.name||'')===(a.source?.name||''));
+      if (!isDup) articles.push({...a, _source:'gnews'});
+    });
+  }
+  if (gnewsioData?.articles) {
+    gnewsioData.articles.forEach(a => {
+      const isDup = articles.some(e => similarity(e.title,a.title)>0.85 && (e.source?.name||'')===(a.source?.name||''));
+      if (!isDup) articles.push({...a, _source:'gnewsio'});
+    });
+  }
+
+  // Batch fetch RSS feeds (30 per batch to avoid overload)
+  const infoneisaFeeds = getInfoneisaFeeds();
+  const otherRssFeeds = getNonInfoneisaFeeds();
+  const enabledFeeds = [...infoneisaFeeds, ...otherRssFeeds];
+  
+  // Update infonesia count display
+  document.getElementById('infoneisaCount').textContent = 
+    infoneisaEnabled ? `${infoneisaFeeds.length} subdomain — aktif` : `${rssFeeds.filter(f=>f.url.includes('infonesia.net')).length} subdomain — nonaktif`;
+  if (enabledFeeds.length > 0) {
+    const BATCH_SIZE = 30;
+    const totalBatches = Math.ceil(enabledFeeds.length / BATCH_SIZE);
+    
+    document.getElementById('rssProgressWrap').classList.add('show');
+    document.getElementById('rssProgressFill').style.width = '0%';
+    document.getElementById('rssProgressLabel').textContent = 'Mengambil berita dari sumber RSS...';
+
+    for (let b = 0; b < totalBatches; b++) {
+      const batch = enabledFeeds.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+      const fetched = b * BATCH_SIZE;
+      const rssPct = Math.round((fetched / enabledFeeds.length) * 100);
+      document.getElementById('rssProgressFill').style.width = rssPct + '%';
+      document.getElementById('rssProgressLabel').textContent = `Memproses sumber berita... ${rssPct}%`;
+
+      const batchResults = await Promise.allSettled(
+        batch.map(f =>
+          fetch(`/api/rss?url=${encodeURIComponent(f.url)}&q=${encodeURIComponent(q)}`)
+            .then(r => r.json())
+            .then(d => ({ ...d, _feedName: f.name }))
+            .catch(() => null)
+        )
+      );
+
+      batchResults.forEach((result, i) => {
+        const rssData = result.status === 'fulfilled' ? result.value : null;
+        if (rssData?.articles) {
+          rssData.articles.forEach(a => {
+            const isDup = articles.some(e =>
+              similarity(e.title, a.title) > 0.85 &&
+              (e.source?.name || '') === (batch[i].name || '')
+            );
+            if (!isDup) articles.push({...a, _source: 'rss_' + batch[i].name, source: { name: batch[i].name }});
+          });
+        }
+      });
+
+      // Update display progressively
+      const filtered = from || to ? articles.filter(a => inDateRange(a.publishedAt, from, to)) : articles;
+      const sorted = [...filtered].sort((a,b) => new Date(b.publishedAt)-new Date(a.publishedAt));
+      document.getElementById('hdr-total').textContent = sorted.length;
+      if (b < totalBatches - 1) await new Promise(r => setTimeout(r, 100));
+    }
+  }
+
+  // Filter by date (applies to ALL sources)
+  if (from || to) {
+    articles = articles.filter(a => inDateRange(a.publishedAt, from, to));
+  }
+
+  articles.sort((a,b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+  allArticles = articles;
+
+  document.getElementById('hdr-total').textContent = articles.length;
+  document.getElementById('hdr-time').textContent = new Date().toLocaleTimeString('id-ID');
+
+  applyFilters();
+  renderArticles(filteredArticles);
+  startAnalyzeAll();
+
+  btn.disabled = false;
+  btn.innerHTML = '🔍 Cari Berita';
+  document.getElementById('rssProgressFill').style.width = '100%';
+  document.getElementById('rssProgressLabel').textContent = '✓ Selesai';
+  setTimeout(() => {
+    document.getElementById('rssProgressWrap').classList.remove('show');
+    document.getElementById('rssProgressFill').style.width = '0%';
+  }, 2000);
+}
+
+function similarity(a, b) {
+  const sa = new Set(a.toLowerCase().split(' '));
+  const sb = new Set(b.toLowerCase().split(' '));
+  const inter = [...sa].filter(x => sb.has(x)).length;
+  return inter / Math.max(sa.size, sb.size);
+}
+
+async function startAnalyzeAll() {
+  const articles = allArticles;
+  const total = articles.length;
+  let done = 0;
+
+  const pw = document.getElementById('progressWrap');
+  pw.classList.add('show');
+  document.getElementById('progressCount').textContent = `0/${total}`;
+  document.getElementById('progressFill').style.width = '0%';
+
+  analyzeController = new AbortController();
+  const signal = analyzeController.signal;
+
+  for (let i = 0; i < articles.length; i++) {
+    if (signal.aborted) break;
+    const a = articles[i];
+    if (a._analyzed) { done++; continue; }
+
+    a._analyzing = true;
+    updateCard(i);
+
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ title: a.title||'', description: (a.description||'').replace(/<[^>]+>/g,'') }),
+        signal
+      });
+      const data = await res.json();
+      a._tone = getToneClass(data.tone || 'netral');
+      a._spkInternal = data.spokesperson_internal || '';
+      a._spkExternal = data.spokesperson_eksternal || '';
+      a._resume = data.resume || '';
+      a._analyzed = true;
+    } catch(e) {
+      if (e.name === 'AbortError') break;
+      a._tone = 'netral'; a._analyzed = true;
+    }
+
+    a._analyzing = false;
+    done++;
+
+    const pct = Math.round(done/total*100);
+    document.getElementById('progressFill').style.width = pct+'%';
+    document.getElementById('progressCount').textContent = `${done}/${total}`;
+    document.getElementById('progressText').textContent = `Menganalisis artikel... ${pct}%`;
+
+    updateCard(i);
+    updateStats(filteredArticles);
+    if (i % 5 === 4) await new Promise(r => setTimeout(r, 400));
+  }
+
+  document.getElementById('progressText').textContent = '✅ Analisis selesai';
+  setTimeout(() => pw.classList.remove('show'), 3000);
+}
+
+function renderArticles(articles) {
+  updateStats(articles);
+  document.getElementById('resultLabel').textContent = `Menampilkan ${articles.length} artikel`;
+  const grid = document.getElementById('newsGrid');
+  if (!articles.length) {
+    document.getElementById('pagination').style.display = 'none';
+    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">🔎</div><h3>Tidak ada hasil</h3><p>Coba kata kunci lain atau ubah filter.</p></div>`;
+    return;
+  }
+  currentPage = 1;
+  renderPage(1);
+}
+
+function renderCard(a, i) {
+  const gi = allArticles.indexOf(a);
+  const date = a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  const tc = a._tone ? getToneClass(a._tone) : '';
+  const url = a.url || '#';
+  const srcName = a.source?.name || 'RSS';
+  const isBookmarked = bookmarks.some(b => b.url === a.url);
+
+  const resumeHtml = a._analyzing
+    ? `<div class="ai-analyzing"><div class="spinner"></div> AI menganalisis...</div>`
+    : a._resume
+      ? `<div class="card-resume">${a._resume}</div>`
+      : a._analyzed ? ''
+      : `<div class="card-resume" style="font-style:italic;color:var(--muted)">${(a.description||'').replace(/<[^>]+>/g,'').substring(0,150)||'—'}</div>`;
+
+  const spkHtml = [
+    a._spkInternal ? `<span class="spk-badge internal">🏢 ${a._spkInternal}</span>` : '',
+    a._spkExternal ? `<span class="spk-badge external">👤 ${a._spkExternal}</span>` : ''
+  ].filter(Boolean).join('');
+
+  return `<div class="article-card ${tc}" id="card-${gi}">
+    <div class="card-top">
+      <div class="card-meta">
+        <span class="source-badge">${srcName}</span>
+        <span class="date-badge">${date}</span>
+        ${tc ? `<span class="tone-badge ${tc}">${tc.charAt(0).toUpperCase()+tc.slice(1)}</span>` : ''}
+      </div>
+      <div class="card-actions">
+        <button class="icon-btn ${isBookmarked?'active':''}" onclick="toggleBookmark(${gi})" title="Simpan">📌</button>
+        <a href="${url}" target="_blank" rel="noopener" style="text-decoration:none">
+          <button class="icon-btn" title="Buka artikel">↗</button>
+        </a>
+      </div>
+    </div>
+    <div class="card-title"><a href="${url}" target="_blank" rel="noopener">${a.title||'Tanpa judul'}</a></div>
+    ${resumeHtml}
+    ${spkHtml ? `<div class="card-footer">${spkHtml}</div>` : ''}
+  </div>`;
+}
+
+function updateCard(idx) {
+  const el = document.getElementById(`card-${idx}`);
+  if (!el) return;
+  const a = allArticles[idx];
+  if (!a) return;
+  const fi = filteredArticles.indexOf(a);
+  // Only update if on current page
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageEnd = pageStart + PAGE_SIZE;
+  if (fi >= pageStart && fi < pageEnd) {
+    el.outerHTML = renderCard(a, fi);
+  }
+  // Always update stats
+  updateStats(filteredArticles);
+}
+
+function updateStats(articles) {
+  const an = articles.filter(a=>a._analyzed);
+  document.getElementById('statTotal').textContent = articles.length;
+  document.getElementById('statPos').textContent = an.filter(a=>a._tone==='positif').length;
+  document.getElementById('statNeg').textContent = an.filter(a=>a._tone==='negatif').length;
+  document.getElementById('statNeu').textContent = an.filter(a=>a._tone==='netral').length;
+}
+
+function applyFilters() {
+  let a = [...allArticles];
+  if (currentFilter.tone !== 'semua') a = a.filter(x => x._tone === currentFilter.tone);
+  if (currentFilter.source !== 'semua') a = a.filter(x => x._source === currentFilter.source || (currentFilter.source === 'rss' && x._source?.startsWith('rss_')));
+  filteredArticles = a;
+}
+
+function filterTone(val, el) {
+  currentFilter.tone = val;
+  document.querySelectorAll('.filter-row')[0].querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  applyFilters(); renderArticles(filteredArticles);
+}
+
+function filterSource(val, el) {
+  currentFilter.source = val;
+  document.querySelectorAll('.filter-row')[1]?.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  applyFilters(); renderArticles(filteredArticles);
+}
+
+function sortArticles(by) {
+  if (by === 'date') filteredArticles.sort((a,b)=>new Date(b.publishedAt)-new Date(a.publishedAt));
+  if (by === 'tone') { const o={positif:0,netral:1,negatif:2}; filteredArticles.sort((a,b)=>(o[a._tone]??3)-(o[b._tone]??3)); }
+  renderArticles(filteredArticles);
+}
+
+function toggleBookmark(idx) {
+  const a = allArticles[idx];
+  const bi = bookmarks.findIndex(b=>b.url===a.url);
+  if (bi>=0) { bookmarks.splice(bi,1); showToast('Dihapus dari tersimpan'); }
+  else { bookmarks.push(a); showToast('📌 Artikel disimpan!'); }
+  localStorage.setItem('pln_bookmarks', JSON.stringify(bookmarks));
+  document.getElementById('bookmarkCount').textContent = `${bookmarks.length} artikel ditandai`;
+  renderArticles(showingBookmarks ? bookmarks : filteredArticles);
+}
+
+function toggleBookmarks() {
+  showingBookmarks = !showingBookmarks;
+  renderArticles(showingBookmarks ? bookmarks : filteredArticles);
+  showToast(showingBookmarks ? `📌 ${bookmarks.length} artikel tersimpan` : 'Kembali ke semua artikel');
+}
+
+function exportExcel() {
+  const articles = showingBookmarks ? bookmarks : filteredArticles;
+  if (!articles.length) return showToast('⚠ Tidak ada artikel');
+  const rows = articles.map(a => ({
+    'Tanggal': a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('id-ID') : '',
+    'Judul Berita': a.title||'',
+    'Link': a.url||'',
+    'Nama Media': a.source?.name||'',
+    'Tone Pemberitaan': a._tone ? a._tone.charAt(0).toUpperCase()+a._tone.slice(1) : '',
+    'Spokesperson Internal': a._spkInternal||'',
+    'Spokesperson Eksternal': a._spkExternal||'',
+    'Resume': a._resume||''
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:12},{wch:65},{wch:50},{wch:22},{wch:16},{wch:35},{wch:35},{wch:80}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Monitoring Berita');
+  XLSX.writeFile(wb, `PLN-News-${new Date().toISOString().split('T')[0]}.xlsx`);
+  showToast('✅ Excel berhasil diunduh');
+}
+
+async function generateBrief() {
+  if (!allArticles.length) return showToast('⚠ Cari berita dulu');
+  const btn = document.getElementById('briefBtn');
+  btn.disabled = true; btn.textContent = 'Generating...';
+  document.getElementById('briefContent').innerHTML = '<div class="ai-analyzing"><div class="spinner"></div> AI sedang menganalisis seluruh pemberitaan...</div>';
+
+  const keyword = document.getElementById('searchInput').value;
+  const payload = allArticles.map(a => ({ title: a.title||'', tone: a._tone||'' }));
+
+  try {
+    const res = await fetch('/api/brief', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ articles: payload, keyword })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err.detail || err.error || 'Server error ' + res.status);
+    }
+
+    const data = await res.json();
+    if (data.brief && data.brief.length > 20) {
+      document.getElementById('briefContent').innerHTML = `<div class="brief-text">${data.brief.replace(/\n/g,'<br/>')}</div>`;
+    } else {
+      throw new Error('Respons AI kosong');
+    }
+  } catch(e) {
+    console.error('Brief error:', e);
+    // Fallback: generate brief manually from analyzed data
+    const analyzed = allArticles.filter(a => a._analyzed);
+    const pos = analyzed.filter(a=>a._tone==='positif').length;
+    const neg = analyzed.filter(a=>a._tone==='negatif').length;
+    const neu = analyzed.filter(a=>a._tone==='netral').length;
+
+    // Count media
+    const mediaCounts = {};
+    allArticles.forEach(a => {
+      const m = a.source?.name || 'Lainnya';
+      mediaCounts[m] = (mediaCounts[m] || 0) + 1;
+    });
+    const topMedia = Object.entries(mediaCounts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k} (${v})`).join(', ');
+
+    const pctPos = allArticles.length ? Math.round(pos/allArticles.length*100) : 0;
+    const pctNeg = allArticles.length ? Math.round(neg/allArticles.length*100) : 0;
+
+    document.getElementById('briefContent').innerHTML = `<div class="brief-text">
+      Monitoring pemberitaan "<strong>${keyword}</strong>" mencatat <strong>${allArticles.length} artikel</strong> hari ini.
+      Dari ${analyzed.length} artikel yang telah dianalisis, ${pos} (${pctPos}%) bertenor positif, ${neg} (${pctNeg}%) negatif, dan ${neu} netral.
+      ${neg > 0 ? `Terdapat ${neg} pemberitaan bernada negatif yang perlu mendapat perhatian tim komunikasi.` : 'Secara umum pemberitaan berjalan kondusif.'}
+      Media yang paling aktif memberitakan: ${topMedia || 'beragam sumber'}.
+      ${analyzed.length < allArticles.length ? `Catatan: ${allArticles.length - analyzed.length} artikel belum selesai dianalisis AI — generate ulang setelah progress bar selesai untuk brief yang lebih akurat.` : ''}
+    </div>`;
+  }
+  btn.disabled = false; btn.textContent = 'Generate';
+}
+
+function normalizeUrl(url) {
+  url = url.trim();
+  if (!url) return '';
+  // Remove protocol if present, then re-add correct one
+  const noProto = url.replace(/^https?:\/\//, '');
+  // Domains that need http:// (SSL issues)
+  const httpOnlyDomains = ['infonesia.net'];
+  const needsHttp = httpOnlyDomains.some(d => noProto.includes(d));
+  return (needsHttp ? 'http://' : 'https://') + noProto;
+}
+
+function importRssFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('rssFileLabel').textContent = file.name;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+    const isCSV = file.name.endsWith('.csv');
+
+    let added = 0, skipped = 0, invalid = 0;
+    const preview = [];
+
+    lines.forEach(line => {
+      let name = '', url = '';
+
+      if (isCSV) {
+        const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
+        if (parts.length >= 2) {
+          name = parts[0];
+          url = normalizeUrl(parts[1]);
+        } else if (parts.length === 1 && parts[0]) {
+          url = normalizeUrl(parts[0]);
+          name = extractDomain(url);
+        }
+      } else {
+        url = normalizeUrl(line);
+        name = extractDomain(url);
+      }
+
+      if (!url) { invalid++; return; }
+      if (!name) name = extractDomain(url);
+
+      // Check duplicate by domain+path (ignore http/https difference)
+      const noProto = url.replace(/^https?:\/\//, '');
+      if (rssFeeds.some(f => f.url.replace(/^https?:\/\//, '') === noProto)) {
+        skipped++;
+        return;
+      }
+
+      rssFeeds.push({ name, url, enabled: true });
+      added++;
+      if (preview.length < 5) preview.push(name);
+    });
+
+    saveRssFeeds();
+    renderRssStatus();
+    renderRssTable();
+
+    const previewText = preview.join(', ') + (added > 5 ? ` dan ${added-5} lainnya` : '');
+    document.getElementById('rssImportPreview').innerHTML = `
+      <div style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:8px 10px;font-size:11px;color:#166534">
+        ✅ Berhasil tambah <strong>${added} feed</strong>${skipped > 0 ? `, ${skipped} dilewati (duplikat)` : ''}${invalid > 0 ? `, ${invalid} tidak valid` : ''}.<br/>
+        ${previewText ? `Contoh: ${previewText}` : ''}
+      </div>`;
+    showToast(`✅ ${added} feed berhasil diimport`);
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function extractDomain(url) {
+  try {
+    const u = new URL(url.startsWith('http') ? url : 'http://'+url);
+    return u.hostname.replace('www.', '');
+  } catch { return url.substring(0, 30); }
+}
+
+async function testCrawlNow() {
+  const statusEl = document.getElementById('crawlStatus');
+  statusEl.textContent = '⏳ Crawling...';
+  try {
+    const resp = await fetch('/api/crawl?secret=Tiunojoyo123&keyword=PLN+Papua&batchIndex=0', {
+      method: 'GET'
+    });
+    const data = await resp.json();
+    if (data.success) {
+      statusEl.textContent = `✅ ${data.saved} artikel baru tersimpan`;
+    } else if (resp.status === 401) {
+      statusEl.textContent = '⚠ Unauthorized';
+    } else {
+      statusEl.textContent = '⚠ ' + (data.error || data.message || 'Selesai');
+    }
+  } catch(e) {
+    statusEl.textContent = '⚠ Error: ' + e.message;
+  }
+  setTimeout(() => statusEl.textContent = '', 5000);
+}
+
+function toggleInfonesia() {
+  infoneisaEnabled = !infoneisaEnabled;
+  const btn = document.getElementById('infoneisaToggle');
+  const count = rssFeeds.filter(f => f.url.includes('infonesia.net')).length;
+  if (infoneisaEnabled) {
+    btn.classList.add('on');
+    document.getElementById('infoneisaCount').textContent = `${count} subdomain — aktif`;
+  } else {
+    btn.classList.remove('on');
+    document.getElementById('infoneisaCount').textContent = `${count} subdomain — nonaktif`;
+  }
+}
+
+function getInfoneisaFeeds() {
+  if (!infoneisaEnabled) return [];
+  return rssFeeds.filter(f => f.enabled && f.url.includes('infonesia.net'));
+}
+
+function getNonInfoneisaFeeds() {
+  return rssFeeds.filter(f => f.enabled && !f.url.includes('infonesia.net'));
+}
+
+// PAGINATION
+function renderPage(page) {
+  currentPage = page;
+  const start = (page - 1) * PAGE_SIZE;
+  const end = start + PAGE_SIZE;
+  const pageArticles = filteredArticles.slice(start, end);
+  const grid = document.getElementById('newsGrid');
+  grid.innerHTML = pageArticles.map((a, i) => renderCard(a, start + i)).join('');
+  renderPagination();
+  grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderPagination() {
+  const total = filteredArticles.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const pag = document.getElementById('pagination');
+
+  if (totalPages <= 1) { pag.style.display = 'none'; return; }
+  pag.style.display = 'flex';
+
+  let html = `<button class="page-btn" onclick="renderPage(${currentPage-1})" ${currentPage===1?'disabled':''}>← Prev</button>`;
+
+  // Show max 7 page buttons
+  let startP = Math.max(1, currentPage - 3);
+  let endP = Math.min(totalPages, startP + 6);
+  if (endP - startP < 6) startP = Math.max(1, endP - 6);
+
+  if (startP > 1) html += `<button class="page-btn" onclick="renderPage(1)">1</button><span class="page-info">...</span>`;
+
+  for (let p = startP; p <= endP; p++) {
+    html += `<button class="page-btn ${p===currentPage?'active':''}" onclick="renderPage(${p})">${p}</button>`;
+  }
+
+  if (endP < totalPages) html += `<span class="page-info">...</span><button class="page-btn" onclick="renderPage(${totalPages})">${totalPages}</button>`;
+
+  html += `<button class="page-btn" onclick="renderPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>Next →</button>`;
+  html += `<span class="page-info">${total} artikel, halaman ${currentPage}/${totalPages}</span>`;
+
+  pag.innerHTML = html;
+}
+
+// ==================== TAB SYSTEM ====================
+function switchTab(tab) {
+  document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.getElementById('panel-' + tab).classList.add('active');
+  if (tab === 'dashboard') renderDashboard();
+}
+
+// ==================== DASHBOARD ====================
+// Load articles from Supabase DB
+async function loadFromDB() {
+  const statusEl = document.getElementById('dashDbStatus');
+  statusEl.textContent = 'Memuat dari database...';
+  try {
+    const resp = await fetch('/api/articles?limit=2000');
+    const data = await resp.json();
+    if (data.articles) {
+      // Convert DB format to app format
+      return data.articles.map(a => ({
+        title: a.title,
+        url: a.url,
+        publishedAt: a.published_at,
+        source: { name: a.source },
+        description: a.description,
+        _tone: null,
+        _analyzed: false
+      }));
+    }
+  } catch(e) {
+    statusEl.textContent = 'Gagal load database: ' + e.message;
+  }
+  return [];
+}
+
+async function renderDashboard() {
+  const sourceMode = document.querySelector('input[name="dashSource"]:checked')?.value || 'live';
+  const statusEl = document.getElementById('dashDbStatus');
+  
+  let articles = [];
+  if (sourceMode === 'db') {
+    const dbArts = await loadFromDB();
+    if (!dbArts.length) {
+      document.getElementById('dashMediaList').innerHTML = '<p style="color:var(--muted);font-size:12px;">Database kosong. Pastikan crawl sudah berjalan.</p>';
+      return;
+    }
+    articles = dbArts;
+    statusEl.textContent = `${dbArts.length} artikel dari database`;
+    document.getElementById('dashTotalAll').textContent = dbArts.length;
+  } else {
+    if (!allArticles.length) {
+      document.getElementById('dashMediaList').innerHTML = '<p style="color:var(--muted);font-size:12px;">Cari berita dulu di tab Monitor, lalu buka Dashboard.</p>';
+      return;
+    }
+    articles = [...allArticles];
+    statusEl.textContent = `${allArticles.length} artikel dari pencarian terakhir`;
+    document.getElementById('dashTotalAll').textContent = allArticles.length;
+  }
+
+  const excludeInfonesia = document.getElementById('dashExcludeInfonesia').checked;
+  if (excludeInfonesia) articles = articles.filter(a => !a.source?.name?.toLowerCase().includes('infonesia'));
+
+  const now = new Date();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+  const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+  const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+
+  const thisMonthArts = articles.filter(a => {
+    const d = new Date(a.publishedAt);
+    return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+  });
+  const lastMonthArts = articles.filter(a => {
+    const d = new Date(a.publishedAt);
+    return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
+  });
+
+  // Stats
+  const mediaSet = new Set(articles.map(a => a.source?.name || 'Unknown'));
+  document.getElementById('dashTotalMonth').textContent = thisMonthArts.length || articles.length;
+  document.getElementById('dashTotalLastMonth').textContent = lastMonthArts.length;
+  document.getElementById('dashTotalMedia').textContent = mediaSet.size;
+
+  // Top Media
+  const mediaCounts = {};
+  articles.forEach(a => {
+    const name = a.source?.name || 'Unknown';
+    mediaCounts[name] = (mediaCounts[name] || 0) + 1;
+  });
+  const sortedMedia = Object.entries(mediaCounts).sort((a,b) => b[1]-a[1]).slice(0, 15);
+  const maxCount = sortedMedia[0]?.[1] || 1;
+  document.getElementById('dashMediaList').innerHTML = sortedMedia.map(([name, count]) => `
+    <div class="media-item">
+      <span class="media-name">${name}</span>
+      <div class="media-bar-wrap"><div class="media-bar" style="width:${Math.round(count/maxCount*100)}%"></div></div>
+      <span class="media-count">${count}</span>
+    </div>`).join('');
+
+  // Tone Distribution
+  const tones = { positif: 0, negatif: 0, netral: 0, '-': 0 };
+  articles.forEach(a => { tones[a._tone || '-'] = (tones[a._tone || '-'] || 0) + 1; });
+  const total = articles.length;
+  const pPos = Math.round(tones.positif/total*100);
+  const pNeg = Math.round(tones.negatif/total*100);
+  const pNet = Math.round(tones.netral/total*100);
+  document.getElementById('dashToneBar').innerHTML = `
+    <div class="tone-seg" style="width:${pPos}%;background:var(--pos)"></div>
+    <div class="tone-seg" style="width:${pNeg}%;background:var(--neg)"></div>
+    <div class="tone-seg" style="width:${pNet}%;background:var(--neu)"></div>
+    <div class="tone-seg" style="width:${100-pPos-pNeg-pNet}%;background:var(--border2)"></div>`;
+  document.getElementById('dashToneLegend').innerHTML = `
+    <span class="tone-legend-item"><span class="tone-dot" style="background:var(--pos)"></span>Positif ${pPos}% (${tones.positif})</span>
+    <span class="tone-legend-item"><span class="tone-dot" style="background:var(--neg)"></span>Negatif ${pNeg}% (${tones.negatif})</span>
+    <span class="tone-legend-item"><span class="tone-dot" style="background:var(--neu)"></span>Netral ${pNet}% (${tones.netral})</span>`;
+  document.getElementById('dashToneDetail').innerHTML = `<p style="font-size:11px;color:var(--muted);">${articles.filter(a=>a._analyzed).length} dari ${total} artikel sudah dianalisis AI</p>`;
+
+  // Perbandingan Bulan
+  const bulanIni = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][thisMonth];
+  const bulanLalu = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][lastMonth];
+  const diff = thisMonthArts.length - lastMonthArts.length;
+  const arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '→';
+  const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '';
+  document.getElementById('dashCompare').innerHTML = `
+    <div class="compare-row"><span class="compare-label">${bulanIni} ${thisYear}</span><span class="compare-val">${thisMonthArts.length || articles.length} artikel</span></div>
+    <div class="compare-row"><span class="compare-label">${bulanLalu}</span><span class="compare-val">${lastMonthArts.length} artikel</span></div>
+    <div class="compare-row"><span class="compare-label">Selisih</span><span class="compare-val ${cls}">${arrow} ${Math.abs(diff)}</span></div>`;
+
+  // Trend 30 Hari
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().split('T')[0]);
+  }
+  const dayCounts = {};
+  days.forEach(d => dayCounts[d] = 0);
+  articles.forEach(a => {
+    const d = a.publishedAt?.split('T')[0];
+    if (d && dayCounts[d] !== undefined) dayCounts[d]++;
+  });
+  const maxDay = Math.max(...Object.values(dayCounts), 1);
+  const trendEl = document.getElementById('dashTrend');
+  const labelEl = document.getElementById('dashTrendLabels');
+  trendEl.innerHTML = days.map(d => {
+    const cnt = dayCounts[d];
+    const h = Math.max(4, Math.round(cnt/maxDay*76));
+    const color = cnt === 0 ? 'var(--border2)' : cnt < 3 ? '#93c5fd' : cnt < 6 ? '#3b82f6' : 'var(--accent)';
+    return `<div title="${d}: ${cnt} artikel" style="flex:1;height:${h}px;background:${color};border-radius:3px 3px 0 0;cursor:default;align-self:flex-end;"></div>`;
+  }).join('');
+  labelEl.innerHTML = days.filter((d,i) => i % 5 === 0).map(d => {
+    const dt = new Date(d);
+    return `<span style="font-size:9px;color:var(--muted);flex:5;">${dt.getDate()}/${dt.getMonth()+1}</span>`;
+  }).join('');
+
+  // Keyword Cloud
+  const stopwords = new Set(['yang','dan','di','ke','dari','untuk','dengan','ini','itu','pada','dalam','oleh','akan','telah','sudah','juga','tidak','sebagai','adalah','pln','papua','listrik','kelistrikan','wilayah','barat','unit','induk','persero']);
+  const wordCount = {};
+  articles.forEach(a => {
+    const words = (a.title || '').toLowerCase().split(/\W+/).filter(w => w.length > 3 && !stopwords.has(w));
+    words.forEach(w => wordCount[w] = (wordCount[w]||0)+1);
+  });
+  const topWords = Object.entries(wordCount).sort((a,b)=>b[1]-a[1]).slice(0,30);
+  document.getElementById('dashKeywords').innerHTML = topWords.map(([w,c]) => 
+    `<span class="kw-tag" style="font-size:${Math.min(14, 10+c)}px">${w} <strong>${c}</strong></span>`
+  ).join('');
+
+  // Kalender Heatmap 3 bulan terakhir
+  const calEl = document.getElementById('dashCalendar');
+  const calHtml = [];
+  const allDayCounts = {};
+  articles.forEach(a => {
+    const d = a.publishedAt?.split('T')[0];
+    if (d) allDayCounts[d] = (allDayCounts[d] || 0) + 1;
+  });
+  const maxCalDay = Math.max(...Object.values(allDayCounts), 1);
+  const dayNames = ['S','S','R','K','J','S','M'];
+  for (let m = 2; m >= 0; m--) {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - m);
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const monthName = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][month];
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    let cells = '<div class="cal-days">';
+    dayNames.forEach(n => cells += `<div class="cal-day-header">${n}</div>`);
+    for (let i = 0; i < firstDay; i++) cells += '<div class="cal-day cal-day-empty"></div>';
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const cnt = allDayCounts[dateStr] || 0;
+      const intensity = cnt === 0 ? '#f3f4f6' : cnt <= 2 ? '#bfdbfe' : cnt <= 5 ? '#60a5fa' : cnt <= 10 ? '#2563eb' : '#1e3a8a';
+      cells += `<div class="cal-day" style="background:${intensity}" title="${dateStr}: ${cnt} artikel">${day}</div>`;
+    }
+    cells += '</div>';
+    calHtml.push(`<div class="cal-month"><div class="cal-month-name">${monthName} ${year}</div>${cells}</div>`);
+  }
+  calEl.innerHTML = `<div class="cal-grid">${calHtml.join('')}</div>`;
+
+  // Media Baru Bulan Ini
+  const mediaThisMonth = new Set(thisMonthArts.map(a => a.source?.name || 'Unknown'));
+  const mediaLastMonth = new Set(lastMonthArts.map(a => a.source?.name || 'Unknown'));
+  const newMedia = [...mediaThisMonth].filter(m => !mediaLastMonth.has(m));
+  document.getElementById('dashNewMedia').innerHTML = newMedia.length
+    ? newMedia.map(m => `<div class="new-media-item">📰 ${m}</div>`).join('')
+    : '<p style="font-size:12px;color:var(--muted);">Tidak ada media baru bulan ini</p>';
+
+  // Top 5 Hari Paling Ramai
+  const topDays = Object.entries(allDayCounts)
+    .sort((a,b) => b[1]-a[1])
+    .slice(0, 5);
+  document.getElementById('dashTopDays').innerHTML = topDays.length
+    ? topDays.map(([date, cnt], i) => {
+        const d = new Date(date);
+        const label = `${d.getDate()} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][d.getMonth()]} ${d.getFullYear()}`;
+        return `<div class="top-day-item"><span>${['🥇','🥈','🥉','4️⃣','5️⃣'][i]} ${label}</span><strong>${cnt} artikel</strong></div>`;
+      }).join('')
+    : '<p style="font-size:12px;color:var(--muted);">Belum ada data</p>';
+}
+
+function exportDashboardExcel() {
+  if (!allArticles.length) return showToast('⚠ Tidak ada data');
+  // Reuse existing export function
+  exportExcel();
+}
+
+function showLoading() {
+  document.getElementById('newsGrid').innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">${[...Array(4)].map(()=>`<div class="skeleton"><div class="skel-line" style="width:25%;margin-bottom:10px"></div><div class="skel-line" style="width:85%"></div><div class="skel-line" style="width:70%"></div></div>`).join('')}</div>`;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3000);
+}
+
+document.getElementById('bookmarkCount').textContent = `${bookmarks.length} artikel ditandai`;
+initRssFeeds();
+
+// Close modal on overlay click
+document.getElementById('rssModal').addEventListener('click', function(e) {
+  if (e.target === this) closeRssModal();
+});
+</script>
+</body>
+</html>
