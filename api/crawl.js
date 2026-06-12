@@ -1,5 +1,5 @@
-import https from 'https';
-import http from 'http';
+const https = require('https');
+const http = require('http');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -92,7 +92,7 @@ async function saveToSupabase(articles, keyword) {
   return { saved: rows.length, status: response.status };
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
