@@ -133,6 +133,62 @@
   .result-label{font-size:13px;color:var(--text2);}
   .sort-select{background:var(--surface);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;}
   .export-btn{background:var(--success);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;}
+  /* Dashboard extras */
+  .dash-stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+  .cal-grid{display:flex;gap:16px;overflow-x:auto;padding-bottom:4px;}
+  .cal-month{flex-shrink:0;}
+  .cal-month-name{font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px;text-align:center;}
+  .cal-days{display:grid;grid-template-columns:repeat(7,20px);gap:2px;}
+  .cal-day{width:20px;height:20px;border-radius:3px;font-size:9px;display:flex;align-items:center;justify-content:center;cursor:default;}
+  .cal-day-header{font-size:9px;font-weight:600;color:var(--muted);text-align:center;}
+  .cal-day-empty{background:transparent;}
+  .top-day-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border1);font-size:12px;}
+  .top-day-item:last-child{border-bottom:none;}
+  .new-media-item{padding:5px 0;border-bottom:1px solid var(--border1);font-size:12px;}
+  .new-media-item:last-child{border-bottom:none;}
+
+  /* TABS */
+  .main-tabs{display:flex;gap:4px;margin-bottom:16px;background:var(--surface2);border-radius:10px;padding:4px;}
+  .main-tab{flex:1;background:none;border:none;padding:8px 12px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;border-radius:7px;font-family:'Inter',sans-serif;transition:all 0.15s;}
+  .main-tab.active{background:var(--accent);color:#fff;}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  /* DASHBOARD */
+  .dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;}
+  .dash-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:var(--shadow);}
+  .dash-card h4{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px;}
+  .dash-full{grid-column:1/-1;}
+  .media-item{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border2);}
+  .media-item:last-child{border-bottom:none;}
+  .media-name{font-size:12px;font-weight:600;color:var(--text);}
+  .media-bar-wrap{flex:1;margin:0 10px;height:6px;background:var(--border2);border-radius:3px;overflow:hidden;}
+  .media-bar{height:100%;background:var(--accent);border-radius:3px;transition:width 0.5s;}
+  .media-count{font-size:11px;color:var(--muted);font-weight:600;min-width:24px;text-align:right;}
+  .trend-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+  .trend-day{aspect-ratio:1;border-radius:3px;background:var(--border2);cursor:default;position:relative;}
+  .trend-day:hover::after{content:attr(title);position:absolute;bottom:110%;left:50%;transform:translateX(-50%);background:#222;color:#fff;font-size:10px;padding:3px 6px;border-radius:4px;white-space:nowrap;z-index:10;}
+  .tone-bar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin-bottom:8px;}
+  .tone-seg{height:100%;transition:width 0.5s;}
+  .tone-legend{display:flex;gap:12px;flex-wrap:wrap;}
+  .tone-legend-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);}
+  .tone-dot{width:8px;height:8px;border-radius:50%;}
+  .compare-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2);}
+  .compare-row:last-child{border-bottom:none;}
+  .compare-label{font-size:12px;color:var(--text);}
+  .compare-vals{display:flex;gap:12px;}
+  .compare-val{font-size:12px;font-weight:700;}
+  .compare-val.up{color:var(--pos);}
+  .compare-val.down{color:var(--neg);}
+  .heatmap-wrap{overflow-x:auto;}
+  .heatmap{display:flex;gap:3px;min-width:600px;}
+  .heatmap-col{display:flex;flex-direction:column;gap:3px;}
+  .heatmap-cell{width:14px;height:14px;border-radius:2px;}
+  .kw-tag{display:inline-block;padding:3px 8px;background:var(--accent-light);color:var(--accent);border-radius:20px;font-size:11px;font-weight:600;margin:2px;}
+  .dash-stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
+  .dash-stat{background:var(--surface2);border-radius:8px;padding:12px;text-align:center;}
+  .dash-stat .num{font-size:22px;font-weight:700;color:var(--accent);}
+  .dash-stat .lbl{font-size:10px;color:var(--muted);margin-top:2px;}
   .pagination{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:20px;padding:16px 0;}
   .page-btn{background:var(--surface);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.15s;}
   .page-btn:hover{border-color:var(--accent2);color:var(--accent2);}
@@ -389,7 +445,101 @@
     </div>
   </div>
     <div class="pagination" id="pagination" style="display:none"></div>
-  </div>
+  </div><!-- end panel-monitor -->
+  </div><!-- end tab-panel -->
+
+  <!-- TAB: DASHBOARD -->
+  <div class="tab-panel" id="panel-dashboard">
+
+    <!-- Sumber Data Toggle -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:10px 14px;background:var(--accent-light);border-radius:8px;border:1px solid rgba(0,61,143,0.15);">
+      <span style="font-size:12px;font-weight:600;color:var(--accent);">Sumber Data:</span>
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="radio" name="dashSource" value="live" checked onchange="renderDashboard()">
+        <span>📡 Artikel Live (hasil cari sekarang)</span>
+      </label>
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="radio" name="dashSource" value="db" onchange="renderDashboard()">
+        <span>🗄 Database (semua yang pernah terjaring)</span>
+      </label>
+      <span id="dashDbStatus" style="font-size:11px;color:var(--muted);margin-left:auto;"></span>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="dash-stat-row">
+      <div class="dash-stat"><div class="num" id="dashTotalMonth">-</div><div class="lbl">Artikel Bulan Ini</div></div>
+      <div class="dash-stat"><div class="num" id="dashTotalLastMonth">-</div><div class="lbl">Bulan Lalu</div></div>
+      <div class="dash-stat"><div class="num" id="dashTotalMedia">-</div><div class="lbl">Media Aktif</div></div>
+      <div class="dash-stat"><div class="num" id="dashTotalAll">-</div><div class="lbl">Total Database</div></div>
+    </div>
+
+    <div class="dash-grid">
+      <!-- Top Media -->
+      <div class="dash-card dash-full">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <h4 style="margin:0;">🏆 Top Media Pemberitaan</h4>
+          <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+            <input type="checkbox" id="dashExcludeInfonesia" onchange="renderDashboard()"> 
+            <span>Exclude Infonesia.net</span>
+          </label>
+        </div>
+        <div id="dashMediaList" style="margin-top:12px;"></div>
+      </div>
+
+      <!-- Tone Distribution -->
+      <div class="dash-card">
+        <h4>🎭 Distribusi Tone</h4>
+        <div class="tone-bar" id="dashToneBar"></div>
+        <div class="tone-legend" id="dashToneLegend"></div>
+        <div style="margin-top:12px;" id="dashToneDetail"></div>
+      </div>
+
+      <!-- Perbandingan Bulan -->
+      <div class="dash-card">
+        <h4>📅 Perbandingan Bulan</h4>
+        <div id="dashCompare"></div>
+      </div>
+
+      <!-- Trend Harian -->
+      <div class="dash-card dash-full">
+        <h4>📈 Tren Pemberitaan 30 Hari Terakhir</h4>
+        <div class="heatmap-wrap">
+          <div id="dashTrend" style="display:flex;gap:4px;align-items:flex-end;height:80px;"></div>
+          <div id="dashTrendLabels" style="display:flex;gap:4px;margin-top:4px;"></div>
+        </div>
+      </div>
+
+      <!-- Kalender Heatmap -->
+      <div class="dash-card dash-full">
+        <h4>📆 Kalender Pemberitaan (3 Bulan Terakhir)</h4>
+        <div id="dashCalendar" style="overflow-x:auto;"></div>
+      </div>
+
+      <!-- Keyword Cloud -->
+      <div class="dash-card dash-full">
+        <h4>🔤 Kata Kunci Populer di Judul</h4>
+        <div id="dashKeywords"></div>
+      </div>
+
+      <!-- Media Baru -->
+      <div class="dash-card">
+        <h4>🆕 Media Baru Bulan Ini</h4>
+        <div id="dashNewMedia"></div>
+      </div>
+
+      <!-- Hari Paling Ramai -->
+      <div class="dash-card">
+        <h4>🔥 Hari Paling Ramai</h4>
+        <div id="dashTopDays"></div>
+      </div>
+
+    </div>
+
+    <div style="text-align:center;padding:8px 0;">
+      <button class="export-btn" onclick="exportDashboardExcel()">⬇ Export Semua Data ke Excel</button>
+    </div>
+  </div><!-- end panel-dashboard -->
+
 </div>
 <div class="toast" id="toast"></div>
 
@@ -1048,6 +1198,232 @@ function renderPagination() {
   html += `<span class="page-info">${total} artikel, halaman ${currentPage}/${totalPages}</span>`;
 
   pag.innerHTML = html;
+}
+
+// ==================== TAB SYSTEM ====================
+function switchTab(tab) {
+  document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.getElementById('panel-' + tab).classList.add('active');
+  if (tab === 'dashboard') renderDashboard();
+}
+
+// ==================== DASHBOARD ====================
+// Load articles from Supabase DB
+async function loadFromDB() {
+  const statusEl = document.getElementById('dashDbStatus');
+  statusEl.textContent = 'Memuat dari database...';
+  try {
+    const resp = await fetch('/api/articles?limit=2000');
+    const data = await resp.json();
+    if (data.articles) {
+      // Convert DB format to app format
+      return data.articles.map(a => ({
+        title: a.title,
+        url: a.url,
+        publishedAt: a.published_at,
+        source: { name: a.source },
+        description: a.description,
+        _tone: null,
+        _analyzed: false
+      }));
+    }
+  } catch(e) {
+    statusEl.textContent = 'Gagal load database: ' + e.message;
+  }
+  return [];
+}
+
+async function renderDashboard() {
+  const sourceMode = document.querySelector('input[name="dashSource"]:checked')?.value || 'live';
+  const statusEl = document.getElementById('dashDbStatus');
+  
+  let articles = [];
+  if (sourceMode === 'db') {
+    const dbArts = await loadFromDB();
+    if (!dbArts.length) {
+      document.getElementById('dashMediaList').innerHTML = '<p style="color:var(--muted);font-size:12px;">Database kosong. Pastikan crawl sudah berjalan.</p>';
+      return;
+    }
+    articles = dbArts;
+    statusEl.textContent = `${dbArts.length} artikel dari database`;
+    document.getElementById('dashTotalAll').textContent = dbArts.length;
+  } else {
+    if (!allArticles.length) {
+      document.getElementById('dashMediaList').innerHTML = '<p style="color:var(--muted);font-size:12px;">Cari berita dulu di tab Monitor, lalu buka Dashboard.</p>';
+      return;
+    }
+    articles = [...allArticles];
+    statusEl.textContent = `${allArticles.length} artikel dari pencarian terakhir`;
+    document.getElementById('dashTotalAll').textContent = allArticles.length;
+  }
+
+  const excludeInfonesia = document.getElementById('dashExcludeInfonesia').checked;
+  if (excludeInfonesia) articles = articles.filter(a => !a.source?.name?.toLowerCase().includes('infonesia'));
+
+  const now = new Date();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+  const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+  const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+
+  const thisMonthArts = articles.filter(a => {
+    const d = new Date(a.publishedAt);
+    return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+  });
+  const lastMonthArts = articles.filter(a => {
+    const d = new Date(a.publishedAt);
+    return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
+  });
+
+  // Stats
+  const mediaSet = new Set(articles.map(a => a.source?.name || 'Unknown'));
+  document.getElementById('dashTotalMonth').textContent = thisMonthArts.length || articles.length;
+  document.getElementById('dashTotalLastMonth').textContent = lastMonthArts.length;
+  document.getElementById('dashTotalMedia').textContent = mediaSet.size;
+
+  // Top Media
+  const mediaCounts = {};
+  articles.forEach(a => {
+    const name = a.source?.name || 'Unknown';
+    mediaCounts[name] = (mediaCounts[name] || 0) + 1;
+  });
+  const sortedMedia = Object.entries(mediaCounts).sort((a,b) => b[1]-a[1]).slice(0, 15);
+  const maxCount = sortedMedia[0]?.[1] || 1;
+  document.getElementById('dashMediaList').innerHTML = sortedMedia.map(([name, count]) => `
+    <div class="media-item">
+      <span class="media-name">${name}</span>
+      <div class="media-bar-wrap"><div class="media-bar" style="width:${Math.round(count/maxCount*100)}%"></div></div>
+      <span class="media-count">${count}</span>
+    </div>`).join('');
+
+  // Tone Distribution
+  const tones = { positif: 0, negatif: 0, netral: 0, '-': 0 };
+  articles.forEach(a => { tones[a._tone || '-'] = (tones[a._tone || '-'] || 0) + 1; });
+  const total = articles.length;
+  const pPos = Math.round(tones.positif/total*100);
+  const pNeg = Math.round(tones.negatif/total*100);
+  const pNet = Math.round(tones.netral/total*100);
+  document.getElementById('dashToneBar').innerHTML = `
+    <div class="tone-seg" style="width:${pPos}%;background:var(--pos)"></div>
+    <div class="tone-seg" style="width:${pNeg}%;background:var(--neg)"></div>
+    <div class="tone-seg" style="width:${pNet}%;background:var(--neu)"></div>
+    <div class="tone-seg" style="width:${100-pPos-pNeg-pNet}%;background:var(--border2)"></div>`;
+  document.getElementById('dashToneLegend').innerHTML = `
+    <span class="tone-legend-item"><span class="tone-dot" style="background:var(--pos)"></span>Positif ${pPos}% (${tones.positif})</span>
+    <span class="tone-legend-item"><span class="tone-dot" style="background:var(--neg)"></span>Negatif ${pNeg}% (${tones.negatif})</span>
+    <span class="tone-legend-item"><span class="tone-dot" style="background:var(--neu)"></span>Netral ${pNet}% (${tones.netral})</span>`;
+  document.getElementById('dashToneDetail').innerHTML = `<p style="font-size:11px;color:var(--muted);">${articles.filter(a=>a._analyzed).length} dari ${total} artikel sudah dianalisis AI</p>`;
+
+  // Perbandingan Bulan
+  const bulanIni = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][thisMonth];
+  const bulanLalu = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][lastMonth];
+  const diff = thisMonthArts.length - lastMonthArts.length;
+  const arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '→';
+  const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '';
+  document.getElementById('dashCompare').innerHTML = `
+    <div class="compare-row"><span class="compare-label">${bulanIni} ${thisYear}</span><span class="compare-val">${thisMonthArts.length || articles.length} artikel</span></div>
+    <div class="compare-row"><span class="compare-label">${bulanLalu}</span><span class="compare-val">${lastMonthArts.length} artikel</span></div>
+    <div class="compare-row"><span class="compare-label">Selisih</span><span class="compare-val ${cls}">${arrow} ${Math.abs(diff)}</span></div>`;
+
+  // Trend 30 Hari
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().split('T')[0]);
+  }
+  const dayCounts = {};
+  days.forEach(d => dayCounts[d] = 0);
+  articles.forEach(a => {
+    const d = a.publishedAt?.split('T')[0];
+    if (d && dayCounts[d] !== undefined) dayCounts[d]++;
+  });
+  const maxDay = Math.max(...Object.values(dayCounts), 1);
+  const trendEl = document.getElementById('dashTrend');
+  const labelEl = document.getElementById('dashTrendLabels');
+  trendEl.innerHTML = days.map(d => {
+    const cnt = dayCounts[d];
+    const h = Math.max(4, Math.round(cnt/maxDay*76));
+    const color = cnt === 0 ? 'var(--border2)' : cnt < 3 ? '#93c5fd' : cnt < 6 ? '#3b82f6' : 'var(--accent)';
+    return `<div title="${d}: ${cnt} artikel" style="flex:1;height:${h}px;background:${color};border-radius:3px 3px 0 0;cursor:default;align-self:flex-end;"></div>`;
+  }).join('');
+  labelEl.innerHTML = days.filter((d,i) => i % 5 === 0).map(d => {
+    const dt = new Date(d);
+    return `<span style="font-size:9px;color:var(--muted);flex:5;">${dt.getDate()}/${dt.getMonth()+1}</span>`;
+  }).join('');
+
+  // Keyword Cloud
+  const stopwords = new Set(['yang','dan','di','ke','dari','untuk','dengan','ini','itu','pada','dalam','oleh','akan','telah','sudah','juga','tidak','sebagai','adalah','pln','papua','listrik','kelistrikan','wilayah','barat','unit','induk','persero']);
+  const wordCount = {};
+  articles.forEach(a => {
+    const words = (a.title || '').toLowerCase().split(/\W+/).filter(w => w.length > 3 && !stopwords.has(w));
+    words.forEach(w => wordCount[w] = (wordCount[w]||0)+1);
+  });
+  const topWords = Object.entries(wordCount).sort((a,b)=>b[1]-a[1]).slice(0,30);
+  document.getElementById('dashKeywords').innerHTML = topWords.map(([w,c]) => 
+    `<span class="kw-tag" style="font-size:${Math.min(14, 10+c)}px">${w} <strong>${c}</strong></span>`
+  ).join('');
+
+  // Kalender Heatmap 3 bulan terakhir
+  const calEl = document.getElementById('dashCalendar');
+  const calHtml = [];
+  const allDayCounts = {};
+  articles.forEach(a => {
+    const d = a.publishedAt?.split('T')[0];
+    if (d) allDayCounts[d] = (allDayCounts[d] || 0) + 1;
+  });
+  const maxCalDay = Math.max(...Object.values(allDayCounts), 1);
+  const dayNames = ['S','S','R','K','J','S','M'];
+  for (let m = 2; m >= 0; m--) {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - m);
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const monthName = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][month];
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    let cells = '<div class="cal-days">';
+    dayNames.forEach(n => cells += `<div class="cal-day-header">${n}</div>`);
+    for (let i = 0; i < firstDay; i++) cells += '<div class="cal-day cal-day-empty"></div>';
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const cnt = allDayCounts[dateStr] || 0;
+      const intensity = cnt === 0 ? '#f3f4f6' : cnt <= 2 ? '#bfdbfe' : cnt <= 5 ? '#60a5fa' : cnt <= 10 ? '#2563eb' : '#1e3a8a';
+      cells += `<div class="cal-day" style="background:${intensity}" title="${dateStr}: ${cnt} artikel">${day}</div>`;
+    }
+    cells += '</div>';
+    calHtml.push(`<div class="cal-month"><div class="cal-month-name">${monthName} ${year}</div>${cells}</div>`);
+  }
+  calEl.innerHTML = `<div class="cal-grid">${calHtml.join('')}</div>`;
+
+  // Media Baru Bulan Ini
+  const mediaThisMonth = new Set(thisMonthArts.map(a => a.source?.name || 'Unknown'));
+  const mediaLastMonth = new Set(lastMonthArts.map(a => a.source?.name || 'Unknown'));
+  const newMedia = [...mediaThisMonth].filter(m => !mediaLastMonth.has(m));
+  document.getElementById('dashNewMedia').innerHTML = newMedia.length
+    ? newMedia.map(m => `<div class="new-media-item">📰 ${m}</div>`).join('')
+    : '<p style="font-size:12px;color:var(--muted);">Tidak ada media baru bulan ini</p>';
+
+  // Top 5 Hari Paling Ramai
+  const topDays = Object.entries(allDayCounts)
+    .sort((a,b) => b[1]-a[1])
+    .slice(0, 5);
+  document.getElementById('dashTopDays').innerHTML = topDays.length
+    ? topDays.map(([date, cnt], i) => {
+        const d = new Date(date);
+        const label = `${d.getDate()} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][d.getMonth()]} ${d.getFullYear()}`;
+        return `<div class="top-day-item"><span>${['🥇','🥈','🥉','4️⃣','5️⃣'][i]} ${label}</span><strong>${cnt} artikel</strong></div>`;
+      }).join('')
+    : '<p style="font-size:12px;color:var(--muted);">Belum ada data</p>';
+}
+
+function exportDashboardExcel() {
+  if (!allArticles.length) return showToast('⚠ Tidak ada data');
+  // Reuse existing export function
+  exportExcel();
 }
 
 function showLoading() {
