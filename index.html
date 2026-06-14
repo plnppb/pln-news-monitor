@@ -571,6 +571,26 @@
       <button class="export-btn" onclick="exportDashboardExcel()" style="display:inline-flex;align-items:center;gap:6px;padding:9px 20px;font-size:13px;">📥 Export Dashboard ke Excel</button>
     </div>
 
+    <!-- Daftar Artikel Dashboard -->
+    <div class="dash-card dash-full" style="margin-top:4px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <h4 style="margin:0;">📋 Daftar Artikel (<span id="dashArticleCount">0</span>)</h4>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="dashSearch" placeholder="Filter judul..." 
+            oninput="filterDashArticles()" 
+            style="font-size:12px;padding:5px 10px;border:1px solid var(--border2);border-radius:6px;width:200px;">
+          <select id="dashToneFilter" onchange="filterDashArticles()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px;">
+            <option value="semua">Semua Tone</option>
+            <option value="positif">Positif</option>
+            <option value="negatif">Negatif</option>
+            <option value="netral">Netral</option>
+          </select>
+        </div>
+      </div>
+      <div id="dashArticleList" style="display:flex;flex-direction:column;gap:6px;"></div>
+      <div id="dashArticlePagination" style="display:flex;gap:6px;justify-content:center;align-items:center;margin-top:12px;flex-wrap:wrap;"></div>
+    </div>
+
   </div><!-- end panel-dashboard -->
   </div><!-- end panel-dashboard-wrap -->
 
@@ -1576,6 +1596,81 @@ async function renderDashboard() {
         return `<div class="top-day-item"><span>${['🥇','🥈','🥉','4️⃣','5️⃣'][i]} ${label}</span><strong>${cnt}</strong></div>`;
       }).join('')
     : '<p style="font-size:12px;color:var(--muted);">Belum ada data</p>';
+
+  // Render daftar artikel
+  renderDashArticleList(articles);
+}
+
+// ---- DASHBOARD ARTICLE LIST ----
+let dashFilteredArticles = [];
+let dashArticlePage = 1;
+const DASH_PAGE_SIZE = 50;
+
+function renderDashArticleList(articles) {
+  dashFilteredArticles = articles;
+  dashArticlePage = 1;
+  const el = document.getElementById('dashArticleCount');
+  if (el) el.textContent = articles.length;
+  renderDashArticlePage(1);
+}
+
+function renderDashArticlePage(page) {
+  dashArticlePage = page;
+  const start = (page - 1) * DASH_PAGE_SIZE;
+  const pageArts = dashFilteredArticles.slice(start, start + DASH_PAGE_SIZE);
+  const grid = document.getElementById('dashArticleList');
+  if (!grid) return;
+
+  if (!pageArts.length) {
+    grid.innerHTML = '<p style="color:var(--muted);font-size:12px;text-align:center;padding:20px;">Tidak ada artikel.</p>';
+    document.getElementById('dashArticlePagination').innerHTML = '';
+    return;
+  }
+
+  grid.innerHTML = pageArts.map(a => {
+    const date = a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '—';
+    const tone = a._tone || 'netral';
+    const toneColor = tone === 'positif' ? 'var(--pos)' : tone === 'negatif' ? 'var(--neg)' : 'var(--neu)';
+    const toneBg = tone === 'positif' ? '#dcfce7' : tone === 'negatif' ? '#fee2e2' : '#f1f5f9';
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid ${toneColor};border-radius:8px;padding:10px 14px;display:flex;align-items:flex-start;gap:10px;">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;flex-wrap:wrap;">
+          <span style="font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-light);padding:2px 7px;border-radius:4px;">${a.source?.name||'—'}</span>
+          <span style="font-size:11px;color:var(--muted);">${date}</span>
+          <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${toneBg};color:${toneColor};">${tone.charAt(0).toUpperCase()+tone.slice(1)}</span>
+        </div>
+        <a href="${a.url||'#'}" target="_blank" rel="noopener" style="font-size:13px;font-weight:600;color:var(--text);text-decoration:none;line-height:1.4;display:block;">${a.title||'Tanpa judul'}</a>
+        ${a._resume ? `<p style="font-size:11px;color:var(--text2);margin-top:4px;line-height:1.5;">${a._resume}</p>` : ''}
+      </div>
+      <a href="${a.url||'#'}" target="_blank" rel="noopener" style="flex-shrink:0;color:var(--muted);font-size:16px;text-decoration:none;">↗</a>
+    </div>`;
+  }).join('');
+
+  const total = dashFilteredArticles.length;
+  const totalPages = Math.ceil(total / DASH_PAGE_SIZE);
+  const pag = document.getElementById('dashArticlePagination');
+  if (!pag) return;
+  if (totalPages <= 1) { pag.innerHTML = ''; return; }
+
+  let html = `<button class="page-btn" onclick="renderDashArticlePage(${page-1})" ${page===1?'disabled':''}>‹ Prev</button>`;
+  for (let p = Math.max(1,page-2); p <= Math.min(totalPages,page+2); p++) {
+    html += `<button class="page-btn ${p===page?'active':''}" onclick="renderDashArticlePage(${p})">${p}</button>`;
+  }
+  html += `<button class="page-btn" onclick="renderDashArticlePage(${page+1})" ${page===totalPages?'disabled':''}>Next ›</button>`;
+  html += `<span style="font-size:11px;color:var(--muted);">${total} artikel, hal ${page}/${totalPages}</span>`;
+  pag.innerHTML = html;
+}
+
+function filterDashArticles() {
+  const q = (document.getElementById('dashSearch')?.value||'').toLowerCase();
+  const tone = document.getElementById('dashToneFilter')?.value||'semua';
+  const base = filterByPeriod(dashAllArticles);
+  const filtered = base.filter(a => {
+    const matchQ = !q||(a.title||'').toLowerCase().includes(q);
+    const matchTone = tone==='semua'||a._tone===tone;
+    return matchQ && matchTone;
+  });
+  renderDashArticleList(filtered);
 }
 
 function exportDashboardExcel() {
