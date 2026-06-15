@@ -1,0 +1,39 @@
+name: Auto Crawl PLN Papua
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # Setiap 6 jam: jam 0, 6, 12, 18 UTC
+  workflow_dispatch:          # Bisa juga dijalankan manual dari GitHub
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Crawl Batch 0
+        run: |
+          curl -s "https://pln-news-monitor.vercel.app/api/crawl?secret=${{ secrets.CRON_SECRET }}&keyword=PLN+Papua&batchIndex=0&batch=30"
+          echo "Batch 0 done"
+
+      - name: Wait 30 seconds
+        run: sleep 30
+
+      - name: Crawl Batch 1
+        run: |
+          curl -s "https://pln-news-monitor.vercel.app/api/crawl?secret=${{ secrets.CRON_SECRET }}&keyword=PLN+Papua&batchIndex=1&batch=30"
+          echo "Batch 1 done"
+
+      - name: Wait 30 seconds
+        run: sleep 30
+
+      - name: Crawl Batch 2
+        run: |
+          curl -s "https://pln-news-monitor.vercel.app/api/crawl?secret=${{ secrets.CRON_SECRET }}&keyword=PLN+Papua&batchIndex=2&batch=30"
+          echo "Batch 2 done"
+
+      - name: Wait 30 seconds
+        run: sleep 30
+
+      - name: Analyze Batch (sentiment)
+        run: |
+          curl -s "https://pln-news-monitor.vercel.app/api/analyze-batch?secret=${{ secrets.CRON_SECRET }}&batch=30"
+          echo "Analyze done"
