@@ -1382,9 +1382,11 @@ function setDashCustomRange() {
 
 
 function filterByPeriod(articles) {
+  // Gunakan createdAt (kapan masuk database) bukan publishedAt
+  const getDate = a => new Date(a.createdAt || a.publishedAt);
   if (dashCustomFrom || dashCustomTo) {
     return articles.filter(a => {
-      const d = new Date(a.publishedAt);
+      const d = getDate(a);
       if (dashCustomFrom && d < new Date(dashCustomFrom)) return false;
       if (dashCustomTo && d > new Date(dashCustomTo + 'T23:59:59')) return false;
       return true;
@@ -1393,7 +1395,7 @@ function filterByPeriod(articles) {
   if (dashPeriodDays === 0) return articles;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - dashPeriodDays);
-  return articles.filter(a => new Date(a.publishedAt) >= cutoff);
+  return articles.filter(a => getDate(a) >= cutoff);
 }
 
 async function loadFromDB() {
@@ -1418,6 +1420,7 @@ async function loadFromDB() {
         title: a.title,
         url: a.url,
         publishedAt: a.published_at,
+        createdAt: a.created_at,
         source: { name: a.source },
         description: a.description,
         keyword: a.keyword,
@@ -1753,6 +1756,7 @@ async function autoLoadFromDB() {
         title: a.title,
         url: a.url,
         publishedAt: a.published_at,
+        createdAt: a.created_at,
         source: { name: a.source },
         description: a.description,
         keyword: a.keyword,
