@@ -1379,33 +1379,7 @@ function setDashCustomRange() {
   renderDashboard();
 }
 
-async function loadFromDB() {
-  const statusEl = document.getElementById('dashDbStatus');
-  statusEl.textContent = 'Memuat dari database...';
-  try {
-    const resp = await fetch('/api/articles?limit=2000');
-    const data = await resp.json();
-    if (data.articles) {
-      statusEl.textContent = `${data.articles.length} artikel di database`;
-      return data.articles.map(a => ({
-        title: a.title,
-        url: a.url,
-        publishedAt: a.published_at,
-        source: { name: a.source },
-        description: a.description,
-        keyword: a.keyword,
-        _tone: a.tone || 'netral',
-        _resume: a.resume || '',
-        _spkInternal: a.spokesperson_internal || '',
-        _spkExternal: a.spokesperson_eksternal || '',
-        _analyzed: !!(a.resume)
-      }));
-    }
-  } catch(e) {
-    statusEl.textContent = 'Gagal load: ' + e.message;
-  }
-  return [];
-}
+
 
 function filterByPeriod(articles) {
   if (dashCustomFrom || dashCustomTo) {
@@ -1420,6 +1394,49 @@ function filterByPeriod(articles) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - dashPeriodDays);
   return articles.filter(a => new Date(a.publishedAt) >= cutoff);
+}
+
+async function loadFromDB() {
+  const statusEl = document.getElementById('dashDbStatus');
+  if (statusEl) statusEl.textContent = 'Memuat dari database...';
+  try {
+    const from = new Date();
+    from.setDate(from.getDate() - 30);
+    const fromStr = from.toISOString().split('T')[0];
+
+    const pageSize = 500;
+    let allFetched = [];
+    let offset = 0;
+
+    while (true) {
+      if (statusEl) statusEl.textContent = 'Memuat... ' + allFetched.length + ' artikel';
+      const r = await fetch('/api/articles?limit=' + pageSize + '&offset=' + offset + '&created_from=' + fromStr);
+      if (!r.ok) break;
+      const d = await r.json();
+      if (!d.articles || !d.articles.length) break;
+      allFetched = allFetched.concat(d.articles.map(a => ({
+        title: a.title,
+        url: a.url,
+        publishedAt: a.published_at,
+        source: { name: a.source },
+        description: a.description,
+        keyword: a.keyword,
+        _tone: a.tone || 'netral',
+        _resume: a.resume || '',
+        _spkInternal: a.spokesperson_internal || '',
+        _spkExternal: a.spokesperson_eksternal || '',
+        _analyzed: !!(a.resume)
+      })));
+      if (d.articles.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    if (statusEl) statusEl.textContent = allFetched.length + ' artikel (30 hari terakhir)';
+    return allFetched;
+  } catch(e) {
+    if (statusEl) statusEl.textContent = 'Gagal: ' + e.message;
+  }
+  return [];
 }
 
 async function renderDashboard() {
@@ -1727,7 +1744,7 @@ async function autoLoadFromDB() {
     let total = null;
 
     while (true) {
-      const r = await fetch('/api/articles?limit=' + pageSize + '&offset=' + offset + '&from=' + fromStr);
+      const r = await fetch('/api/articles?limit=' + pageSize + '&offset=' + offset + '&created_from=' + fromStr);
       if (!r.ok) break;
       const d = await r.json();
       if (total === null) total = d.total || 0;
