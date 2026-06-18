@@ -486,8 +486,8 @@
     <!-- Filter Bar -->
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
       <span style="font-size:12px;font-weight:700;color:var(--accent);">📅 Periode:</span>
-      <button class="dash-period-btn active" onclick="setDashPeriod(7,this)">7 Hari</button>
-      <button class="dash-period-btn" onclick="setDashPeriod(30,this)">30 Hari</button>
+      <button class="dash-period-btn" onclick="setDashPeriod(7,this)">7 Hari</button>
+      <button class="dash-period-btn active" onclick="setDashPeriod(30,this)">30 Hari</button>
       <button class="dash-period-btn" onclick="setDashPeriod(90,this)">3 Bulan</button>
       <button class="dash-period-btn" onclick="setDashPeriod(0,this)">Semua</button>
       <div style="display:flex;align-items:center;gap:6px;margin-left:8px;">
@@ -601,7 +601,7 @@
 <script>
 // Dashboard state - harus di atas karena switchTab membutuhkan ini
 let dashAllArticles = [];
-let dashPeriodDays = 7;
+let dashPeriodDays = 30;
 let dashCustomFrom = '';
 let dashCustomTo = '';
 
@@ -1714,37 +1714,50 @@ initRssFeeds();
 // Auto-load artikel dari database saat halaman dibuka
 async function autoLoadFromDB() {
   try {
-    const resp = await fetch('/api/articles?limit=100');
-    if (!resp.ok) return;
-    const data = await resp.json();
-    if (!data.articles || !data.articles.length) return;
+    // 30 hari terakhir
+    const from = new Date();
+    from.setDate(from.getDate() - 30);
+    const fromStr = from.toISOString().split('T')[0];
 
-    // Convert DB format ke app format
-    const articles = data.articles.map(a => ({
-      title: a.title,
-      url: a.url,
-      publishedAt: a.published_at,
-      source: { name: a.source },
-      description: a.description,
-      keyword: a.keyword,
-      _tone: a.tone || 'netral',
-      _resume: a.resume || '',
-      _spkInternal: a.spokesperson_internal || '',
-      _spkExternal: a.spokesperson_eksternal || '',
-      _analyzed: !!(a.resume)
-    }));
+    document.getElementById('resultLabel').textContent = 'Memuat artikel 30 hari terakhir...';
 
-    allArticles = articles;
-    filteredArticles = [...articles];
-    document.getElementById('hdr-total').textContent = data.total || articles.length;
-    document.getElementById('resultLabel').textContent = `Menampilkan ${articles.length} artikel (dari database)`;
-    updateStats(articles);
+    const pageSize = 500;
+    let allFetched = [];
+    let offset = 0;
+    let total = null;
+
+    while (true) {
+      const r = await fetch('/api/articles?limit=' + pageSize + '&offset=' + offset + '&from=' + fromStr);
+      if (!r.ok) break;
+      const d = await r.json();
+      if (total === null) total = d.total || 0;
+      if (!d.articles || !d.articles.length) break;
+      const mapped = d.articles.map(a => ({
+        title: a.title,
+        url: a.url,
+        publishedAt: a.published_at,
+        source: { name: a.source },
+        description: a.description,
+        keyword: a.keyword,
+        _tone: a.tone || 'netral',
+        _resume: a.resume || '',
+        _spkInternal: a.spokesperson_internal || '',
+        _spkExternal: a.spokesperson_eksternal || '',
+        _analyzed: !!(a.resume)
+      }));
+      allFetched = allFetched.concat(mapped);
+      document.getElementById('resultLabel').textContent = 'Memuat... ' + allFetched.length + (total ? '/' + total : '');
+      if (d.articles.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    allArticles = allFetched;
+    filteredArticles = [...allFetched];
+    document.getElementById('hdr-total').textContent = allFetched.length;
+    document.getElementById('resultLabel').textContent = 'Menampilkan ' + allFetched.length + ' artikel (30 hari terakhir)';
+    updateStats(allFetched);
     currentPage = 1;
     renderPage(1);
-
-    // Update header
-    const kw = articles[0]?.keyword || 'PLN Papua';
-    document.querySelector('.header-keyword') && (document.querySelector('.header-keyword').textContent = kw);
   } catch(e) {
     console.log('Auto-load DB:', e.message);
   }
