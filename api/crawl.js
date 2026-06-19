@@ -4,6 +4,8 @@ const http = require('http');
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const NEWS_API_KEY = process.env.NEWS_API_KEY;
+const GNEWSIO_API_KEY = process.env.GNEWSIO_API_KEY;
 
 async function fetchUrl(urlStr) {
   return new Promise((resolve, reject) => {
@@ -69,6 +71,81 @@ async function getFeedsFromDB() {
   return await response.json();
 }
 
+// ==================== SUMBER TAMBAHAN: NewsAPI, Google News RSS, GNews.io ====================
+
+async function fetchFromNewsAPI(keyword) {
+  if (!NEWS_API_KEY) return [];
+  try {
+    const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(keyword)}&language=id&sortBy=publishedAt&pageSize=50&apiKey=${NEWS_API_KEY}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const data = await response.json();
+    if (!data.articles) return [];
+    return data.articles.map(a => ({
+      title: a.title,
+      url: a.url,
+      source: a.source?.name || 'NewsAPI',
+      published_at: a.publishedAt || new Date().toISOString(),
+      description: (a.description || '').substring(0, 500)
+    }));
+  } catch (e) {
+    return [];
+  }
+}
+
+async function fetchFromGoogleNewsRSS(keyword) {
+  try {
+    const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(keyword)}&hl=id&gl=ID&ceid=ID:id`;
+    const xml = await fetchUrl(rssUrl);
+    const items = [];
+    const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+    let match;
+    while ((match = itemRegex.exec(xml)) !== null) {
+      const item = match[1];
+      const getTag = (tag) => {
+        const m = item.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));
+        return m ? (m[1] || m[2] || '').trim() : '';
+      };
+      const title = getTag('title');
+      const link = getTag('link');
+      const pubDate = getTag('pubDate');
+      const source = getTag('source');
+      const description = getTag('description').replace(/<[^>]+>/g, '').substring(0, 500);
+      if (!title || !link) continue;
+      items.push({
+        title,
+        url: link,
+        source: source || 'Google News',
+        published_at: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
+        description
+      });
+    }
+    return items;
+  } catch (e) {
+    return [];
+  }
+}
+
+async function fetchFromGNewsIo(keyword) {
+  if (!GNEWSIO_API_KEY) return [];
+  try {
+    const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(keyword)}&lang=id&country=id&max=10&apikey=${GNEWSIO_API_KEY}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const data = await response.json();
+    if (!data.articles) return [];
+    return data.articles.map(a => ({
+      title: a.title,
+      url: a.url,
+      source: a.source?.name || 'GNews.io',
+      published_at: a.publishedAt || new Date().toISOString(),
+      description: (a.description || '').substring(0, 500)
+    }));
+  } catch (e) {
+    return [];
+  }
+}
+
+// ==================== ANALYZE & SAVE ====================
+
 async function analyzeArticle(title, description) {
   if (!GEMINI_API_KEY) return { tone: 'netral', resume: '', spokesperson_internal: '', spokesperson_eksternal: '' };
   try {
@@ -107,9 +184,8 @@ Deskripsi: ${(description || '').replace(/<[^>]+>/g, '').substring(0, 300)}`;
 }
 
 async function saveToSupabase(articles, keyword) {
-  if (!articles.length) return { saved: 0, newIds: [] };
+  if (!articles.length) return { saved: 0 };
 
-  // Analyze dulu setiap artikel sebelum disimpan
   const rows = [];
   for (const a of articles) {
     const analysis = await analyzeArticle(a.title, a.description);
@@ -125,7 +201,6 @@ async function saveToSupabase(articles, keyword) {
       spokesperson_internal: analysis.spokesperson_internal || '',
       spokesperson_eksternal: analysis.spokesperson_eksternal || ''
     });
-    // Delay 200ms antar artikel agar tidak kena rate limit Gemini
     await new Promise(r => setTimeout(r, 200));
   }
 
@@ -142,6 +217,8 @@ async function saveToSupabase(articles, keyword) {
   return { saved: rows.length, status: response.status };
 }
 
+// ==================== MAIN HANDLER ====================
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -154,8 +231,47 @@ module.exports = async function handler(req, res) {
   const keyword = req.query.keyword || 'PLN Papua';
   const batchSize = parseInt(req.query.batch) || 30;
   const batchIndex = parseInt(req.query.batchIndex) || 0;
+  // source=feeds (default, RSS feeds dari DB) atau source=external (NewsAPI+GoogleNews+GNewsIo)
+  const source = req.query.source || 'feeds';
 
   try {
+    const keywords = keyword.toLowerCase().split(/\s+/).filter(k => k.length > 1);
+
+    // ===== MODE: EXTERNAL (NewsAPI + Google News RSS + GNews.io) =====
+    if (source === 'external') {
+      const [newsApiArts, googleNewsArts, gnewsioArts] = await Promise.all([
+        fetchFromNewsAPI(keyword),
+        fetchFromGoogleNewsRSS(keyword),
+        fetchFromGNewsIo(keyword)
+      ]);
+
+      let combined = [...newsApiArts, ...googleNewsArts, ...gnewsioArts];
+
+      // Filter: harus mengandung semua kata keyword
+      combined = combined.filter(a => {
+        const text = (a.title + ' ' + a.description).toLowerCase();
+        return keywords.every(k => text.includes(k));
+      });
+
+      // Dedup by URL
+      const seen = new Set();
+      combined = combined.filter(a => {
+        if (seen.has(a.url)) return false;
+        seen.add(a.url);
+        return true;
+      });
+
+      const saved = await saveToSupabase(combined, keyword);
+      return res.status(200).json({
+        success: true,
+        source: 'external',
+        total: combined.length,
+        saved: saved.saved,
+        breakdown: { newsapi: newsApiArts.length, googlenews: googleNewsArts.length, gnewsio: gnewsioArts.length }
+      });
+    }
+
+    // ===== MODE: FEEDS (RSS dari database, default) =====
     const allFeeds = await getFeedsFromDB();
     if (!allFeeds.length) {
       return res.status(200).json({ success: true, message: 'No feeds in DB. Please sync feeds first.' });
@@ -168,7 +284,6 @@ module.exports = async function handler(req, res) {
     }
 
     const results = { total: 0, saved: 0, errors: [], batchIndex, totalFeeds: allFeeds.length };
-    const keywords = keyword.toLowerCase().split(/\s+/).filter(k => k.length > 1);
 
     await Promise.allSettled(batch.map(async (feed) => {
       try {
@@ -191,7 +306,7 @@ module.exports = async function handler(req, res) {
       }
     }));
 
-    return res.status(200).json({ success: true, ...results });
+    return res.status(200).json({ success: true, source: 'feeds', ...results });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
