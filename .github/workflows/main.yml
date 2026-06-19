@@ -2,38 +2,53 @@ name: Auto Crawl PLN Papua
 
 on:
   schedule:
-    - cron: '0 */6 * * *'   # Setiap 6 jam: jam 0, 6, 12, 18 UTC
-  workflow_dispatch:          # Bisa juga dijalankan manual dari GitHub
+    - cron: '0 0,6,12,18 * * *'  # Setiap 6 jam
+  workflow_dispatch:
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
     steps:
-      - name: Crawl Batch 0
+      - name: Crawl RSS Feeds (All Batches)
         run: |
-          curl -s "https://pln-news-monitor.vercel.app/api/crawl?secret=${{ secrets.CRON_SECRET }}&keyword=PLN+Papua&batchIndex=0&batch=30"
-          echo "Batch 0 done"
+          SECRET="${{ secrets.CRON_SECRET }}"
+          BASE="https://pln-news-monitor.vercel.app/api/crawl"
+          TOTAL_FEEDS=592
+          BATCH_SIZE=30
+          TOTAL_BATCHES=$(( (TOTAL_FEEDS + BATCH_SIZE - 1) / BATCH_SIZE ))
 
-      - name: Wait 30 seconds
-        run: sleep 30
+          echo "Total batches: $TOTAL_BATCHES"
 
-      - name: Crawl Batch 1
+          for i in $(seq 0 $((TOTAL_BATCHES - 1))); do
+            echo "Crawling RSS batch $i..."
+            RESULT=$(curl -s "${BASE}?secret=${SECRET}&keyword=PLN+Papua&batchIndex=${i}&batch=${BATCH_SIZE}")
+            echo "Batch $i: $RESULT"
+            sleep 3
+          done
+
+          echo "RSS feeds crawl done!"
+
+      - name: Crawl External Sources (NewsAPI + Google News + GNews.io)
         run: |
-          curl -s "https://pln-news-monitor.vercel.app/api/crawl?secret=${{ secrets.CRON_SECRET }}&keyword=PLN+Papua&batchIndex=1&batch=30"
-          echo "Batch 1 done"
+          SECRET="${{ secrets.CRON_SECRET }}"
+          BASE="https://pln-news-monitor.vercel.app/api/crawl"
 
-      - name: Wait 30 seconds
-        run: sleep 30
+          echo "Crawling external sources for multiple keywords..."
+          for KW in "PLN+Wilayah+Papua" "PLN+Papua" "PLN+Sorong" "PLN+Jayapura" "PLN+Manokwari"; do
+            echo "Keyword: $KW"
+            RESULT=$(curl -s "${BASE}?secret=${SECRET}&keyword=${KW}&source=external")
+            echo "Result: $RESULT"
+            sleep 5
+          done
 
-      - name: Crawl Batch 2
+          echo "External sources crawl done!"
+
+      - name: Analyze New Articles
         run: |
-          curl -s "https://pln-news-monitor.vercel.app/api/crawl?secret=${{ secrets.CRON_SECRET }}&keyword=PLN+Papua&batchIndex=2&batch=30"
-          echo "Batch 2 done"
-
-      - name: Wait 30 seconds
-        run: sleep 30
-
-      - name: Analyze Batch (sentiment)
-        run: |
-          curl -s "https://pln-news-monitor.vercel.app/api/analyze-batch?secret=${{ secrets.CRON_SECRET }}&batch=30"
-          echo "Analyze done"
+          SECRET="${{ secrets.CRON_SECRET }}"
+          echo "Running analyze batch..."
+          for i in 1 2 3 4 5; do
+            curl -s "https://pln-news-monitor.vercel.app/api/analyze-batch?secret=${SECRET}&batch=30"
+            sleep 5
+          done
+          echo "Analyze done!"
