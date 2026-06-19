@@ -253,6 +253,14 @@ module.exports = async function handler(req, res) {
         return keywords.every(k => text.includes(k));
       });
 
+      // Filter: hanya artikel maksimal 30 hari terakhir (buang artikel lama yang baru diindex ulang Google News)
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - 30);
+      combined = combined.filter(a => {
+        const pubDate = new Date(a.published_at);
+        return pubDate >= cutoffDate;
+      });
+
       // Dedup by URL
       const seen = new Set();
       combined = combined.filter(a => {
