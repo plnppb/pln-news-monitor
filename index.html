@@ -1382,8 +1382,8 @@ function setDashCustomRange() {
 
 
 function filterByPeriod(articles) {
-  // Gunakan createdAt (kapan masuk database) bukan publishedAt
-  const getDate = a => new Date(a.createdAt || a.publishedAt);
+  // Gunakan publishedAt (tanggal artikel benar-benar terbit)
+  const getDate = a => new Date(a.publishedAt);
   if (dashCustomFrom || dashCustomTo) {
     return articles.filter(a => {
       const d = getDate(a);
@@ -1412,7 +1412,7 @@ async function loadFromDB() {
 
     while (true) {
       if (statusEl) statusEl.textContent = 'Memuat... ' + allFetched.length + ' artikel';
-      const r = await fetch('/api/articles?limit=' + pageSize + '&offset=' + offset + '&created_from=' + fromStr);
+      const r = await fetch('/api/articles?limit=' + pageSize + '&offset=' + offset + '&from=' + fromStr);
       if (!r.ok) break;
       const d = await r.json();
       if (!d.articles || !d.articles.length) break;
@@ -1459,11 +1459,11 @@ async function renderDashboard() {
   const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
 
   const thisMonthArts = dashAllArticles.filter(a => {
-    const d = new Date(a.createdAt || a.publishedAt);
+    const d = new Date(a.publishedAt);
     return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
   });
   const lastMonthArts = dashAllArticles.filter(a => {
-    const d = new Date(a.createdAt || a.publishedAt);
+    const d = new Date(a.publishedAt);
     return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
   });
 
@@ -1518,7 +1518,7 @@ async function renderDashboard() {
   const dayCounts = {};
   days.forEach(d => dayCounts[d] = 0);
   articles.forEach(a => {
-    const d = (a.createdAt || a.publishedAt)?.split('T')[0];
+    const d = a.publishedAt?.split('T')[0];
     if (d && dayCounts[d] !== undefined) dayCounts[d]++;
   });
   const maxDay = Math.max(...Object.values(dayCounts), 1);
@@ -1553,7 +1553,7 @@ async function renderDashboard() {
   // Kalender Heatmap 3 bulan terakhir
   const allDayCounts = {};
   dashAllArticles.forEach(a => {
-    const d = (a.createdAt || a.publishedAt)?.split('T')[0];
+    const d = a.publishedAt?.split('T')[0];
     if (d) allDayCounts[d] = (allDayCounts[d] || 0) + 1;
   });
   const maxCalDay = Math.max(...Object.values(allDayCounts), 1);
@@ -1605,7 +1605,7 @@ async function renderDashboard() {
   // Top 5 Hari Paling Ramai (dari periode aktif)
   const periodDayCounts = {};
   articles.forEach(a => {
-    const d = (a.createdAt || a.publishedAt)?.split('T')[0];
+    const d = a.publishedAt?.split('T')[0];
     if (d) periodDayCounts[d] = (periodDayCounts[d] || 0) + 1;
   });
   const topDays = Object.entries(periodDayCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
@@ -1747,7 +1747,7 @@ async function autoLoadFromDB() {
     let total = null;
 
     while (true) {
-      const r = await fetch('/api/articles?limit=' + pageSize + '&offset=' + offset + '&created_from=' + fromStr);
+      const r = await fetch('/api/articles?limit=' + pageSize + '&offset=' + offset + '&from=' + fromStr);
       if (!r.ok) break;
       const d = await r.json();
       if (total === null) total = d.total || 0;
