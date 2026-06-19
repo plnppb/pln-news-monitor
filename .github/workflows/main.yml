@@ -9,19 +9,17 @@ jobs:
   crawl:
     runs-on: ubuntu-latest
     steps:
-      - name: Crawl RSS Feeds (All Batches)
+      - name: Crawl RSS Feeds (skip Infonesia, statis tidak update)
         run: |
           SECRET="${{ secrets.CRON_SECRET }}"
           BASE="https://pln-news-monitor.vercel.app/api/crawl"
-          TOTAL_FEEDS=592
           BATCH_SIZE=30
-          TOTAL_BATCHES=$(( (TOTAL_FEEDS + BATCH_SIZE - 1) / BATCH_SIZE ))
-
-          echo "Total batches: $TOTAL_BATCHES"
+          # Feed non-infonesia jumlahnya sedikit, cukup beberapa batch saja
+          TOTAL_BATCHES=3
 
           for i in $(seq 0 $((TOTAL_BATCHES - 1))); do
-            echo "Crawling RSS batch $i..."
-            RESULT=$(curl -s "${BASE}?secret=${SECRET}&keyword=PLN+Papua&batchIndex=${i}&batch=${BATCH_SIZE}")
+            echo "Crawling RSS batch $i (skip Infonesia)..."
+            RESULT=$(curl -s "${BASE}?secret=${SECRET}&keyword=PLN+Papua&batchIndex=${i}&batch=${BATCH_SIZE}&skipInfonesia=true")
             echo "Batch $i: $RESULT"
             sleep 3
           done
@@ -34,11 +32,27 @@ jobs:
           BASE="https://pln-news-monitor.vercel.app/api/crawl"
 
           echo "Crawling external sources for multiple keywords..."
-          for KW in "PLN+Wilayah+Papua" "PLN+Papua" "PLN+Sorong" "PLN+Jayapura" "PLN+Manokwari"; do
+          for KW in \
+            "PLN+Wilayah+Papua" \
+            "PLN+Papua" \
+            "PLN+Sorong" \
+            "PLN+Jayapura" \
+            "PLN+Manokwari" \
+            "PLN+Papua+Barat" \
+            "PLN+Papua+Selatan" \
+            "PLN+Papua+Tengah" \
+            "PLN+Papua+Pegunungan" \
+            "listrik+Papua" \
+            "pemadaman+listrik+Papua" \
+            "PLN+Biak" \
+            "PLN+Merauke" \
+            "PLN+Nabire" \
+            "PLN+Fakfak" \
+            ; do
             echo "Keyword: $KW"
             RESULT=$(curl -s "${BASE}?secret=${SECRET}&keyword=${KW}&source=external")
             echo "Result: $RESULT"
-            sleep 5
+            sleep 4
           done
 
           echo "External sources crawl done!"
