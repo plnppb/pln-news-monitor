@@ -109,7 +109,14 @@ async function fetchFromGoogleNewsRSS(keyword) {
       const link = getTag('link');
       const pubDate = getTag('pubDate');
       const source = getTag('source');
-      const description = getTag('description').replace(/<[^>]+>/g, '').substring(0, 500);
+      // Bersihkan description dari HTML entities dan tag (Google News kirim HTML mentah)
+      let description = getTag('description');
+      description = description
+        .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .substring(0, 500);
       if (!title || !link) continue;
       items.push({
         title,
@@ -261,11 +268,21 @@ module.exports = async function handler(req, res) {
         return pubDate >= cutoffDate;
       });
 
-      // Dedup by URL
-      const seen = new Set();
+      // Dedup by judul yang mirip (Google News kasih URL redirect berbeda untuk artikel sama)
+      function normalizeTitle(t) {
+        return t.toLowerCase()
+          .replace(/[^a-z0-9\s]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .split(' ')
+          .slice(0, 8) // ambil 8 kata pertama untuk perbandingan
+          .join(' ');
+      }
+      const seenTitles = new Set();
       combined = combined.filter(a => {
-        if (seen.has(a.url)) return false;
-        seen.add(a.url);
+        const norm = normalizeTitle(a.title);
+        if (seenTitles.has(norm)) return false;
+        seenTitles.add(norm);
         return true;
       });
 
@@ -285,13 +302,17 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ success: true, message: 'No feeds in DB. Please sync feeds first.' });
     }
 
+    // Skip feed Infonesia - feed-nya statis/tidak update, hanya buang waktu crawl
+    const skipInfonesia = req.query.skipInfonesia !== 'false'; // default: true, skip Infonesia
+    const activeFeeds = skipInfonesia ? allFeeds.filter(f => !f.is_infonesia) : allFeeds;
+
     const start = batchIndex * batchSize;
-    const batch = allFeeds.slice(start, start + batchSize);
+    const batch = activeFeeds.slice(start, start + batchSize);
     if (!batch.length) {
-      return res.status(200).json({ success: true, message: 'All batches processed', total: allFeeds.length });
+      return res.status(200).json({ success: true, message: 'All batches processed', total: activeFeeds.length });
     }
 
-    const results = { total: 0, saved: 0, errors: [], batchIndex, totalFeeds: allFeeds.length };
+    const results = { total: 0, saved: 0, errors: [], batchIndex, totalFeeds: activeFeeds.length, skippedInfonesia: skipInfonesia };
 
     await Promise.allSettled(batch.map(async (feed) => {
       try {
