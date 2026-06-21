@@ -5,7 +5,7 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
   const { keyword, source, from, to, created_from, created_to, limit = 500, offset = 0 } = req.query;
-  let url = `${SUPABASE_URL}/rest/v1/articles?select=*&order=created_at.desc&limit=${limit}&offset=${offset}`;
+  let url = `${SUPABASE_URL}/rest/v1/articles?select=*&order=published_at.desc&limit=${limit}&offset=${offset}`;
   if (keyword) url += `&keyword=eq.${encodeURIComponent(keyword)}`;
   if (source) url += `&source=ilike.${encodeURIComponent('%' + source + '%')}`;
   if (from) url += `&published_at=gte.${from}`;
