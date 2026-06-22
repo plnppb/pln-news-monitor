@@ -51,9 +51,6 @@
   .btn-primary:hover{background:var(--accent2);}
   .btn-primary:disabled{opacity:0.5;cursor:not-allowed;}
   /* INFONESIA TOGGLE */
-  .infonesia-toggle-wrap{background:var(--accent-light);border:1px solid rgba(0,61,143,0.15);border-radius:8px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
-  .infonesia-toggle-label{font-size:11px;font-weight:600;color:var(--accent);}
-  .infonesia-toggle-sub{font-size:10px;color:var(--muted);margin-top:1px;}
   .toggle-switch{width:36px;height:20px;background:var(--border2);border-radius:10px;cursor:pointer;position:relative;transition:background 0.2s;border:none;flex-shrink:0;}
   .toggle-switch.on{background:var(--accent);}
   .toggle-switch::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);}
@@ -308,14 +305,6 @@
       <input type="text" id="searchInput" placeholder="Kata kunci..." value="PLN Wilayah Papua"/>
       <input type="date" id="dateFrom" title="Dari tanggal"/>
       <input type="date" id="dateTo" title="Sampai tanggal"/>
-      <!-- INFONESIA TOGGLE -->
-      <div class="infonesia-toggle-wrap">
-        <div>
-          <div class="infonesia-toggle-label">⚡ Feed Infonesia.net</div>
-          <div class="infonesia-toggle-sub" id="infoneisaCount">549 subdomain</div>
-        </div>
-        <button class="toggle-switch on" id="infoneisaToggle" onclick="toggleInfonesia()" title="Toggle semua feed infonesia.net"></button>
-      </div>
       <!-- Auto Crawl Status -->
       <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:8px 10px;margin-bottom:8px;">
         <div style="font-size:11px;font-weight:600;color:#0369a1;margin-bottom:4px;">🤖 Auto-Crawl Aktif</div>
@@ -495,10 +484,6 @@
         <span style="font-size:11px;color:var(--muted)">s/d</span>
         <input type="date" id="dashTo" style="font-size:11px;padding:5px 8px;" onchange="setDashCustomRange()"/>
       </div>
-      <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:auto;">
-        <input type="checkbox" id="dashExcludeInfonesia" onchange="renderDashboard()">
-        <span>Exclude Infonesia.net</span>
-      </label>
       <span id="dashDbStatus" style="font-size:11px;color:var(--muted);"></span>
     </div>
 
@@ -608,7 +593,6 @@ let dashCustomTo = '';
 let allArticles = [];
 let currentPage = 1;
 const PAGE_SIZE = 50;
-let infoneisaEnabled = true;
 let filteredArticles = [];
 let bookmarks = JSON.parse(localStorage.getItem('pln_bookmarks') || '[]');
 let rssFeeds = JSON.parse(localStorage.getItem('pln_rss_feeds') || '[]');
@@ -628,11 +612,6 @@ function initRssFeeds() {
   }
   renderRssStatus();
   renderRssTable();
-  // Update infonesia count
-  const infCount = rssFeeds.filter(f => f.url.includes('infonesia.net')).length;
-  if (infCount > 0) {
-    document.getElementById('infoneisaCount').textContent = `${infCount} subdomain — aktif`;
-  }
 }
 
 function saveRssFeeds() {
@@ -836,13 +815,8 @@ async function fetchNews() {
   }
 
   // Batch fetch RSS feeds (30 per batch to avoid overload)
-  const infoneisaFeeds = getInfoneisaFeeds();
-  const otherRssFeeds = getNonInfoneisaFeeds();
-  const enabledFeeds = [...infoneisaFeeds, ...otherRssFeeds];
-  
-  // Update infonesia count display
-  document.getElementById('infoneisaCount').textContent = 
-    infoneisaEnabled ? `${infoneisaFeeds.length} subdomain — aktif` : `${rssFeeds.filter(f=>f.url.includes('infonesia.net')).length} subdomain — nonaktif`;
+  const enabledFeeds = rssFeeds.filter(f => f.enabled);
+
   if (enabledFeeds.length > 0) {
     const BATCH_SIZE = 30;
     const totalBatches = Math.ceil(enabledFeeds.length / BATCH_SIZE);
@@ -1275,28 +1249,6 @@ async function testCrawlNow() {
   setTimeout(() => statusEl.textContent = '', 5000);
 }
 
-function toggleInfonesia() {
-  infoneisaEnabled = !infoneisaEnabled;
-  const btn = document.getElementById('infoneisaToggle');
-  const count = rssFeeds.filter(f => f.url.includes('infonesia.net')).length;
-  if (infoneisaEnabled) {
-    btn.classList.add('on');
-    document.getElementById('infoneisaCount').textContent = `${count} subdomain — aktif`;
-  } else {
-    btn.classList.remove('on');
-    document.getElementById('infoneisaCount').textContent = `${count} subdomain — nonaktif`;
-  }
-}
-
-function getInfoneisaFeeds() {
-  if (!infoneisaEnabled) return [];
-  return rssFeeds.filter(f => f.enabled && f.url.includes('infonesia.net'));
-}
-
-function getNonInfoneisaFeeds() {
-  return rssFeeds.filter(f => f.enabled && !f.url.includes('infonesia.net'));
-}
-
 // PAGINATION
 function renderPage(page) {
   currentPage = page;
@@ -1448,9 +1400,6 @@ async function renderDashboard() {
   }
 
   let articles = filterByPeriod(dashAllArticles);
-
-  const excludeInfonesia = document.getElementById('dashExcludeInfonesia')?.checked;
-  if (excludeInfonesia) articles = articles.filter(a => !a.source?.name?.toLowerCase().includes('infonesia'));
 
   const now = new Date();
   const thisMonth = now.getMonth();
@@ -1696,8 +1645,7 @@ function filterDashArticles() {
 function exportDashboardExcel() {
   if (!dashAllArticles.length) return showToast('⚠ Belum ada data dashboard');
   const articles = filterByPeriod(dashAllArticles);
-  const excludeInfonesia = document.getElementById('dashExcludeInfonesia')?.checked;
-  const filtered = excludeInfonesia ? articles.filter(a => !a.source?.name?.toLowerCase().includes('infonesia')) : articles;
+  const filtered = articles;
 
   const rows = filtered.map(a => ({
     'Tanggal': a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('id-ID') : '',
