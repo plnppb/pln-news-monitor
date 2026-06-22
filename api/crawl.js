@@ -303,7 +303,7 @@ module.exports = async function handler(req, res) {
     }
 
     // Skip feed Infonesia - feed-nya statis/tidak update, hanya buang waktu crawl
-    const skipInfonesia = req.query.skipInfonesia !== 'false'; // default: true, skip Infonesia
+    const skipInfonesia = req.query.skipInfonesia === 'true'; // default: false, Infonesia diperlakukan sama seperti sumber lain
     const activeFeeds = skipInfonesia ? allFeeds.filter(f => !f.is_infonesia) : allFeeds;
 
     const start = batchIndex * batchSize;
