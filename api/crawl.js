@@ -71,8 +71,6 @@ async function getFeedsFromDB() {
   return await response.json();
 }
 
-// ==================== SUMBER TAMBAHAN: NewsAPI, Google News RSS, GNews.io ====================
-
 async function fetchFromNewsAPI(keyword) {
   if (!NEWS_API_KEY) return [];
   try {
@@ -109,7 +107,6 @@ async function fetchFromGoogleNewsRSS(keyword) {
       const link = getTag('link');
       const pubDate = getTag('pubDate');
       const source = getTag('source');
-      // Bersihkan description dari HTML entities dan tag (Google News kirim HTML mentah)
       let description = getTag('description');
       description = description
         .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
@@ -153,22 +150,64 @@ async function fetchFromGNewsIo(keyword) {
 
 // ==================== ANALYZE & SAVE ====================
 
+const TONE_PROMPT = `Kamu adalah analis media senior untuk PT PLN (Persero) UIW Papua & Papua Barat. Tugasmu menganalisis artikel berita dan menentukan tonalitas dari sudut pandang citra PLN UIW Papua & Papua Barat.
+
+## PANDUAN TONALITAS
+
+### NEGATIF — artikel yang menyudutkan, mengkritik, atau merugikan citra PLN:
+- Keluhan warga/pelanggan terhadap PLN (pemadaman, tagihan, pelayanan buruk)
+- Kritik dari legislatif/DPR/DPRD/pemerintah daerah terhadap PLN (kata: "soroti", "desak", "pertanyakan", "minta penjelasan", "tegur")
+- Gangguan/kerusakan sistem kelistrikan yang merugikan masyarakat (kata: "padam", "mati lampu", "gangguan listrik", "byar pet", "keluhkan", "protes", "tuntut")
+- Kecelakaan/insiden terkait infrastruktur PLN
+- Berita tarif listrik naik yang menimbulkan keresahan
+
+### POSITIF — artikel yang menguntungkan atau memuji citra PLN:
+- Pencapaian konkret PLN (elektrifikasi desa, pengurangan gangguan, target terpenuhi)
+- Penghargaan/apresiasi yang diterima PLN dari pihak eksternal
+- Program PLN yang berdampak nyata bagi masyarakat (kata: "berhasil", "capai", "sukses", "apresiasi", "penghargaan", "listrik masuk desa")
+- Kolaborasi/MoU di mana PLN sebagai inisiator atau setara
+- Inovasi/program PLN yang positif (EBT, SPKLU, elektrifikasi 3T)
+- Berita pembangunan infrastruktur PLN yang selesai/berjalan baik
+
+### NETRAL — artikel informatif tanpa tendensi positif/negatif yang kuat:
+- Pernyataan komitmen PLN tanpa bukti pencapaian konkret
+- Kegiatan rutin PLN (rapat, sosialisasi, kunjungan kerja)
+- Permintaan/harapan pihak lain ke PLN tanpa nada tekanan (kata: "harap", "minta", "diminta" dengan nada biasa)
+- Pemeliharaan jaringan terencana yang diinformasikan dengan baik
+- Berita kebijakan energi nasional yang menyebut PLN secara umum
+- Profil/wawancara pejabat PLN tanpa isu spesifik
+
+## KASUS KHUSUS KATA "PEMADAMAN":
+- "Warga keluhkan pemadaman" / "pemadaman bergilir bikin resah" → NEGATIF
+- "PLN berhasil kurangi durasi pemadaman X persen" / "pemadaman turun" → POSITIF
+- "PLN jadwalkan pemadaman untuk pemeliharaan" → NETRAL
+
+## KASUS KHUSUS KATA "SOROTI":
+- "DPR soroti kelistrikan Papua" / "DPRD soroti PLN" → NEGATIF (tekanan legislatif)
+- "Publik soroti kinerja PLN" → NEGATIF
+
+## KASUS KHUSUS MoU/KOLABORASI:
+- "PLN teken MoU" / "PLN gandeng X" (PLN sebagai inisiator) → POSITIF
+- "PLN diminta teken MoU" / "X minta PLN kerja sama" → NETRAL
+
+## FORMAT RESPONS (JSON saja, tanpa teks lain, tanpa markdown):
+{
+  "tone": "positif" | "negatif" | "netral",
+  "spokesperson_internal": "Nama, Jabatan PLN (kosongkan jika tidak ada, pisah semicolon jika lebih dari satu)",
+  "spokesperson_eksternal": "Nama, Jabatan non-PLN (kosongkan jika tidak ada, pisah semicolon jika lebih dari satu)",
+  "resume": "Ringkasan 2-3 kalimat dalam Bahasa Indonesia yang menjelaskan isi berita secara objektif"
+}`;
+
 async function analyzeArticle(title, description) {
   if (!GEMINI_API_KEY) return { tone: 'netral', resume: '', spokesperson_internal: '', spokesperson_eksternal: '' };
   try {
-    const prompt = `Kamu adalah analis media untuk PLN UIW Papua & Papua Barat. Analisis berita berikut dan berikan respons HANYA dalam format JSON ini (tanpa teks lain, tanpa markdown):
-{
-  "tone": "positif" | "negatif" | "netral",
-  "spokesperson_internal": "Nama, Jabatan (pisah semicolon jika lebih dari satu, kosongkan jika tidak ada)",
-  "spokesperson_eksternal": "Nama, Jabatan (pisah semicolon jika lebih dari satu, kosongkan jika tidak ada)",
-  "resume": "Ringkasan 2-3 kalimat dalam bahasa Indonesia"
-}
-Panduan tone:
-- positif: berita menguntungkan/memuji PLN atau program PLN
-- negatif: berita kritik, keluhan, masalah, atau merugikan PLN
-- netral: berita informatif/faktual tanpa tendensi tertentu
+    const prompt = `${TONE_PROMPT}
+
+## ARTIKEL YANG DIANALISIS:
 Judul: ${title}
-Deskripsi: ${(description || '').replace(/<[^>]+>/g, '').substring(0, 300)}`;
+Deskripsi: ${(description || '').replace(/<[^>]+>/g, '').substring(0, 400)}
+
+Berikan analisis dalam format JSON:`;
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -177,7 +216,7 @@ Deskripsi: ${(description || '').replace(/<[^>]+>/g, '').substring(0, 300)}`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 400 }
+          generationConfig: { temperature: 0.1, maxOutputTokens: 500 }
         })
       }
     );
@@ -238,13 +277,12 @@ module.exports = async function handler(req, res) {
   const keyword = req.query.keyword || 'PLN Papua';
   const batchSize = parseInt(req.query.batch) || 30;
   const batchIndex = parseInt(req.query.batchIndex) || 0;
-  // source=feeds (default, RSS feeds dari DB) atau source=external (NewsAPI+GoogleNews+GNewsIo)
   const source = req.query.source || 'feeds';
 
   try {
     const keywords = keyword.toLowerCase().split(/\s+/).filter(k => k.length > 1);
 
-    // ===== MODE: EXTERNAL (NewsAPI + Google News RSS + GNews.io) =====
+    // ===== MODE: EXTERNAL =====
     if (source === 'external') {
       const [newsApiArts, googleNewsArts, gnewsioArts] = await Promise.all([
         fetchFromNewsAPI(keyword),
@@ -254,29 +292,17 @@ module.exports = async function handler(req, res) {
 
       let combined = [...newsApiArts, ...googleNewsArts, ...gnewsioArts];
 
-      // Filter: harus mengandung semua kata keyword
       combined = combined.filter(a => {
         const text = (a.title + ' ' + a.description).toLowerCase();
         return keywords.every(k => text.includes(k));
       });
 
-      // Filter: hanya artikel maksimal 30 hari terakhir (buang artikel lama yang baru diindex ulang Google News)
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - 30);
-      combined = combined.filter(a => {
-        const pubDate = new Date(a.published_at);
-        return pubDate >= cutoffDate;
-      });
+      combined = combined.filter(a => new Date(a.published_at) >= cutoffDate);
 
-      // Dedup by judul yang mirip (Google News kasih URL redirect berbeda untuk artikel sama)
       function normalizeTitle(t) {
-        return t.toLowerCase()
-          .replace(/[^a-z0-9\s]/g, '')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .split(' ')
-          .slice(0, 8) // ambil 8 kata pertama untuk perbandingan
-          .join(' ');
+        return t.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim().split(' ').slice(0, 8).join(' ');
       }
       const seenTitles = new Set();
       combined = combined.filter(a => {
@@ -296,14 +322,13 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ===== MODE: FEEDS (RSS dari database, default) =====
+    // ===== MODE: FEEDS =====
     const allFeeds = await getFeedsFromDB();
     if (!allFeeds.length) {
-      return res.status(200).json({ success: true, message: 'No feeds in DB. Please sync feeds first.' });
+      return res.status(200).json({ success: true, message: 'No feeds in DB.' });
     }
 
-    // Skip feed Infonesia - feed-nya statis/tidak update, hanya buang waktu crawl
-    const skipInfonesia = req.query.skipInfonesia === 'true'; // default: false, Infonesia diperlakukan sama seperti sumber lain
+    const skipInfonesia = req.query.skipInfonesia === 'true';
     const activeFeeds = skipInfonesia ? allFeeds.filter(f => !f.is_infonesia) : allFeeds;
 
     const start = batchIndex * batchSize;
@@ -312,19 +337,17 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ success: true, message: 'All batches processed', total: activeFeeds.length });
     }
 
-    const results = { total: 0, saved: 0, errors: [], batchIndex, totalFeeds: activeFeeds.length, skippedInfonesia: skipInfonesia };
+    const results = { total: 0, saved: 0, errors: [], batchIndex, totalFeeds: activeFeeds.length };
 
     await Promise.allSettled(batch.map(async (feed) => {
       try {
         const xml = await fetchUrl(feed.url);
         const articles = parseRSS(xml, feed.url);
-
         const filtered = articles.filter(a => {
           const text = (a.title + ' ' + a.description).toLowerCase();
           if (feed.is_infonesia) return text.includes('pln');
           return keywords.every(k => text.includes(k));
         });
-
         results.total += filtered.length;
         if (filtered.length > 0) {
           const saved = await saveToSupabase(filtered, keyword);
