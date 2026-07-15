@@ -334,6 +334,11 @@
         <input type="text" id="mkwNewInput" placeholder="Tambah kata kunci baru..." onkeydown="if(event.key==='Enter')addMkwKeyword()"/>
         <button class="btn-manage" onclick="addMkwKeyword()">+ Tambah</button>
       </div>
+      <div class="mkw-addrow" style="margin-top:8px;">
+        <input type="date" id="mkwDateFrom" title="Dari tanggal" style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text2);"/>
+        <input type="date" id="mkwDateTo" title="Sampai tanggal" style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text2);"/>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px;">Kosongkan untuk default 30 hari terakhir.</div>
       <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="runMultiKeywordCrawl()" id="mkwRunBtn">🚀 Jalankan Crawl (<span id="mkwSelCount">0</span> keyword)</button>
       <div class="mkw-status" id="mkwStatus"></div>
     </div>
@@ -1271,9 +1276,8 @@ async function testCrawlNow() {
 const CRON_SECRET = 'Trunojoyo123';
 
 const MKW_DEFAULTS = [
-  'PLN Wilayah Papua', 'PLN Papua', 'PLN Sorong', 'PLN Jayapura', 'PLN Manokwari',
-  'PLN Papua Barat', 'PLN Papua Selatan', 'PLN Papua Tengah', 'PLN Papua Pegunungan',
-  'listrik Papua', 'pemadaman listrik Papua', 'PLN Biak', 'PLN Merauke', 'PLN Nabire', 'PLN Fakfak'
+  'PLN Papua', 'PLN Sorong', 'PLN Jayapura', 'PLN Manokwari',
+  'listrik Papua', 'PLN Biak', 'PLN Merauke', 'PLN Nabire', 'PLN Fakfak', 'PLN Wamena'
 ];
 
 let mkwSelected = new Set();
@@ -1281,8 +1285,10 @@ let mkwSelected = new Set();
 function renderMkwChips() {
   const wrap = document.getElementById('mkwChips');
   wrap.innerHTML = MKW_DEFAULTS.map(kw =>
-    `<div class="chip" data-kw="${kw}" onclick="toggleMkwKeyword(this)">${kw}</div>`
+    `<div class="chip active" data-kw="${kw}" onclick="toggleMkwKeyword(this)">${kw}</div>`
   ).join('');
+  mkwSelected = new Set(MKW_DEFAULTS);
+  updateMkwCount();
 }
 
 function toggleMkwKeyword(el) {
@@ -1341,17 +1347,26 @@ async function runMultiKeywordCrawl() {
     return;
   }
 
+  const dateFrom = document.getElementById('mkwDateFrom').value;
+  const dateTo = document.getElementById('mkwDateTo').value;
+  if (dateFrom && dateTo && dateFrom > dateTo) {
+    statusEl.textContent = '⚠ Tanggal "Dari" tidak boleh setelah tanggal "Sampai".';
+    return;
+  }
+  const dateQS = (dateFrom ? `&dateFrom=${dateFrom}` : '') + (dateTo ? `&dateTo=${dateTo}` : '');
+  const periodLabel = (dateFrom || dateTo) ? `${dateFrom || '...'} s/d ${dateTo || '...'}` : 'default 30 hari terakhir';
+
   btn.disabled = true;
   btn.style.opacity = '0.6';
   let totalSaved = 0;
   const errors = [];
-  statusEl.innerHTML = '';
+  statusEl.innerHTML = `<em>Periode: ${periodLabel}</em><br>`;
 
   for (let i = 0; i < keywords.length; i++) {
     const kw = keywords[i];
     statusEl.innerHTML = `⏳ (${i + 1}/${keywords.length}) Crawling "<strong>${kw}</strong>"...` + statusEl.innerHTML;
     try {
-      const resp = await fetch(`/api/crawl?secret=${CRON_SECRET}&keyword=${encodeURIComponent(kw)}&source=external`);
+      const resp = await fetch(`/api/crawl?secret=${CRON_SECRET}&keyword=${encodeURIComponent(kw)}&source=external${dateQS}`);
       const data = await resp.json();
       if (data.success) {
         totalSaved += data.saved || 0;
