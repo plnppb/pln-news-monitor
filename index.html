@@ -1280,26 +1280,16 @@ const MKW_DEFAULTS = [
   'listrik Papua', 'PLN Biak', 'PLN Merauke', 'PLN Nabire', 'PLN Fakfak', 'PLN Wamena'
 ];
 
-let mkwSelected = new Set();
-
 function renderMkwChips() {
   const wrap = document.getElementById('mkwChips');
   wrap.innerHTML = MKW_DEFAULTS.map(kw =>
     `<div class="chip active" data-kw="${kw}" onclick="toggleMkwKeyword(this)">${kw}</div>`
   ).join('');
-  mkwSelected = new Set(MKW_DEFAULTS);
   updateMkwCount();
 }
 
 function toggleMkwKeyword(el) {
-  const kw = el.getAttribute('data-kw');
-  if (mkwSelected.has(kw)) {
-    mkwSelected.delete(kw);
-    el.classList.remove('active');
-  } else {
-    mkwSelected.add(kw);
-    el.classList.add('active');
-  }
+  el.classList.toggle('active');
   updateMkwCount();
 }
 
@@ -1309,10 +1299,11 @@ function addMkwKeyword() {
   if (!kw) return;
   input.value = '';
 
-  // Kalau sudah ada sebagai chip (default atau custom), tinggal select
+  // Kalau sudah ada sebagai chip (default atau custom), tinggal aktifkan
   const existing = document.querySelector(`#mkwChips .chip[data-kw="${CSS.escape(kw)}"]`);
   if (existing) {
-    if (!mkwSelected.has(kw)) toggleMkwKeyword(existing);
+    existing.classList.add('active');
+    updateMkwCount();
     return;
   }
 
@@ -1322,24 +1313,21 @@ function addMkwKeyword() {
   chip.setAttribute('data-kw', kw);
   chip.innerHTML = `<span onclick="toggleMkwKeyword(this.parentElement)">${kw}</span><span class="rm" onclick="removeMkwChip(event,this)">✕</span>`;
   wrap.appendChild(chip);
-  mkwSelected.add(kw);
   updateMkwCount();
 }
 
 function removeMkwChip(ev, el) {
   ev.stopPropagation();
-  const chip = el.parentElement;
-  mkwSelected.delete(chip.getAttribute('data-kw'));
-  chip.remove();
+  el.parentElement.remove();
   updateMkwCount();
 }
 
 function updateMkwCount() {
-  document.getElementById('mkwSelCount').textContent = mkwSelected.size;
+  document.getElementById('mkwSelCount').textContent = document.querySelectorAll('#mkwChips .chip.active').length;
 }
 
 async function runMultiKeywordCrawl() {
-  const keywords = Array.from(mkwSelected);
+  const keywords = Array.from(document.querySelectorAll('#mkwChips .chip.active')).map(el => el.getAttribute('data-kw'));
   const statusEl = document.getElementById('mkwStatus');
   const btn = document.getElementById('mkwRunBtn');
   if (!keywords.length) {
