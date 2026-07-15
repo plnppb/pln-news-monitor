@@ -297,9 +297,18 @@ module.exports = async function handler(req, res) {
         return keywords.every(k => text.includes(k));
       });
 
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - 30);
+      const qDateFrom = req.query.dateFrom;
+      const qDateTo = req.query.dateTo;
+      const cutoffDate = qDateFrom ? new Date(qDateFrom) : (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 30);
+        return d;
+      })();
       combined = combined.filter(a => new Date(a.published_at) >= cutoffDate);
+      if (qDateTo) {
+        const toDate = new Date(qDateTo + 'T23:59:59');
+        combined = combined.filter(a => new Date(a.published_at) <= toDate);
+      }
 
       function normalizeTitle(t) {
         return t.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim().split(' ').slice(0, 8).join(' ');
