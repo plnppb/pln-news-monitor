@@ -41,6 +41,12 @@
   .chip{background:var(--surface2);border:1px solid var(--border2);border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer;transition:all 0.15s;color:var(--text2);}
   .chip:hover{border-color:var(--accent2);color:var(--accent2);}
   .chip.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+  .mkw-chip{display:inline-flex;align-items:center;gap:4px;}
+  .mkw-chip .rm{opacity:0.7;font-weight:700;}
+  .mkw-chip .rm:hover{opacity:1;}
+  .mkw-addrow{display:flex;gap:5px;margin-top:6px;}
+  .mkw-addrow input{flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text2);}
+  .mkw-status{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.6;max-height:110px;overflow-y:auto;}
 
   .input-group{display:flex;flex-direction:column;gap:7px;}
   input[type=text],input[type=date]{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:13px;padding:8px 11px;width:100%;transition:border 0.15s;font-family:'Inter',sans-serif;}
@@ -318,6 +324,18 @@
         <div class="rss-progress-bar"><div class="rss-progress-fill" id="rssProgressFill"></div></div>
         <div class="rss-progress-label" id="rssProgressLabel">Mengambil berita...</div>
       </div>
+    </div>
+
+    <!-- MULTI-KEYWORD CRAWL -->
+    <div>
+      <div class="sidebar-label">Crawl Manual · Banyak Kata Kunci</div>
+      <div class="keyword-chips" id="mkwChips"></div>
+      <div class="mkw-addrow">
+        <input type="text" id="mkwNewInput" placeholder="Tambah kata kunci baru..." onkeydown="if(event.key==='Enter')addMkwKeyword()"/>
+        <button class="btn-manage" onclick="addMkwKeyword()">+ Tambah</button>
+      </div>
+      <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="runMultiKeywordCrawl()" id="mkwRunBtn">🚀 Jalankan Crawl (<span id="mkwSelCount">0</span> keyword)</button>
+      <div class="mkw-status" id="mkwStatus"></div>
     </div>
 
   <!-- RSS MODAL -->
@@ -1232,7 +1250,7 @@ async function testCrawlNow() {
   const statusEl = document.getElementById('crawlStatus');
   statusEl.textContent = '⏳ Crawling...';
   try {
-    const resp = await fetch('/api/crawl?secret=Tiunojoyo123&keyword=PLN+Papua&batchIndex=0', {
+    const resp = await fetch(`/api/crawl?secret=${CRON_SECRET}&keyword=PLN+Papua&batchIndex=0`, {
       method: 'GET'
     });
     const data = await resp.json();
@@ -1248,6 +1266,113 @@ async function testCrawlNow() {
   }
   setTimeout(() => statusEl.textContent = '', 5000);
 }
+
+// ==================== MULTI-KEYWORD CRAWL ====================
+const CRON_SECRET = 'Trunojoyo123';
+
+const MKW_DEFAULTS = [
+  'PLN Wilayah Papua', 'PLN Papua', 'PLN Sorong', 'PLN Jayapura', 'PLN Manokwari',
+  'PLN Papua Barat', 'PLN Papua Selatan', 'PLN Papua Tengah', 'PLN Papua Pegunungan',
+  'listrik Papua', 'pemadaman listrik Papua', 'PLN Biak', 'PLN Merauke', 'PLN Nabire', 'PLN Fakfak'
+];
+
+let mkwSelected = new Set();
+
+function renderMkwChips() {
+  const wrap = document.getElementById('mkwChips');
+  wrap.innerHTML = MKW_DEFAULTS.map(kw =>
+    `<div class="chip" data-kw="${kw}" onclick="toggleMkwKeyword(this)">${kw}</div>`
+  ).join('');
+}
+
+function toggleMkwKeyword(el) {
+  const kw = el.getAttribute('data-kw');
+  if (mkwSelected.has(kw)) {
+    mkwSelected.delete(kw);
+    el.classList.remove('active');
+  } else {
+    mkwSelected.add(kw);
+    el.classList.add('active');
+  }
+  updateMkwCount();
+}
+
+function addMkwKeyword() {
+  const input = document.getElementById('mkwNewInput');
+  const kw = input.value.trim();
+  if (!kw) return;
+  input.value = '';
+
+  // Kalau sudah ada sebagai chip (default atau custom), tinggal select
+  const existing = document.querySelector(`#mkwChips .chip[data-kw="${CSS.escape(kw)}"]`);
+  if (existing) {
+    if (!mkwSelected.has(kw)) toggleMkwKeyword(existing);
+    return;
+  }
+
+  const wrap = document.getElementById('mkwChips');
+  const chip = document.createElement('div');
+  chip.className = 'chip mkw-chip active';
+  chip.setAttribute('data-kw', kw);
+  chip.innerHTML = `<span onclick="toggleMkwKeyword(this.parentElement)">${kw}</span><span class="rm" onclick="removeMkwChip(event,this)">✕</span>`;
+  wrap.appendChild(chip);
+  mkwSelected.add(kw);
+  updateMkwCount();
+}
+
+function removeMkwChip(ev, el) {
+  ev.stopPropagation();
+  const chip = el.parentElement;
+  mkwSelected.delete(chip.getAttribute('data-kw'));
+  chip.remove();
+  updateMkwCount();
+}
+
+function updateMkwCount() {
+  document.getElementById('mkwSelCount').textContent = mkwSelected.size;
+}
+
+async function runMultiKeywordCrawl() {
+  const keywords = Array.from(mkwSelected);
+  const statusEl = document.getElementById('mkwStatus');
+  const btn = document.getElementById('mkwRunBtn');
+  if (!keywords.length) {
+    statusEl.textContent = '⚠ Pilih atau tambahkan minimal 1 kata kunci dulu.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+  let totalSaved = 0;
+  const errors = [];
+  statusEl.innerHTML = '';
+
+  for (let i = 0; i < keywords.length; i++) {
+    const kw = keywords[i];
+    statusEl.innerHTML = `⏳ (${i + 1}/${keywords.length}) Crawling "<strong>${kw}</strong>"...` + statusEl.innerHTML;
+    try {
+      const resp = await fetch(`/api/crawl?secret=${CRON_SECRET}&keyword=${encodeURIComponent(kw)}&source=external`);
+      const data = await resp.json();
+      if (data.success) {
+        totalSaved += data.saved || 0;
+        statusEl.innerHTML = `✅ "${kw}": ${data.saved || 0} artikel baru<br>` + statusEl.innerHTML;
+      } else {
+        errors.push(kw);
+        statusEl.innerHTML = `⚠ "${kw}": ${data.error || data.message || 'gagal'}<br>` + statusEl.innerHTML;
+      }
+    } catch (e) {
+      errors.push(kw);
+      statusEl.innerHTML = `⚠ "${kw}": ${e.message}<br>` + statusEl.innerHTML;
+    }
+    if (i < keywords.length - 1) await new Promise(r => setTimeout(r, 4000));
+  }
+
+  statusEl.innerHTML = `<strong>Selesai. Total ${totalSaved} artikel baru tersimpan${errors.length ? `, ${errors.length} keyword gagal` : ''}.</strong><br>` + statusEl.innerHTML;
+  btn.disabled = false;
+  btn.style.opacity = '1';
+}
+
+renderMkwChips();
 
 // PAGINATION
 function renderPage(page) {
