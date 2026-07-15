@@ -337,6 +337,7 @@
       <div class="mkw-addrow" style="margin-top:8px;">
         <input type="date" id="mkwDateFrom" title="Dari tanggal" style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text2);"/>
         <input type="date" id="mkwDateTo" title="Sampai tanggal" style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text2);"/>
+        <button class="btn-manage" onclick="document.getElementById('mkwDateFrom').value='';document.getElementById('mkwDateTo').value='';" title="Kosongkan tanggal">✕</button>
       </div>
       <div style="font-size:10px;color:var(--muted);margin-top:4px;">Kosongkan untuk default 30 hari terakhir.</div>
       <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="runMultiKeywordCrawl()" id="mkwRunBtn">🚀 Jalankan Crawl (<span id="mkwSelCount">0</span> keyword)</button>
@@ -1373,6 +1374,12 @@ async function runMultiKeywordCrawl() {
   statusEl.innerHTML = `<strong>Selesai. Total ${totalSaved} artikel baru tersimpan${errors.length ? `, ${errors.length} keyword gagal` : ''}.</strong><br>` + statusEl.innerHTML;
   btn.disabled = false;
   btn.style.opacity = '1';
+
+  if (totalSaved > 0) {
+    statusEl.innerHTML = `🔄 Memuat ulang daftar artikel...<br>` + statusEl.innerHTML;
+    await autoLoadFromDB();
+    statusEl.innerHTML = `🔄 Daftar artikel sudah diperbarui.<br>` + statusEl.innerHTML;
+  }
 }
 
 renderMkwChips();
