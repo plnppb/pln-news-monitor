@@ -315,8 +315,8 @@
       <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:8px 10px;margin-bottom:8px;">
         <div style="font-size:11px;font-weight:600;color:#0369a1;margin-bottom:4px;">🤖 Auto-Crawl Aktif</div>
         <div style="font-size:10px;color:#0369a1;line-height:1.6;">
-          ✅ Artikel dikumpulkan otomatis tiap <strong>30 menit</strong>.<br>
-          Buka tab <strong>Dashboard &rarr; 🗄 Database</strong> untuk lihat semua hasil.
+          ✅ Artikel dikumpulkan otomatis tiap <strong>6 jam</strong> (07:00, 13:00, 19:00, 01:00 WIT).<br>
+          Buka tab <strong>📊 Dashboard</strong> untuk lihat semua hasil.
         </div>
       </div>
       <button class="btn btn-primary" onclick="fetchNews()" id="searchBtn">🔍 Cari Berita</button>
@@ -350,11 +350,14 @@
       <div class="modal-header">
         <h3>⚙ Kelola Sumber RSS</h3>
         <div style="display:flex;align-items:center;gap:8px;">
-          <button id="syncBtn" onclick="syncFeedsToDB()" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;">☁ Sync ke DB</button>
+          <button id="syncBtn" onclick="refreshRssFromDB()" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;">🔄 Refresh dari DB</button>
           <button class="modal-close" onclick="closeRssModal()">✕</button>
         </div>
       </div>
       <div class="modal-body">
+        <input type="text" id="rssSearchInput" placeholder="🔍 Cari nama media atau URL feed..."
+          style="width:100%;padding:7px 10px;margin-bottom:10px;font-size:12px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text2);"
+          oninput="renderRssTable()"/>
         <table class="rss-table" id="rssTable">
           <thead>
             <tr>
@@ -393,7 +396,7 @@
         </div>
       </div>
       <div class="modal-footer" style="font-size:11px;color:var(--muted)">
-        Feed aktif: antaranews.com/rss/terkini.xml · koreri.com/feed · kabarpapua.co/feed · jubi.id/feed
+        <span id="rssFooterCount"></span> · ⚠ Perubahan di sini baru berlaku di crawl otomatis setelah klik <strong>☁ Sync ke DB</strong>.
       </div>
     </div>
   </div>
@@ -629,10 +632,22 @@ const DEFAULT_FEEDS = [
   { name: 'ANTARA Papua', url: 'https://www.antaranews.com/rss/terkini.xml', enabled: true },
 ];
 
-function initRssFeeds() {
-  if (rssFeeds.length === 0) {
-    rssFeeds = [...DEFAULT_FEEDS];
-    saveRssFeeds();
+async function fetchFeedsFromDB() {
+  const resp = await fetch('/api/feeds');
+  if (!resp.ok) throw new Error('Gagal ambil data dari server (' + resp.status + ')');
+  const data = await resp.json();
+  if (data.error) throw new Error(data.error);
+  return (data.feeds || []).map(f => ({ name: f.name, url: f.url, enabled: f.enabled !== false }));
+}
+
+async function initRssFeeds() {
+  try {
+    rssFeeds = await fetchFeedsFromDB();
+    saveRssFeeds(); // simpan sebagai cache offline saja, bukan sumber kebenaran
+  } catch (e) {
+    // Offline / API gagal → pakai cache lokal terakhir, atau default
+    if (!rssFeeds.length) rssFeeds = [...DEFAULT_FEEDS];
+    showToast('⚠ Gagal muat daftar RSS dari server, menampilkan data cache: ' + e.message);
   }
   renderRssStatus();
   renderRssTable();
@@ -664,11 +679,26 @@ function renderRssStatus() {
 function renderRssTable() {
   const tbody = document.getElementById('rssTableBody');
   if (!tbody) return;
+  const footerCount = document.getElementById('rssFooterCount');
+  if (footerCount) {
+    const activeN = rssFeeds.filter(f => f.enabled).length;
+    footerCount.textContent = `${activeN} feed aktif dari ${rssFeeds.length} terdaftar (di browser ini)`;
+  }
   if (!rssFeeds.length) {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Belum ada feed. Tambahkan di bawah.</td></tr>';
     return;
   }
-  tbody.innerHTML = rssFeeds.map((f, i) => `
+  const q = (document.getElementById('rssSearchInput')?.value || '').trim().toLowerCase();
+  const rows = rssFeeds
+    .map((f, i) => ({ f, i }))
+    .filter(({ f }) => !q || f.name.toLowerCase().includes(q) || f.url.toLowerCase().includes(q));
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Tidak ada feed yang cocok dengan "${q}".</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(({ f, i }) => `
     <tr id="rss-row-${i}">
       <td class="rss-name-cell">
         <span id="rss-name-${i}">${f.name}</span>
@@ -690,33 +720,37 @@ function renderRssTable() {
     </tr>`).join('');
 }
 
-function openRssModal() {
-  renderRssTable();
+async function openRssModal() {
   document.getElementById('rssModal').classList.add('show');
+  const tbody = document.getElementById('rssTableBody');
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">⏳ Memuat data terbaru dari server...</td></tr>';
+  try {
+    rssFeeds = await fetchFeedsFromDB();
+    saveRssFeeds();
+  } catch (e) {
+    showToast('⚠ Gagal muat dari server, menampilkan cache terakhir: ' + e.message);
+  }
+  renderRssTable();
 }
 
-async function syncFeedsToDB() {
+async function refreshRssFromDB() {
   const btn = document.getElementById('syncBtn');
-  btn.textContent = '⏳ Syncing...';
+  btn.textContent = '⏳ Memuat...';
   btn.disabled = true;
   try {
-    const resp = await fetch('/api/feeds', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feeds: rssFeeds })
-    });
-    const data = await resp.json();
-    if (data.success) {
-      showToast(`✅ ${data.synced} feed berhasil disync ke database!`);
-    } else {
-      showToast('⚠ Gagal sync: ' + (data.error || 'Unknown error'));
-    }
-  } catch(e) {
-    showToast('⚠ Error: ' + e.message);
+    rssFeeds = await fetchFeedsFromDB();
+    saveRssFeeds();
+    renderRssTable();
+    renderRssStatus();
+    showToast('✅ Data disegarkan dari server');
+  } catch (e) {
+    showToast('⚠ Gagal muat dari server: ' + e.message);
   }
-  btn.textContent = '☁ Sync ke DB';
+  btn.textContent = '🔄 Refresh dari DB';
   btn.disabled = false;
 }
+
+
 
 function editRss(i) {
   const feed = rssFeeds[i];
@@ -735,44 +769,114 @@ function editRss(i) {
   `;
 }
 
-function saveEditRss(i) {
+async function saveEditRss(i) {
   const newName = document.getElementById(`edit-name-${i}`)?.value?.trim();
-  const newUrl = document.getElementById(`edit-url-${i}`)?.value?.trim();
+  let newUrl = document.getElementById(`edit-url-${i}`)?.value?.trim();
   if (!newName || !newUrl) return showToast('⚠ Nama dan URL tidak boleh kosong');
-  rssFeeds[i].name = newName;
-  rssFeeds[i].url = newUrl;
-  saveRssFeeds();
-  renderRssTable();
-  showToast('✅ Feed berhasil diperbarui');
+  newUrl = normalizeUrl(newUrl);
+  const originalUrl = rssFeeds[i].url;
+
+  try {
+    // Ambil data terbaru dulu biar cek duplikat akurat (siapa tahu device lain baru nambah)
+    const fresh = await fetchFeedsFromDB();
+    const domain = extractDomain(newUrl);
+    const dupe = fresh.find(f => f.url !== originalUrl && extractDomain(f.url) === domain);
+    if (dupe) { showToast(`⚠ Domain "${domain}" sudah dipakai feed "${dupe.name}"`); renderRssTable(); return; }
+
+    const resp = await fetch('/api/feeds', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ originalUrl, name: newName, url: newUrl })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Gagal update di server');
+
+    rssFeeds = await fetchFeedsFromDB();
+    saveRssFeeds();
+    renderRssTable();
+    renderRssStatus();
+    showToast('✅ Feed berhasil diperbarui di database');
+  } catch (e) {
+    showToast('⚠ Gagal simpan ke server: ' + e.message);
+    renderRssTable();
+  }
 }
 
 function closeRssModal() {
   document.getElementById('rssModal').classList.remove('show');
 }
 
-function toggleRss(i) {
-  rssFeeds[i].enabled = !rssFeeds[i].enabled;
-  saveRssFeeds(); renderRssStatus(); renderRssTable();
+async function toggleRss(i) {
+  const feed = rssFeeds[i];
+  const newEnabled = !feed.enabled;
+  try {
+    const resp = await fetch('/api/feeds', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ originalUrl: feed.url, enabled: newEnabled })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Gagal update di server');
+    feed.enabled = newEnabled;
+    saveRssFeeds(); renderRssStatus(); renderRssTable();
+  } catch (e) {
+    showToast('⚠ Gagal ubah status di server: ' + e.message);
+  }
 }
 
-function removeRss(i) {
+async function removeRss(i) {
   const name = rssFeeds[i].name;
-  rssFeeds.splice(i, 1);
-  saveRssFeeds(); renderRssStatus(); renderRssTable();
-  showToast(`🗑 ${name} dihapus`);
+  const url = rssFeeds[i].url;
+  if (!confirm(`Hapus feed "${name}" dari database? Ini akan berlaku untuk semua orang.`)) return;
+  try {
+    const resp = await fetch('/api/feeds', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Gagal hapus di server');
+    rssFeeds = await fetchFeedsFromDB();
+    saveRssFeeds(); renderRssStatus(); renderRssTable();
+    showToast(`🗑 ${name} dihapus dari database`);
+  } catch (e) {
+    showToast('⚠ Gagal hapus di server: ' + e.message);
+  }
 }
 
-function addRssFeed() {
+async function addRssFeed() {
   let name = document.getElementById('rssName').value.trim();
   let url = document.getElementById('rssUrl').value.trim();
   if (!name || !url) return showToast('⚠ Isi nama dan URL feed');
   url = normalizeUrl(url);
-  if (rssFeeds.some(f => f.url === url)) return showToast('⚠ Feed sudah ada');
-  rssFeeds.push({ name, url, enabled: true });
-  saveRssFeeds(); renderRssStatus(); renderRssTable();
-  document.getElementById('rssName').value = '';
-  document.getElementById('rssUrl').value = '';
-  showToast(`✅ ${name} ditambahkan`);
+  const btn = document.querySelector('.btn-add-feed');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Menyimpan...'; }
+
+  try {
+    // Ambil data terbaru dulu biar cek duplikat akurat (siapa tahu device lain baru nambah)
+    const fresh = await fetchFeedsFromDB();
+    const domain = extractDomain(url);
+    const dupe = fresh.find(f => extractDomain(f.url) === domain);
+    if (dupe) { showToast(`⚠ Domain "${domain}" sudah terdaftar sebagai "${dupe.name}" (${dupe.url})`); return; }
+
+    const resp = await fetch('/api/feeds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feeds: [{ name, url, enabled: true }] })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Gagal simpan ke server');
+
+    rssFeeds = await fetchFeedsFromDB();
+    saveRssFeeds(); renderRssStatus(); renderRssTable();
+    document.getElementById('rssName').value = '';
+    document.getElementById('rssUrl').value = '';
+    showToast(`✅ ${name} ditambahkan ke database`);
+  } catch (e) {
+    showToast('⚠ Gagal simpan ke server: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '+ Tambah Manual'; }
+  }
 }
 
 function setKeyword(kw, el) {
@@ -1183,19 +1287,34 @@ function normalizeUrl(url) {
   return (needsHttp ? 'http://' : 'https://') + noProto;
 }
 
-function importRssFile(input) {
+async function importRssFile(input) {
   const file = input.files[0];
   if (!file) return;
   document.getElementById('rssFileLabel').textContent = file.name;
 
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     const text = e.target.result;
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
     const isCSV = file.name.endsWith('.csv');
 
+    document.getElementById('rssImportPreview').innerHTML =
+      `<div style="font-size:11px;color:var(--muted)">⏳ Memeriksa duplikat ke server...</div>`;
+
+    let fresh;
+    try {
+      fresh = await fetchFeedsFromDB();
+    } catch (err) {
+      document.getElementById('rssImportPreview').innerHTML =
+        `<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:8px 10px;font-size:11px;color:#991b1b">⚠ Gagal cek ke server: ${err.message}. Import dibatalkan.</div>`;
+      input.value = '';
+      return;
+    }
+
     let added = 0, skipped = 0, invalid = 0;
     const preview = [];
+    const toAdd = [];
+    const seenDomains = new Set(fresh.map(f => extractDomain(f.url)));
 
     lines.forEach(line => {
       let name = '', url = '';
@@ -1217,29 +1336,55 @@ function importRssFile(input) {
       if (!url) { invalid++; return; }
       if (!name) name = extractDomain(url);
 
-      // Check duplicate by domain+path (ignore http/https difference)
-      const noProto = url.replace(/^https?:\/\//, '');
-      if (rssFeeds.some(f => f.url.replace(/^https?:\/\//, '') === noProto)) {
+      // Check duplicate by domain (dhana.com/rss dan dhana.com/feed dianggap sama),
+      // termasuk terhadap baris lain di file yang sama
+      const domain = extractDomain(url);
+      if (seenDomains.has(domain)) {
         skipped++;
         return;
       }
+      seenDomains.add(domain);
 
-      rssFeeds.push({ name, url, enabled: true });
+      toAdd.push({ name, url, enabled: true });
       added++;
       if (preview.length < 5) preview.push(name);
     });
 
-    saveRssFeeds();
-    renderRssStatus();
-    renderRssTable();
-
     const previewText = preview.join(', ') + (added > 5 ? ` dan ${added-5} lainnya` : '');
-    document.getElementById('rssImportPreview').innerHTML = `
-      <div style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:8px 10px;font-size:11px;color:#166534">
-        ✅ Berhasil tambah <strong>${added} feed</strong>${skipped > 0 ? `, ${skipped} dilewati (duplikat)` : ''}${invalid > 0 ? `, ${invalid} tidak valid` : ''}.<br/>
-        ${previewText ? `Contoh: ${previewText}` : ''}
-      </div>`;
-    showToast(`✅ ${added} feed berhasil diimport`);
+
+    if (!toAdd.length) {
+      document.getElementById('rssImportPreview').innerHTML =
+        `<div style="background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:8px 10px;font-size:11px;color:#854d0e">
+          Tidak ada feed baru untuk ditambahkan${skipped > 0 ? ` (${skipped} duplikat dilewati)` : ''}${invalid > 0 ? `, ${invalid} tidak valid` : ''}.
+        </div>`;
+      input.value = '';
+      return;
+    }
+
+    try {
+      const resp = await fetch('/api/feeds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feeds: toAdd })
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || 'Gagal simpan ke server');
+
+      rssFeeds = await fetchFeedsFromDB();
+      saveRssFeeds();
+      renderRssStatus();
+      renderRssTable();
+
+      document.getElementById('rssImportPreview').innerHTML = `
+        <div style="background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:8px 10px;font-size:11px;color:#166534">
+          ✅ Berhasil tambah <strong>${added} feed ke database</strong>${skipped > 0 ? `, ${skipped} dilewati (duplikat domain)` : ''}${invalid > 0 ? `, ${invalid} tidak valid` : ''}.<br/>
+          ${previewText ? `Contoh: ${previewText}` : ''}
+        </div>`;
+      showToast(`✅ ${added} feed berhasil diimport ke database`);
+    } catch (err) {
+      document.getElementById('rssImportPreview').innerHTML =
+        `<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:8px 10px;font-size:11px;color:#991b1b">⚠ Gagal simpan ke server: ${err.message}</div>`;
+    }
     input.value = '';
   };
   reader.readAsText(file);
