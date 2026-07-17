@@ -7,6 +7,44 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 const GNEWSIO_API_KEY = process.env.GNEWSIO_API_KEY;
 
+// Semua kabupaten/kota di wilayah kerja PLN UIW Papua & Papua Barat, mencakup
+// 6 provinsi hasil pemekaran (Papua, Papua Barat, Papua Tengah, Papua Pegunungan,
+// Papua Selatan, Papua Barat Daya). Dipakai supaya artikel yang menyebut nama
+// kabupaten/kota tanpa kata literal "papua" (mis. berita "PLN Nduga" atau feed
+// "Infonesia Maybrat") tetap dianggap relevan, bukan malah ikut kesaring keluar.
+const PAPUA_REGION_TERMS = [
+  'papua',
+  // Papua Barat Daya
+  'sorong', 'maybrat', 'tambrauw', 'raja ampat',
+  // Papua Barat
+  'manokwari', 'arfak', 'bintuni', 'wondama', 'fakfak', 'kaimana',
+  // Papua Tengah
+  'nabire', 'paniai', 'mimika', 'timika', 'puncak jaya', 'kabupaten puncak', 'dogiyai', 'deiyai', 'intan jaya',
+  // Papua Pegunungan
+  'jayawijaya', 'wamena', 'lanny jaya', 'nduga', 'mamberamo tengah', 'yalimo', 'tolikara', 'pegunungan bintang', 'yahukimo',
+  // Papua Selatan
+  'merauke', 'boven digoel', 'mappi', 'asmat',
+  // Papua (induk)
+  'jayapura', 'keerom', 'sarmi', 'biak', 'supiori', 'waropen', 'mamberamo raya',
+];
+
+function matchesPapuaRegion(text) {
+  return PAPUA_REGION_TERMS.some(term => text.includes(term));
+}
+
+// Cocokkan tiap kata kunci ke teks artikel.
+// - "papua" dianggap cocok juga kalau teksnya menyebut nama kabupaten/kota
+//   spesifik di wilayah Papua (tidak wajib ada kata literal "papua").
+// - "pln" dianggap cocok juga kalau teksnya menyebut "listrik" (banyak berita
+//   soal kelistrikan Papua yang tidak literal menyebut "PLN").
+function keywordMatch(text, keywords) {
+  return keywords.every(k => {
+    if (k === 'papua') return matchesPapuaRegion(text);
+    if (k === 'pln') return text.includes('pln') || text.includes('listrik');
+    return text.includes(k);
+  });
+}
+
 async function fetchUrl(urlStr) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlStr);
@@ -294,7 +332,7 @@ module.exports = async function handler(req, res) {
 
       combined = combined.filter(a => {
         const text = (a.title + ' ' + a.description).toLowerCase();
-        return keywords.every(k => text.includes(k));
+        return keywordMatch(text, keywords);
       });
 
       const qDateFrom = req.query.dateFrom;
@@ -352,10 +390,13 @@ module.exports = async function handler(req, res) {
       try {
         const xml = await fetchUrl(feed.url);
         const articles = parseRSS(xml, feed.url);
+        // PENTING: semua feed — termasuk subdomain Infonesia manapun (is_infonesia) —
+        // WAJIB lolos filter kata kunci penuh di bawah ini. Jangan buat jalan pintas
+        // khusus untuk Infonesia lagi (pernah ada bug: feed is_infonesia cuma dicek
+        // mengandung "pln" doang, akibatnya berita PLN di luar Papua ikut kesedot).
         const filtered = articles.filter(a => {
           const text = (a.title + ' ' + a.description).toLowerCase();
-          if (feed.is_infonesia) return text.includes('pln');
-          return keywords.every(k => text.includes(k));
+          return keywordMatch(text, keywords);
         });
         results.total += filtered.length;
         if (filtered.length > 0) {
