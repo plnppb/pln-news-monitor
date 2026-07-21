@@ -1564,7 +1564,10 @@ async function runMultiKeywordCrawl() {
         const funnelText = f
           ? ` <span style="color:#94a3b8">(mentah ${f.mentah} → kata kunci ${f.lolos_kata_kunci} → tanggal ${f.lolos_tanggal} → dedup ${f.setelah_dedup} → simpan ${f.tersimpan_baru})</span>`
           : '';
-        statusEl.innerHTML = `✅ "${kw}": ${data.saved || 0} artikel baru${funnelText}<br>` + statusEl.innerHTML;
+        const errText = (data.sourceErrors && Object.keys(data.sourceErrors).length)
+          ? `<br><span style="color:#dc2626">⚠ ${Object.entries(data.sourceErrors).map(([src,msg]) => `${src}: ${msg}`).join(' | ')}</span>`
+          : '';
+        statusEl.innerHTML = `✅ "${kw}": ${data.saved || 0} artikel baru${funnelText}${errText}<br>` + statusEl.innerHTML;
       } else {
         errors.push(kw);
         statusEl.innerHTML = `⚠ "${kw}": ${data.error || data.message || 'gagal'}<br>` + statusEl.innerHTML;
