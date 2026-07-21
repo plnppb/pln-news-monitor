@@ -329,11 +329,13 @@ module.exports = async function handler(req, res) {
       ]);
 
       let combined = [...newsApiArts, ...googleNewsArts, ...gnewsioArts];
+      const rawTotal = combined.length;
 
       combined = combined.filter(a => {
         const text = (a.title + ' ' + a.description).toLowerCase();
         return keywordMatch(text, keywords);
       });
+      const afterKeywordFilter = combined.length;
 
       const qDateFrom = req.query.dateFrom;
       const qDateTo = req.query.dateTo;
@@ -347,6 +349,7 @@ module.exports = async function handler(req, res) {
         const toDate = new Date(qDateTo + 'T23:59:59');
         combined = combined.filter(a => new Date(a.published_at) <= toDate);
       }
+      const afterDateFilter = combined.length;
 
       function normalizeTitle(t) {
         return t.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim().split(' ').slice(0, 8).join(' ');
@@ -358,6 +361,7 @@ module.exports = async function handler(req, res) {
         seenTitles.add(norm);
         return true;
       });
+      const afterDedup = combined.length;
 
       const saved = await saveToSupabase(combined, keyword);
       return res.status(200).json({
@@ -365,7 +369,14 @@ module.exports = async function handler(req, res) {
         source: 'external',
         total: combined.length,
         saved: saved.saved,
-        breakdown: { newsapi: newsApiArts.length, googlenews: googleNewsArts.length, gnewsio: gnewsioArts.length }
+        breakdown: { newsapi: newsApiArts.length, googlenews: googleNewsArts.length, gnewsio: gnewsioArts.length },
+        funnel: {
+          mentah: rawTotal,
+          lolos_kata_kunci: afterKeywordFilter,
+          lolos_tanggal: afterDateFilter,
+          setelah_dedup: afterDedup,
+          tersimpan_baru: saved.saved
+        }
       });
     }
 
