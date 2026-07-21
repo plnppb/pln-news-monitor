@@ -110,21 +110,27 @@ async function getFeedsFromDB() {
 }
 
 async function fetchFromNewsAPI(keyword) {
-  if (!NEWS_API_KEY) return [];
+  if (!NEWS_API_KEY) return { articles: [], error: 'NEWS_API_KEY tidak diset' };
   try {
     const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(keyword)}&language=id&sortBy=publishedAt&pageSize=50&apiKey=${NEWS_API_KEY}`;
     const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
     const data = await response.json();
-    if (!data.articles) return [];
-    return data.articles.map(a => ({
-      title: a.title,
-      url: a.url,
-      source: a.source?.name || 'NewsAPI',
-      published_at: a.publishedAt || new Date().toISOString(),
-      description: (a.description || '').substring(0, 500)
-    }));
+    if (!response.ok || data.status === 'error') {
+      return { articles: [], error: `NewsAPI ${response.status}: ${data.message || data.code || 'unknown error'}` };
+    }
+    if (!data.articles) return { articles: [], error: null };
+    return {
+      articles: data.articles.map(a => ({
+        title: a.title,
+        url: a.url,
+        source: a.source?.name || 'NewsAPI',
+        published_at: a.publishedAt || new Date().toISOString(),
+        description: (a.description || '').substring(0, 500)
+      })),
+      error: null
+    };
   } catch (e) {
-    return [];
+    return { articles: [], error: 'NewsAPI exception: ' + e.message };
   }
 }
 
@@ -168,21 +174,27 @@ async function fetchFromGoogleNewsRSS(keyword) {
 }
 
 async function fetchFromGNewsIo(keyword) {
-  if (!GNEWSIO_API_KEY) return [];
+  if (!GNEWSIO_API_KEY) return { articles: [], error: 'GNEWSIO_API_KEY tidak diset' };
   try {
     const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(keyword)}&lang=id&country=id&max=10&apikey=${GNEWSIO_API_KEY}`;
     const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
     const data = await response.json();
-    if (!data.articles) return [];
-    return data.articles.map(a => ({
-      title: a.title,
-      url: a.url,
-      source: a.source?.name || 'GNews.io',
-      published_at: a.publishedAt || new Date().toISOString(),
-      description: (a.description || '').substring(0, 500)
-    }));
+    if (!response.ok || data.errors) {
+      return { articles: [], error: `GNews.io ${response.status}: ${(data.errors || []).join(', ') || 'unknown error'}` };
+    }
+    if (!data.articles) return { articles: [], error: null };
+    return {
+      articles: data.articles.map(a => ({
+        title: a.title,
+        url: a.url,
+        source: a.source?.name || 'GNews.io',
+        published_at: a.publishedAt || new Date().toISOString(),
+        description: (a.description || '').substring(0, 500)
+      })),
+      error: null
+    };
   } catch (e) {
-    return [];
+    return { articles: [], error: 'GNews.io exception: ' + e.message };
   }
 }
 
@@ -322,11 +334,13 @@ module.exports = async function handler(req, res) {
 
     // ===== MODE: EXTERNAL =====
     if (source === 'external') {
-      const [newsApiArts, googleNewsArts, gnewsioArts] = await Promise.all([
+      const [newsApiRes, googleNewsArts, gnewsioRes] = await Promise.all([
         fetchFromNewsAPI(keyword),
         fetchFromGoogleNewsRSS(keyword),
         fetchFromGNewsIo(keyword)
       ]);
+      const newsApiArts = newsApiRes.articles;
+      const gnewsioArts = gnewsioRes.articles;
 
       let combined = [...newsApiArts, ...googleNewsArts, ...gnewsioArts];
       const rawTotal = combined.length;
@@ -364,12 +378,17 @@ module.exports = async function handler(req, res) {
       const afterDedup = combined.length;
 
       const saved = await saveToSupabase(combined, keyword);
+      const sourceErrors = {};
+      if (newsApiRes.error) sourceErrors.newsapi = newsApiRes.error;
+      if (gnewsioRes.error) sourceErrors.gnewsio = gnewsioRes.error;
+
       return res.status(200).json({
         success: true,
         source: 'external',
         total: combined.length,
         saved: saved.saved,
         breakdown: { newsapi: newsApiArts.length, googlenews: googleNewsArts.length, gnewsio: gnewsioArts.length },
+        sourceErrors,
         funnel: {
           mentah: rawTotal,
           lolos_kata_kunci: afterKeywordFilter,
