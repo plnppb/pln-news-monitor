@@ -14,7 +14,7 @@ jobs:
           SECRET="${{ secrets.CRON_SECRET }}"
           BASE="https://pln-news-monitor.vercel.app/api/crawl"
           BATCH_SIZE=30
-          TOTAL_FEEDS=592
+          TOTAL_FEEDS=100
           TOTAL_BATCHES=$(( (TOTAL_FEEDS + BATCH_SIZE - 1) / BATCH_SIZE ))
 
           for i in $(seq 0 $((TOTAL_BATCHES - 1))); do
