@@ -1504,7 +1504,11 @@ async function runMultiKeywordCrawl() {
       const data = await resp.json();
       if (data.success) {
         totalSaved += data.saved || 0;
-        statusEl.innerHTML = `✅ "${kw}": ${data.saved || 0} artikel baru<br>` + statusEl.innerHTML;
+        const f = data.funnel;
+        const funnelText = f
+          ? ` <span style="color:#94a3b8">(mentah ${f.mentah} → kata kunci ${f.lolos_kata_kunci} → tanggal ${f.lolos_tanggal} → dedup ${f.setelah_dedup} → simpan ${f.tersimpan_baru})</span>`
+          : '';
+        statusEl.innerHTML = `✅ "${kw}": ${data.saved || 0} artikel baru${funnelText}<br>` + statusEl.innerHTML;
       } else {
         errors.push(kw);
         statusEl.innerHTML = `⚠ "${kw}": ${data.error || data.message || 'gagal'}<br>` + statusEl.innerHTML;
@@ -1922,15 +1926,44 @@ function filterDashArticles() {
   renderDashArticleList(filtered);
 }
 
-function exportDashboardExcel() {
+async function resolveGoogleLinksForExport(articles) {
+  const targets = [...new Set(articles.map(a => a.url).filter(u => u && u.includes('news.google.com')))];
+  if (!targets.length) return {};
+
+  const resolvedMap = {};
+  const chunkSize = 30;
+  for (let i = 0; i < targets.length; i += chunkSize) {
+    const chunk = targets.slice(i, i + chunkSize);
+    showToast(`🔗 Resolve link asli... (${Math.min(i + chunkSize, targets.length)}/${targets.length})`);
+    try {
+      const resp = await fetch('/api/resolve-links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: chunk })
+      });
+      const data = await resp.json();
+      if (data.resolved) Object.assign(resolvedMap, data.resolved);
+    } catch (e) {
+      // Gagal satu batch → biarkan link Google apa adanya untuk batch ini
+    }
+  }
+  return resolvedMap;
+}
+
+async function exportDashboardExcel() {
   if (!dashAllArticles.length) return showToast('⚠ Belum ada data dashboard');
   const articles = filterByPeriod(dashAllArticles);
   const filtered = articles;
 
+  const btn = document.querySelector('.export-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Menyiapkan...'; }
+
+  const resolvedMap = await resolveGoogleLinksForExport(filtered);
+
   const rows = filtered.map(a => ({
     'Tanggal': a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('id-ID') : '',
     'Judul Berita': a.title || '',
-    'Link': a.url || '',
+    'Link': (a.url && resolvedMap[a.url]) || a.url || '',
     'Nama Media': a.source?.name || '',
     'Tone': a._tone ? a._tone.charAt(0).toUpperCase() + a._tone.slice(1) : '',
     'Spokesperson Internal': a._spkInternal || '',
@@ -1944,6 +1977,8 @@ function exportDashboardExcel() {
   XLSX.utils.book_append_sheet(wb, ws, 'Dashboard PLN Papua');
   XLSX.writeFile(wb, `PLN-Dashboard-${new Date().toISOString().split('T')[0]}.xlsx`);
   showToast('✅ Excel dashboard berhasil diunduh');
+
+  if (btn) { btn.disabled = false; btn.textContent = '📥 Export Dashboard ke Excel'; }
 }
 
 function showLoading() {
