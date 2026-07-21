@@ -311,6 +311,11 @@
       <input type="text" id="searchInput" placeholder="Kata kunci..." value="PLN Wilayah Papua"/>
       <input type="date" id="dateFrom" title="Dari tanggal"/>
       <input type="date" id="dateTo" title="Sampai tanggal"/>
+      <button class="btn btn-primary" onclick="fetchNews()" id="searchBtn">🔍 Cari Berita</button>
+      <div class="rss-progress-wrap" id="rssProgressWrap">
+        <div class="rss-progress-bar"><div class="rss-progress-fill" id="rssProgressFill"></div></div>
+        <div class="rss-progress-label" id="rssProgressLabel">Mengambil berita...</div>
+      </div>
       <!-- Auto Crawl Status -->
       <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:8px 10px;margin-bottom:8px;">
         <div style="font-size:11px;font-weight:600;color:#0369a1;margin-bottom:4px;">🤖 Auto-Crawl Aktif</div>
@@ -318,11 +323,11 @@
           ✅ Artikel dikumpulkan otomatis tiap <strong>6 jam</strong> (07:00, 13:00, 19:00, 01:00 WIT).<br>
           Buka tab <strong>📊 Dashboard</strong> untuk lihat semua hasil.
         </div>
-      </div>
-      <button class="btn btn-primary" onclick="fetchNews()" id="searchBtn">🔍 Cari Berita</button>
-      <div class="rss-progress-wrap" id="rssProgressWrap">
-        <div class="rss-progress-bar"><div class="rss-progress-fill" id="rssProgressFill"></div></div>
-        <div class="rss-progress-label" id="rssProgressLabel">Mengambil berita...</div>
+        <button onclick="runFeedsCrawlNow()" id="feedsCrawlBtn"
+          style="width:100%;margin-top:6px;background:#0369a1;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;">
+          ⚡ Jalankan Sekarang (Semua Feed RSS)
+        </button>
+        <div id="feedsCrawlStatus" style="font-size:10px;color:#0369a1;margin-top:6px;line-height:1.6;max-height:90px;overflow-y:auto;"></div>
       </div>
     </div>
 
@@ -1470,6 +1475,57 @@ function removeMkwChip(ev, el) {
 
 function updateMkwCount() {
   document.getElementById('mkwSelCount').textContent = document.querySelectorAll('#mkwChips .chip.active').length;
+}
+
+async function runFeedsCrawlNow() {
+  const statusEl = document.getElementById('feedsCrawlStatus');
+  const btn = document.getElementById('feedsCrawlBtn');
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+  statusEl.innerHTML = '⏳ Memulai crawl semua feed RSS...';
+
+  let batchIndex = 0;
+  let totalSaved = 0;
+  let totalFeeds = '?';
+  const errors = [];
+
+  try {
+    while (true) {
+      const resp = await fetch(`/api/crawl?secret=${CRON_SECRET}&batchIndex=${batchIndex}&batch=30`);
+      const data = await resp.json();
+
+      if (!resp.ok || data.error) {
+        errors.push(data.error || 'Gagal di batch ' + batchIndex);
+        statusEl.innerHTML = `⚠ Batch ${batchIndex}: ${data.error || 'gagal'}<br>` + statusEl.innerHTML;
+        break;
+      }
+      if (data.message === 'All batches processed' || data.message === 'No feeds in DB.') {
+        statusEl.innerHTML = `✅ Semua batch selesai diproses.<br>` + statusEl.innerHTML;
+        break;
+      }
+
+      totalSaved += data.saved || 0;
+      totalFeeds = data.totalFeeds ?? totalFeeds;
+      statusEl.innerHTML = `⏳ Batch ${batchIndex + 1} (feed ke-${batchIndex*30+1} s/d ${Math.min((batchIndex+1)*30, totalFeeds)} dari ${totalFeeds}): ${data.saved || 0} artikel baru<br>` + statusEl.innerHTML;
+
+      batchIndex++;
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  } catch (e) {
+    errors.push(e.message);
+    statusEl.innerHTML = `⚠ Error: ${e.message}<br>` + statusEl.innerHTML;
+  }
+
+  statusEl.innerHTML = `<strong>Selesai. Total ${totalSaved} artikel baru tersimpan dari ${totalFeeds} feed${errors.length ? `, ada ${errors.length} error` : ''}.</strong><br>` + statusEl.innerHTML;
+
+  if (totalSaved > 0) {
+    statusEl.innerHTML = `🔄 Memuat ulang daftar artikel...<br>` + statusEl.innerHTML;
+    await autoLoadFromDB();
+    statusEl.innerHTML = `🔄 Daftar artikel sudah diperbarui.<br>` + statusEl.innerHTML;
+  }
+
+  btn.disabled = false;
+  btn.style.opacity = '1';
 }
 
 async function runMultiKeywordCrawl() {
