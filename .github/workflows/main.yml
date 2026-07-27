@@ -33,21 +33,28 @@ jobs:
 
           echo "Crawling external sources for multiple keywords..."
           for KW in \
-            "PLN+Wilayah+Papua" \
             "PLN+Papua" \
+            "listrik+Papua" \
             "PLN+Sorong" \
+            "listrik+Sorong" \
             "PLN+Jayapura" \
+            "listrik+Jayapura" \
             "PLN+Manokwari" \
+            "listrik+Manokwari" \
+            "PLN+Biak" \
+            "listrik+Biak" \
+            "PLN+Merauke" \
+            "listrik+Merauke" \
+            "PLN+Nabire" \
+            "listrik+Nabire" \
+            "PLN+Fakfak" \
+            "listrik+Fakfak" \
+            "PLN+Wamena" \
+            "listrik+Wamena" \
             "PLN+Papua+Barat" \
             "PLN+Papua+Selatan" \
             "PLN+Papua+Tengah" \
             "PLN+Papua+Pegunungan" \
-            "listrik+Papua" \
-            "pemadaman+listrik+Papua" \
-            "PLN+Biak" \
-            "PLN+Merauke" \
-            "PLN+Nabire" \
-            "PLN+Fakfak" \
             ; do
             echo "Keyword: $KW"
             RESULT=$(curl -s "${BASE}?secret=${SECRET}&keyword=${KW}&source=external")
