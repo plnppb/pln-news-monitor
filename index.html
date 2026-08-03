@@ -1001,6 +1001,26 @@ async function fetchNews() {
   }
 
   articles.sort((a,b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+
+  // Cek mana yang sudah ada di database, biar kartu-nya nampilin ikon yang sesuai
+  try {
+    const urls = articles.map(a => a.url).filter(Boolean);
+    if (urls.length) {
+      const checkResp = await fetch('/api/check-saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls })
+      });
+      const checkData = await checkResp.json();
+      const existingSet = new Set(checkData.existing || []);
+      articles.forEach(a => { if (existingSet.has(a.url)) a._fromDB = true; });
+    }
+  } catch (e) {
+    // Kalau pengecekan gagal, biarkan semua tampil sebagai "belum tersimpan" — aman,
+    // paling banter tombol simpan muncul di artikel yang sebenarnya sudah ada (akan
+    // ditolak sebagai duplikat oleh /api/save-article, bukan bug fatal)
+  }
+
   allArticles = articles;
 
   document.getElementById('hdr-total').textContent = articles.length;
@@ -1128,6 +1148,9 @@ function renderCard(a, i) {
         <a href="${url}" target="_blank" rel="noopener" style="text-decoration:none">
           <button class="icon-btn" title="Buka artikel">↗</button>
         </a>
+        ${a._fromDB
+          ? `<button class="icon-btn" disabled title="Sudah ada di database" style="opacity:0.6;cursor:default">✅</button>`
+          : `<button class="icon-btn" id="savedb-${gi}" onclick="saveArticleToDB(${gi})" title="Masukkan ke database, biar auto-crawl selanjutnya nangkep ini terus">💾</button>`}
       </div>
     </div>
     <div class="card-title"><a href="${url}" target="_blank" rel="noopener">${a.title||'Tanpa judul'}</a></div>
@@ -1185,6 +1208,41 @@ function sortArticles(by) {
   if (by === 'date') filteredArticles.sort((a,b)=>new Date(b.publishedAt)-new Date(a.publishedAt));
   if (by === 'tone') { const o={positif:0,netral:1,negatif:2}; filteredArticles.sort((a,b)=>(o[a._tone]??3)-(o[b._tone]??3)); }
   renderArticles(filteredArticles);
+}
+
+async function saveArticleToDB(idx) {
+  const a = allArticles[idx];
+  if (!a) return;
+  const btn = document.getElementById(`savedb-${idx}`);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+
+  try {
+    const resp = await fetch('/api/save-article', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        secret: CRON_SECRET,
+        title: a.title,
+        url: a.url,
+        source: a.source?.name || '',
+        published_at: a.publishedAt || new Date().toISOString(),
+        description: a.description || ''
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Gagal simpan');
+
+    a._fromDB = true;
+    if (btn) {
+      btn.textContent = '✅';
+      btn.title = data.alreadyExists ? 'Sudah ada di database' : 'Tersimpan ke database';
+      btn.style.opacity = '1';
+    }
+    showToast(data.alreadyExists ? 'Artikel sudah ada di database' : '✅ Artikel masuk database — akan terus muncul di crawl berikutnya');
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = '💾'; }
+    showToast('⚠ Gagal simpan: ' + e.message);
+  }
 }
 
 function toggleBookmark(idx) {
@@ -1723,7 +1781,8 @@ async function loadFromDB() {
         _resume: a.resume || '',
         _spkInternal: a.spokesperson_internal || '',
         _spkExternal: a.spokesperson_eksternal || '',
-        _analyzed: !!(a.resume)
+        _analyzed: !!(a.resume),
+        _fromDB: true
       })));
       if (d.articles.length < pageSize) break;
       offset += pageSize;
@@ -2086,7 +2145,8 @@ async function autoLoadFromDB() {
         _resume: a.resume || '',
         _spkInternal: a.spokesperson_internal || '',
         _spkExternal: a.spokesperson_eksternal || '',
-        _analyzed: !!(a.resume)
+        _analyzed: !!(a.resume),
+        _fromDB: true
       }));
       allFetched = allFetched.concat(mapped);
       document.getElementById('resultLabel').textContent = 'Memuat... ' + allFetched.length + (total ? '/' + total : '');
