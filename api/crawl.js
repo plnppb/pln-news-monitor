@@ -112,7 +112,7 @@ async function getFeedsFromDB() {
 async function fetchFromNewsAPI(keyword) {
   if (!NEWS_API_KEY) return { articles: [], error: 'NEWS_API_KEY tidak diset' };
   try {
-    const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(keyword)}&language=id&sortBy=publishedAt&pageSize=50&apiKey=${NEWS_API_KEY}`;
+    const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(keyword)}&language=id&sortBy=publishedAt&pageSize=100&apiKey=${NEWS_API_KEY}`;
     const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
     const data = await response.json();
     if (!response.ok || data.status === 'error') {
@@ -249,7 +249,7 @@ const TONE_PROMPT = `Kamu adalah analis media senior untuk PT PLN (Persero) UIW 
 }`;
 
 async function analyzeArticle(title, description) {
-  if (!GEMINI_API_KEY) return { tone: 'netral', resume: '', spokesperson_internal: '', spokesperson_eksternal: '' };
+  if (!GEMINI_API_KEY) return { error: 'NO_API_KEY' };
   try {
     const prompt = `${TONE_PROMPT}
 
@@ -271,11 +271,19 @@ Berikan analisis dalam format JSON:`;
       }
     );
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    const clean = text.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean);
+
+    if (data.error) return { error: data.error.message, code: data.error.code };
+
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const clean = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { error: 'NO_JSON', raw: text.substring(0, 100) };
+
+    const result = JSON.parse(jsonMatch[0]);
+    if (!['positif', 'negatif', 'netral'].includes(result.tone)) result.tone = 'netral';
+    return result;
   } catch (e) {
-    return { tone: 'netral', resume: '', spokesperson_internal: '', spokesperson_eksternal: '' };
+    return { error: e.message };
   }
 }
 
@@ -283,8 +291,10 @@ async function saveToSupabase(articles, keyword) {
   if (!articles.length) return { saved: 0 };
 
   const rows = [];
+  let analysisFailures = 0;
   for (const a of articles) {
     const analysis = await analyzeArticle(a.title, a.description);
+    if (analysis.error) analysisFailures++;
     rows.push({
       title: a.title,
       url: a.url,
@@ -292,10 +302,10 @@ async function saveToSupabase(articles, keyword) {
       published_at: a.published_at,
       description: a.description || '',
       keyword: keyword,
-      tone: analysis.tone || 'netral',
-      resume: analysis.resume || '',
-      spokesperson_internal: analysis.spokesperson_internal || '',
-      spokesperson_eksternal: analysis.spokesperson_eksternal || ''
+      tone: analysis.error ? '' : (analysis.tone || 'netral'),
+      resume: analysis.error ? '' : (analysis.resume || ''),
+      spokesperson_internal: analysis.error ? '' : (analysis.spokesperson_internal || ''),
+      spokesperson_eksternal: analysis.error ? '' : (analysis.spokesperson_eksternal || '')
     });
     await new Promise(r => setTimeout(r, 200));
   }
@@ -310,7 +320,7 @@ async function saveToSupabase(articles, keyword) {
     },
     body: JSON.stringify(rows)
   });
-  return { saved: rows.length, status: response.status };
+  return { saved: rows.length, status: response.status, analysisFailures };
 }
 
 // ==================== MAIN HANDLER ====================
@@ -394,7 +404,8 @@ module.exports = async function handler(req, res) {
           lolos_kata_kunci: afterKeywordFilter,
           lolos_tanggal: afterDateFilter,
           setelah_dedup: afterDedup,
-          tersimpan_baru: saved.saved
+          tersimpan_baru: saved.saved,
+          analisis_gagal: saved.analysisFailures || 0
         }
       });
     }
