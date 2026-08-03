@@ -1,9 +1,180 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-module.exports = async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+const TONE_PROMPT = `Kamu adalah analis media senior untuk PT PLN (Persero) UIW Papua & Papua Barat. Tugasmu menganalisis artikel berita dan menentukan tonalitas dari sudut pandang citra PLN UIW Papua & Papua Barat.
+
+## PANDUAN TONALITAS
+
+### NEGATIF — artikel yang menyudutkan, mengkritik, atau merugikan citra PLN:
+- Keluhan warga/pelanggan terhadap PLN (pemadaman, tagihan, pelayanan buruk)
+- Kritik dari legislatif/DPR/DPRD/pemerintah daerah terhadap PLN (kata: "soroti", "desak", "pertanyakan", "minta penjelasan", "tegur")
+- Gangguan/kerusakan sistem kelistrikan yang merugikan masyarakat (kata: "padam", "mati lampu", "gangguan listrik", "byar pet", "keluhkan", "protes", "tuntut")
+- Kecelakaan/insiden terkait infrastruktur PLN
+- Berita tarif listrik naik yang menimbulkan keresahan
+
+### POSITIF — artikel yang menguntungkan atau memuji citra PLN:
+- Pencapaian konkret PLN (elektrifikasi desa, pengurangan gangguan, target terpenuhi)
+- Penghargaan/apresiasi yang diterima PLN dari pihak eksternal
+- Program PLN yang berdampak nyata bagi masyarakat (kata: "berhasil", "capai", "sukses", "apresiasi", "penghargaan", "listrik masuk desa")
+- Kolaborasi/MoU di mana PLN sebagai inisiator atau setara
+- Inovasi/program PLN yang positif (EBT, SPKLU, elektrifikasi 3T)
+- Berita pembangunan infrastruktur PLN yang selesai/berjalan baik
+
+### NETRAL — artikel informatif tanpa tendensi positif/negatif yang kuat:
+- Pernyataan komitmen PLN tanpa bukti pencapaian konkret
+- Kegiatan rutin PLN (rapat, sosialisasi, kunjungan kerja)
+- Permintaan/harapan pihak lain ke PLN tanpa nada tekanan (kata: "harap", "minta", "diminta" dengan nada biasa)
+- Pemeliharaan jaringan terencana yang diinformasikan dengan baik
+- Berita kebijakan energi nasional yang menyebut PLN secara umum
+- Profil/wawancara pejabat PLN tanpa isu spesifik
+
+## KASUS KHUSUS KATA "PEMADAMAN":
+- "Warga keluhkan pemadaman" / "pemadaman bergilir bikin resah" → NEGATIF
+- "PLN berhasil kurangi durasi pemadaman X persen" / "pemadaman turun" → POSITIF
+- "PLN jadwalkan pemadaman untuk pemeliharaan" → NETRAL
+
+## KASUS KHUSUS KATA "SOROTI":
+- "DPR soroti kelistrikan Papua" / "DPRD soroti PLN" → NEGATIF (tekanan legislatif)
+- "Publik soroti kinerja PLN" → NEGATIF
+
+## KASUS KHUSUS MoU/KOLABORASI:
+- "PLN teken MoU" / "PLN gandeng X" (PLN sebagai inisiator) → POSITIF
+- "PLN diminta teken MoU" / "X minta PLN kerja sama" → NETRAL
+
+## FORMAT RESPONS (JSON saja, tanpa teks lain, tanpa markdown):
+{
+  "tone": "positif" | "negatif" | "netral",
+  "spokesperson_internal": "Nama, Jabatan PLN (kosongkan jika tidak ada, pisah semicolon jika lebih dari satu)",
+  "spokesperson_eksternal": "Nama, Jabatan non-PLN (kosongkan jika tidak ada, pisah semicolon jika lebih dari satu)",
+  "resume": "Ringkasan 2-3 kalimat dalam Bahasa Indonesia yang menjelaskan isi berita secara objektif"
+}`;
+
+async function analyzeArticle(title, description) {
+  if (!GEMINI_API_KEY) return { error: 'NO_API_KEY' };
+  try {
+    const prompt = `${TONE_PROMPT}
+
+## ARTIKEL YANG DIANALISIS:
+Judul: ${title}
+Deskripsi: ${(description || '').replace(/<[^>]+>/g, '').substring(0, 400)}
+
+Berikan analisis dalam format JSON:`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 500 }
+        })
+      }
+    );
+    const data = await response.json();
+    if (data.error) return { error: data.error.message };
+
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const clean = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { error: 'NO_JSON' };
+
+    const result = JSON.parse(jsonMatch[0]);
+    if (!['positif', 'negatif', 'netral'].includes(result.tone)) result.tone = 'netral';
+    return result;
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+// ===== POST mode=check: cek batch URL mana yang sudah ada di database =====
+async function handleCheck(req, res) {
+  const { urls } = req.body || {};
+  if (!urls || !Array.isArray(urls) || !urls.length) {
+    return res.status(400).json({ error: 'urls (array) wajib diisi' });
+  }
+  try {
+    const existing = new Set();
+    const chunkSize = 50;
+    for (let i = 0; i < urls.length; i += chunkSize) {
+      const chunk = urls.slice(i, i + chunkSize);
+      const list = chunk.map(u => `"${u.replace(/"/g, '\\"')}"`).join(',');
+      const filterValue = `in.(${list})`;
+      const resp = await fetch(
+        `${SUPABASE_URL}/rest/v1/articles?select=url&url=${encodeURIComponent(filterValue)}`,
+        { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+      );
+      const data = await resp.json();
+      if (Array.isArray(data)) data.forEach(row => existing.add(row.url));
+    }
+    return res.status(200).json({ existing: Array.from(existing) });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+// ===== POST mode=save: simpan satu artikel manual dari hasil pencarian kustom =====
+async function handleSave(req, res) {
+  const secret = req.headers['x-cron-secret'] || req.body?.secret;
+  if (secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { title, url, source, published_at, description } = req.body || {};
+  if (!title || !url) {
+    return res.status(400).json({ error: 'title dan url wajib diisi' });
+  }
+
+  try {
+    const existing = await fetch(
+      `${SUPABASE_URL}/rest/v1/articles?select=id&url=eq.${encodeURIComponent(url)}`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    ).then(r => r.json());
+
+    if (Array.isArray(existing) && existing.length > 0) {
+      return res.status(200).json({ success: true, alreadyExists: true });
+    }
+
+    const analysis = await analyzeArticle(title, description);
+
+    const row = {
+      title,
+      url,
+      source: source || 'Manual',
+      published_at: published_at || new Date().toISOString(),
+      description: description || '',
+      keyword: 'manual-add',
+      tone: analysis.error ? '' : (analysis.tone || 'netral'),
+      resume: analysis.error ? '' : (analysis.resume || ''),
+      spokesperson_internal: analysis.error ? '' : (analysis.spokesperson_internal || ''),
+      spokesperson_eksternal: analysis.error ? '' : (analysis.spokesperson_eksternal || '')
+    };
+
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/articles`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'resolution=ignore-duplicates,return=representation'
+      },
+      body: JSON.stringify([row])
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return res.status(response.status).json({ error: errText });
+    }
+
+    return res.status(200).json({ success: true, saved: true, analysisFailed: !!analysis.error });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+// ===== GET: baca daftar artikel (perilaku asli, tidak berubah) =====
+async function handleList(req, res) {
   const { keyword, source, from, to, created_from, created_to, limit = 500, offset = 0 } = req.query;
   let url = `${SUPABASE_URL}/rest/v1/articles?select=*&order=published_at.desc&limit=${limit}&offset=${offset}`;
   if (keyword) url += `&keyword=eq.${encodeURIComponent(keyword)}`;
@@ -28,3 +199,21 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: error.message });
   }
 }
+
+module.exports = async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  if (req.method === 'GET') return handleList(req, res);
+
+  if (req.method === 'POST') {
+    const mode = req.body?.mode;
+    if (mode === 'check') return handleCheck(req, res);
+    if (mode === 'save') return handleSave(req, res);
+    return res.status(400).json({ error: 'mode wajib diisi: "check" atau "save"' });
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' });
+};
