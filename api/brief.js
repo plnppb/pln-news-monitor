@@ -7,10 +7,11 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { articles, keyword } = req.body;
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const GEMINI_KEYS = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '')
+    .split(',').map(k => k.trim()).filter(Boolean);
 
   if (!articles?.length) return res.status(400).json({ error: 'No articles' });
-  if (!geminiKey) return res.status(500).json({ error: 'Gemini API key not configured' });
+  if (!GEMINI_KEYS.length) return res.status(500).json({ error: 'Gemini API key not configured' });
 
   const total = articles.length;
   const pos = articles.filter(a => a.tone === 'positif').length;
@@ -42,31 +43,38 @@ Tulis Daily Media Brief dalam bahasa Indonesia, format paragraf mengalir (BUKAN 
 
 Tulis langsung briefnya tanpa judul atau heading.`;
 
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 800 }
-        })
+  let lastError = null;
+  for (let i = 0; i < GEMINI_KEYS.length; i++) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_KEYS[i]}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.3, maxOutputTokens: 800 }
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.error) {
+        lastError = data.error.message;
+        const isQuota = data.error.code === 429 || /quota/i.test(data.error.message || '');
+        if (isQuota && i < GEMINI_KEYS.length - 1) continue;
+        return res.status(500).json({ error: 'Gemini API error', detail: data.error.message });
       }
-    );
 
-    if (!response.ok) {
-      const err = await response.text();
-      return res.status(500).json({ error: 'Gemini API error', detail: err });
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (!text) return res.status(500).json({ error: 'Empty response from Gemini' });
+
+      return res.status(200).json({ brief: text.trim() });
+    } catch (error) {
+      lastError = error.message;
+      continue;
     }
-
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    if (!text) return res.status(500).json({ error: 'Empty response from Gemini' });
-
-    return res.status(200).json({ brief: text.trim() });
-  } catch (error) {
-    return res.status(500).json({ error: 'Failed to generate brief', detail: error.message });
   }
+  return res.status(500).json({ error: 'Failed to generate brief', detail: `Semua ${GEMINI_KEYS.length} API key gagal/kehabisan kuota. Error terakhir: ${lastError}` });
 }

@@ -3,7 +3,6 @@ const http = require('http');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 const GNEWSIO_API_KEY = process.env.GNEWSIO_API_KEY;
 

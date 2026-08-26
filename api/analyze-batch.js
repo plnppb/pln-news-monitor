@@ -1,6 +1,10 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// Bisa lebih dari satu key, dipisah koma, dari akun Google berbeda-beda
+// (kuota Gemini diikat ke project Google, bukan ke key — jadi key dari
+// akun/project berbeda beneran punya kuota terpisah).
+const GEMINI_KEYS = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '')
+  .split(',').map(k => k.trim()).filter(Boolean);
 
 const TONE_PROMPT = `Kamu adalah analis media senior untuk PT PLN (Persero) UIW Papua & Papua Barat. Tugasmu menganalisis artikel berita dan menentukan tonalitas dari sudut pandang citra PLN UIW Papua & Papua Barat.
 
@@ -20,37 +24,46 @@ Balas HANYA JSON ini tanpa teks lain:
 {"tone":"netral","spokesperson_internal":"","spokesperson_eksternal":"","resume":"ringkasan 2-3 kalimat"}`;
 
 async function analyzeArticle(title, description) {
-  if (!GEMINI_API_KEY) return { error: 'NO_API_KEY' };
-  try {
-    const prompt = `${TONE_PROMPT}\n\nJudul: ${title}\nDeskripsi: ${(description || '').replace(/<[^>]+>/g, '').substring(0, 400)}`;
+  if (!GEMINI_KEYS.length) return { error: 'NO_API_KEY' };
+  const prompt = `${TONE_PROMPT}\n\nJudul: ${title}\nDeskripsi: ${(description || '').replace(/<[^>]+>/g, '').substring(0, 400)}`;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 500 }
-        })
+  let lastError = null;
+  for (let i = 0; i < GEMINI_KEYS.length; i++) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_KEYS[i]}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 500 }
+          })
+        }
+      );
+      const data = await response.json();
+
+      if (data.error) {
+        lastError = data.error.message;
+        const isQuota = data.error.code === 429 || /quota/i.test(data.error.message || '');
+        if (isQuota && i < GEMINI_KEYS.length - 1) continue; // coba key berikutnya
+        return { error: data.error.message, code: data.error.code, keyIndex: i };
       }
-    );
-    const data = await response.json();
 
-    // Expose error dari Gemini
-    if (data.error) return { error: data.error.message, code: data.error.code };
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const clean = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      const jsonMatch = clean.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return { error: 'NO_JSON', raw: text.substring(0, 100) };
 
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const clean = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    const jsonMatch = clean.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return { error: 'NO_JSON', raw: text.substring(0, 100) };
-    
-    const result = JSON.parse(jsonMatch[0]);
-    if (!['positif', 'negatif', 'netral'].includes(result.tone)) result.tone = 'netral';
-    return result;
-  } catch (e) {
-    return { error: e.message };
+      const result = JSON.parse(jsonMatch[0]);
+      if (!['positif', 'negatif', 'netral'].includes(result.tone)) result.tone = 'netral';
+      return result;
+    } catch (e) {
+      lastError = e.message;
+      continue; // exception jaringan, coba key berikutnya juga
+    }
   }
+  return { error: `Semua ${GEMINI_KEYS.length} API key gagal/kehabisan kuota. Error terakhir: ${lastError}` };
 }
 
 module.exports = async function handler(req, res) {
@@ -72,7 +85,7 @@ module.exports = async function handler(req, res) {
     const articles = await r.json();
     if (!articles.length) return res.status(200).json({ error: 'No articles found' });
     const result = await analyzeArticle(articles[0].title, articles[0].description);
-    return res.status(200).json({ article: articles[0].title, gemini_result: result, api_key_set: !!GEMINI_API_KEY });
+    return res.status(200).json({ article: articles[0].title, gemini_result: result, keys_configured: GEMINI_KEYS.length });
   }
 
   try {
