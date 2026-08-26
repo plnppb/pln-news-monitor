@@ -64,6 +64,13 @@ jobs:
 
           echo "External sources crawl done!"
 
+      - name: Crawl Radar Papua (berita umum, di luar konteks PLN)
+        run: |
+          SECRET="${{ secrets.CRON_SECRET }}"
+          BASE="https://pln-news-monitor.vercel.app/api/crawl"
+          RESULT=$(curl -s "${BASE}?secret=${SECRET}&keyword=Papua&source=radar")
+          echo "Radar Papua: $RESULT"
+
       - name: Analyze New Articles
         run: |
           SECRET="${{ secrets.CRON_SECRET }}"
