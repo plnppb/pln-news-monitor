@@ -2,8 +2,5 @@
   "version": 2,
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
-  ],
-  "functions": {
-    "api/analyze-batch.js": { "maxDuration": 60 }
-  }
+  ]
 }
