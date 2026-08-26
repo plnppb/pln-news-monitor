@@ -60,7 +60,7 @@ module.exports = async function handler(req, res) {
   const secret = req.headers['x-cron-secret'] || req.query.secret;
   if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' });
 
-  const batchSize = parseInt(req.query.batch) || 10;
+  const batchSize = parseInt(req.query.batch) || 2;
   const reanalyze = req.query.reanalyze === 'true';
   const offset = parseInt(req.query.offset) || 0;
 
@@ -121,7 +121,11 @@ module.exports = async function handler(req, res) {
 
       toneCount[result.tone] = (toneCount[result.tone] || 0) + 1;
       processed++;
-      await new Promise(r => setTimeout(r, 4200));
+      // TIDAK ADA jeda di sini lagi — batch sengaja dibikin kecil (default 2)
+      // biar satu request selesai jauh di bawah limit eksekusi 10 detik Vercel
+      // Hobby. Jeda antar-request Gemini (biar tidak kena rate limit 15/menit)
+      // sekarang jadi tanggung jawab PEMANGGIL endpoint ini (skrip browser /
+      // GitHub Actions), bukan di dalam function ini.
     }
 
     const nextOffset = offset + batchSize;
