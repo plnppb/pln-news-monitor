@@ -200,17 +200,157 @@ async function handleList(req, res) {
   }
 }
 
+// ===== GET ?resource=followups: baca semua tiket tindak lanjut =====
+async function handleListFollowups(req, res) {
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/followups?select=*&order=created_at.desc`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    const data = await response.json();
+    return res.status(200).json({ followups: data });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+// ===== POST mode=pin: jadikan satu artikel tiket tindak lanjut baru =====
+async function handlePin(req, res) {
+  const { article_url, article_title, article_source, article_published_at } = req.body || {};
+  if (!article_url || !article_title) {
+    return res.status(400).json({ error: 'article_url dan article_title wajib diisi' });
+  }
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/followups`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'resolution=ignore-duplicates,return=representation'
+      },
+      body: JSON.stringify([{ article_url, article_title, article_source, article_published_at }])
+    });
+    const data = await response.json();
+    if (!response.ok) return res.status(response.status).json({ error: JSON.stringify(data) });
+    return res.status(200).json({ success: true, followup: data[0] || null, alreadyExists: !data.length });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+// ===== POST mode=unpin: hapus tiket tindak lanjut =====
+async function handleUnpin(req, res) {
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id wajib diisi' });
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/followups?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if (!response.ok) return res.status(response.status).json({ error: await response.text() });
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+// ===== POST mode=update-status: ubah status Kanban =====
+async function handleUpdateStatus(req, res) {
+  const { id, status } = req.body || {};
+  if (!id || !['baru', 'proses', 'selesai'].includes(status)) {
+    return res.status(400).json({ error: 'id dan status (baru/proses/selesai) wajib diisi' });
+  }
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/followups?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({ status, updated_at: new Date().toISOString() })
+    });
+    const data = await response.json();
+    if (!response.ok) return res.status(response.status).json({ error: JSON.stringify(data) });
+    return res.status(200).json({ success: true, followup: data[0] });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+// ===== POST mode=add-note: tambah satu catatan ke log kronologis =====
+async function handleAddNote(req, res) {
+  const { id, note } = req.body || {};
+  if (!id || !note) return res.status(400).json({ error: 'id dan note wajib diisi' });
+  try {
+    const existing = await fetch(
+      `${SUPABASE_URL}/rest/v1/followups?id=eq.${id}&select=notes`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    ).then(r => r.json());
+
+    if (!Array.isArray(existing) || !existing.length) {
+      return res.status(404).json({ error: 'Tiket tidak ditemukan' });
+    }
+
+    const notes = existing[0].notes || [];
+    notes.push({ text: note, created_at: new Date().toISOString() });
+
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/followups?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({ notes, updated_at: new Date().toISOString() })
+    });
+    const data = await response.json();
+    if (!response.ok) return res.status(response.status).json({ error: JSON.stringify(data) });
+    return res.status(200).json({ success: true, followup: data[0] });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+// ===== GET ?resource=radar: baca berita radar Papua =====
+async function handleListRadar(req, res) {
+  const { limit = 200, offset = 0 } = req.query;
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/papua_radar?select=*&order=published_at.desc&limit=${limit}&offset=${offset}`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Prefer': 'count=exact' } }
+    );
+    const data = await response.json();
+    const count = response.headers.get('content-range')?.split('/')[1] || data.length;
+    return res.status(200).json({ articles: data, total: parseInt(count) || data.length });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  if (req.method === 'GET') return handleList(req, res);
+  if (req.method === 'GET') {
+    if (req.query.resource === 'followups') return handleListFollowups(req, res);
+    if (req.query.resource === 'radar') return handleListRadar(req, res);
+    return handleList(req, res);
+  }
 
   if (req.method === 'POST') {
     const mode = req.body?.mode;
     if (mode === 'check') return handleCheck(req, res);
+    if (mode === 'save') return handleSave(req, res);
+    if (mode === 'pin') return handlePin(req, res);
+    if (mode === 'unpin') return handleUnpin(req, res);
+    if (mode === 'update-status') return handleUpdateStatus(req, res);
+    if (mode === 'add-note') return handleAddNote(req, res);
     if (mode === 'save') return handleSave(req, res);
     return res.status(400).json({ error: 'mode wajib diisi: "check" atau "save"' });
   }

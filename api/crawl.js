@@ -342,6 +342,68 @@ module.exports = async function handler(req, res) {
   try {
     const keywords = keyword.toLowerCase().split(/\s+/).filter(k => k.length > 1);
 
+    // ===== MODE: RADAR (berita umum Papua, di luar konteks PLN) =====
+    if (source === 'radar') {
+      const radarKeyword = req.query.keyword || 'Papua';
+      const [newsApiRes, googleNewsArts, gnewsioRes] = await Promise.all([
+        fetchFromNewsAPI(radarKeyword),
+        fetchFromGoogleNewsRSS(radarKeyword),
+        fetchFromGNewsIo(radarKeyword)
+      ]);
+      let combined = [...newsApiRes.articles, ...googleNewsArts, ...gnewsioRes.articles];
+      const rawTotal = combined.length;
+
+      // Filter ringan: cukup wajib mengandung kata "papua" literal, tanpa syarat topik PLN/listrik
+      combined = combined.filter(a => (a.title + ' ' + a.description).toLowerCase().includes('papua'));
+
+      const qDateFrom = req.query.dateFrom;
+      const qDateTo = req.query.dateTo;
+      const cutoffDate = qDateFrom ? new Date(qDateFrom) : (() => {
+        const d = new Date(); d.setDate(d.getDate() - 30); return d;
+      })();
+      combined = combined.filter(a => new Date(a.published_at) >= cutoffDate);
+      if (qDateTo) {
+        const toDate = new Date(qDateTo + 'T23:59:59');
+        combined = combined.filter(a => new Date(a.published_at) <= toDate);
+      }
+
+      function normTitleRadar(t) {
+        return t.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim().split(' ').slice(0, 8).join(' ');
+      }
+      const seen = new Set();
+      combined = combined.filter(a => {
+        const n = normTitleRadar(a.title);
+        if (seen.has(n)) return false;
+        seen.add(n);
+        return true;
+      });
+
+      let saved = 0;
+      if (combined.length) {
+        const rows = combined.map(a => ({
+          title: a.title, url: a.url, source: a.source,
+          published_at: a.published_at, description: a.description || ''
+        }));
+        const resp = await fetch(`${SUPABASE_URL}/rest/v1/papua_radar?on_conflict=url`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Prefer': 'resolution=ignore-duplicates,return=representation'
+          },
+          body: JSON.stringify(rows)
+        });
+        const savedRows = await resp.json();
+        saved = Array.isArray(savedRows) ? savedRows.length : 0;
+      }
+
+      return res.status(200).json({
+        success: true, source: 'radar', saved,
+        funnel: { mentah: rawTotal, lolos_filter_papua: combined.length, tersimpan_baru: saved }
+      });
+    }
+
     // ===== MODE: EXTERNAL =====
     if (source === 'external') {
       const [newsApiRes, googleNewsArts, gnewsioRes] = await Promise.all([
