@@ -60,7 +60,7 @@ module.exports = async function handler(req, res) {
   const secret = req.headers['x-cron-secret'] || req.query.secret;
   if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' });
 
-  const batchSize = parseInt(req.query.batch) || 30;
+  const batchSize = parseInt(req.query.batch) || 10;
   const reanalyze = req.query.reanalyze === 'true';
   const offset = parseInt(req.query.offset) || 0;
 
@@ -121,7 +121,7 @@ module.exports = async function handler(req, res) {
 
       toneCount[result.tone] = (toneCount[result.tone] || 0) + 1;
       processed++;
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 4200));
     }
 
     const nextOffset = offset + batchSize;
