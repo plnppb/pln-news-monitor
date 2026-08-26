@@ -93,7 +93,7 @@ module.exports = async function handler(req, res) {
     if (reanalyze) {
       url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description&limit=${batchSize}&offset=${offset}&order=id.asc`;
     } else {
-      url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description&resume=eq.&limit=${batchSize}&order=id.asc`;
+      url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description&tone=eq.&limit=${batchSize}&order=id.asc`;
     }
 
     const response = await fetch(url, {
@@ -117,7 +117,7 @@ module.exports = async function handler(req, res) {
         continue;
       }
 
-      await fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${article.id}`, {
+      const patchResp = await fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${article.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -131,6 +131,12 @@ module.exports = async function handler(req, res) {
           spokesperson_eksternal: result.spokesperson_eksternal || ''
         })
       });
+
+      if (!patchResp.ok) {
+        failed++;
+        if (errors.length < 3) errors.push({ id: article.id, error: `Gagal simpan ke DB: ${await patchResp.text()}` });
+        continue;
+      }
 
       toneCount[result.tone] = (toneCount[result.tone] || 0) + 1;
       processed++;
