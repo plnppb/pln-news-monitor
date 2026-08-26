@@ -74,9 +74,14 @@ jobs:
       - name: Analyze New Articles
         run: |
           SECRET="${{ secrets.CRON_SECRET }}"
-          echo "Running analyze batch..."
-          for i in 1 2 3 4 5; do
-            curl -s "https://pln-news-monitor.vercel.app/api/analyze-batch?secret=${SECRET}&batch=30"
-            sleep 5
+          echo "Running analyze batch (batch kecil, jeda sesuai limit rate Gemini)..."
+          for i in $(seq 1 30); do
+            RESULT=$(curl -s "https://pln-news-monitor.vercel.app/api/analyze-batch?secret=${SECRET}&batch=10")
+            echo "Batch $i: $RESULT"
+            if echo "$RESULT" | grep -q "Semua artikel sudah dianalisis"; then
+              echo "Semua artikel sudah dianalisis, berhenti."
+              break
+            fi
+            sleep 2
           done
           echo "Analyze done!"
