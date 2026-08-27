@@ -2382,7 +2382,16 @@ async function renderDashboard() {
   if (window._toneTrendChart) window._toneTrendChart.destroy();
   try {
     const toneCtx = document.getElementById('dashToneTrendChart');
-    if (toneCtx) {
+    const totalAnalyzedInPeriod = toneChartData.positif.reduce((a,b)=>a+b,0)
+      + toneChartData.negatif.reduce((a,b)=>a+b,0)
+      + toneChartData.netral.reduce((a,b)=>a+b,0);
+    if (toneCtx && !totalAnalyzedInPeriod) {
+      const existingChart = Chart.getChart(toneCtx);
+      if (existingChart) existingChart.destroy();
+      if (toneCtx.parentElement) {
+        toneCtx.parentElement.innerHTML = '<p style="color:var(--muted);font-size:12px;padding:12px;">Belum ada artikel yang dianalisis AI pada periode ini.</p>';
+      }
+    } else if (toneCtx) {
       const existingChart = Chart.getChart(toneCtx);
       if (existingChart) existingChart.destroy();
       window._toneTrendChart = new Chart(toneCtx, {
@@ -2410,6 +2419,10 @@ async function renderDashboard() {
     }
   } catch (e) {
     console.error('Gagal render Tren Tonalitas Harian:', e);
+    const toneCtxErr = document.getElementById('dashToneTrendChart');
+    if (toneCtxErr && toneCtxErr.parentElement) {
+      toneCtxErr.parentElement.innerHTML = `<p style="color:#ef4444;font-size:12px;padding:12px;">⚠ Gagal memuat grafik: ${(e && e.message) || e}</p>`;
+    }
   }
 
   try {
