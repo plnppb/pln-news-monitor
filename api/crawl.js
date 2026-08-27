@@ -355,7 +355,43 @@ async function saveToSupabase(articles, keyword) {
     },
     body: JSON.stringify(rows)
   });
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    return { saved: 0, status: response.status, error: errText, analysisFailures: 0 };
+  }
   return { saved: rows.length, status: response.status, analysisFailures: 0 };
+}
+
+// Update view/like/comment count untuk video YouTube yang SUDAH ADA di database
+// (insert biasa cuma nyimpen baris baru — baris yang url-nya udah ada otomatis di-skip,
+// jadi statistiknya nggak pernah ke-update kalau cuma andalin insert doang).
+// Sengaja cuma update 3 kolom ini, TIDAK menyentuh tone/resume yang mungkin udah dianalisis.
+async function updateYoutubeStats(articles) {
+  let updated = 0;
+  let failed = 0;
+  for (const a of articles) {
+    if (a.view_count == null && a.like_count == null && a.comment_count == null) continue;
+    try {
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/articles?url=eq.${encodeURIComponent(a.url)}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          view_count: a.view_count ?? null,
+          like_count: a.like_count ?? null,
+          comment_count: a.comment_count ?? null
+        })
+      });
+      if (resp.ok) updated++; else failed++;
+    } catch (e) {
+      failed++;
+    }
+  }
+  return { updated, failed };
 }
 
 // ==================== MAIN HANDLER ====================
@@ -486,10 +522,11 @@ module.exports = async function handler(req, res) {
       });
 
       const saved = await saveToSupabase(combined, keyword);
+      const statsUpdate = await updateYoutubeStats(combined);
       return res.status(200).json({
         success: true, source: 'youtube', saved: saved.saved,
-        error: ytRes.error,
-        funnel: { mentah: rawTotal, lolos_kata_kunci: afterKeywordFilter, tersimpan_baru: saved.saved }
+        error: ytRes.error || saved.error,
+        funnel: { mentah: rawTotal, lolos_kata_kunci: afterKeywordFilter, tersimpan_baru: saved.saved, statistik_diupdate: statsUpdate.updated, statistik_gagal: statsUpdate.failed }
       });
     }
 
