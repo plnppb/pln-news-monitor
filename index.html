@@ -458,6 +458,7 @@
       <button id="tab-dashboard" onclick="switchTab('dashboard')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📊 Dashboard</button>
       <button id="tab-radar" onclick="switchTab('radar')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📡 Radar Papua</button>
       <button id="tab-followups" onclick="switchTab('followups')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🗂 Tindak Lanjut</button>
+      <button id="tab-spokesperson" onclick="switchTab('spokesperson')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🎙 Spokesperson</button>
     </div>
 
     <!-- PANEL MONITOR -->
@@ -465,10 +466,10 @@
 
     <!-- STATS -->
     <div class="stats-bar">
-      <div class="stat-card"><div class="num" id="statTotal">0</div><div class="lbl">Total Artikel</div></div>
-      <div class="stat-card pos"><div class="num" id="statPos">0</div><div class="lbl">Tone Positif</div></div>
-      <div class="stat-card neg"><div class="num" id="statNeg">0</div><div class="lbl">Tone Negatif</div></div>
-      <div class="stat-card neu"><div class="num" id="statNeu">0</div><div class="lbl">Tone Netral</div></div>
+      <div class="stat-card" style="cursor:pointer" onclick="filterToneFromCard('semua')"><div class="num" id="statTotal">0</div><div class="lbl">Total Artikel</div></div>
+      <div class="stat-card pos" style="cursor:pointer" onclick="filterToneFromCard('positif')"><div class="num" id="statPos">0</div><div class="lbl">Tone Positif</div></div>
+      <div class="stat-card neg" style="cursor:pointer" onclick="filterToneFromCard('negatif')"><div class="num" id="statNeg">0</div><div class="lbl">Tone Negatif</div></div>
+      <div class="stat-card neu" style="cursor:pointer" onclick="filterToneFromCard('netral')"><div class="num" id="statNeu">0</div><div class="lbl">Tone Netral</div></div>
     </div>
 
     <!-- PROGRESS -->
@@ -638,6 +639,20 @@
       </div>
     </div>
   </div><!-- end panel-followups-wrap -->
+
+  <!-- PANEL SPOKESPERSON RECAP -->
+  <div id="panel-spokesperson-wrap" style="display:none;">
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#1e40af;line-height:1.6;">
+      🎙 <strong>Penting:</strong> "Sikap Pernyataan Sendiri" di bawah ini menilai apa yang <em>diucapkan orang itu sendiri</em> di dalam kutipannya — bukan tone keseluruhan artikel tempat dia muncul. Seorang GM bisa saja dikutip dengan tenang di artikel yang temanya negatif (misal soal keluhan warga); itu <strong>tidak</strong> otomatis membuat GM tersebut "sumber negatif". Kalau kolom ini kosong/"belum dianalisis", artinya artikel itu belum sempat dianalisis ulang dengan prompt baru — jalankan <code>reanalyzeAll()</code> lagi untuk melengkapinya.
+    </div>
+    <div id="spokespersonLoading" style="text-align:center;color:var(--muted);padding:20px;">⏳ Memuat data...</div>
+    <div id="spokespersonContent" style="display:none;">
+      <h4 style="margin:16px 0 8px;">🏢 Narasumber Internal PLN</h4>
+      <div id="spkInternalList" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <h4 style="margin:24px 0 8px;">👤 Narasumber Eksternal</h4>
+      <div id="spkExternalList" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+  </div><!-- end panel-spokesperson-wrap -->
 
   </div><!-- end .main -->
 </div><!-- end .app -->
@@ -1169,7 +1184,15 @@ function renderCard(a, i) {
       <div class="card-meta">
         <span class="source-badge">${srcName}</span>
         <span class="date-badge">${date}</span>
-        ${tc ? `<span class="tone-badge ${tc}">${tc.charAt(0).toUpperCase()+tc.slice(1)}</span>` : ''}
+        ${tc
+          ? (a._fromDB
+              ? `<select class="tone-badge ${tc}" style="border:none;cursor:pointer;font-weight:600;" onchange="changeArticleTone(${gi}, this.value)" title="Klik untuk koreksi tone kalau AI-nya salah nilai">
+                   <option value="positif" ${a._tone==='positif'?'selected':''}>Positif</option>
+                   <option value="negatif" ${a._tone==='negatif'?'selected':''}>Negatif</option>
+                   <option value="netral" ${a._tone==='netral'?'selected':''}>Netral</option>
+                 </select>`
+              : `<span class="tone-badge ${tc}">${tc.charAt(0).toUpperCase()+tc.slice(1)}</span>`)
+          : ''}
       </div>
       <div class="card-actions">
         <button class="icon-btn" onclick="pinArticle(${gi})" title="Tambahkan ke Tindak Lanjut">📌</button>
@@ -1185,6 +1208,29 @@ function renderCard(a, i) {
     ${resumeHtml}
     ${spkHtml ? `<div class="card-footer">${spkHtml}</div>` : ''}
   </div>`;
+}
+
+async function changeArticleTone(idx, newTone) {
+  const a = allArticles[idx];
+  if (!a) return;
+  const oldTone = a._tone;
+  a._tone = newTone; // optimistic update
+  try {
+    const resp = await fetch('/api/articles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'update-tone', url: a.url, tone: newTone })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Gagal update tone');
+    showToast(`✅ Tone diubah jadi "${newTone}"`);
+    updateCard(idx);
+    updateStats(filteredArticles);
+  } catch (e) {
+    a._tone = oldTone; // rollback kalau gagal
+    updateCard(idx);
+    showToast('⚠ Gagal ubah tone: ' + e.message);
+  }
 }
 
 function updateCard(idx) {
@@ -1216,6 +1262,16 @@ function applyFilters() {
   if (currentFilter.tone !== 'semua') a = a.filter(x => x._tone === currentFilter.tone);
   if (currentFilter.source !== 'semua') a = a.filter(x => x._source === currentFilter.source || (currentFilter.source === 'rss' && x._source?.startsWith('rss_')));
   filteredArticles = a;
+}
+
+function filterToneFromCard(val) {
+  const buttons = document.querySelectorAll('.filter-row')[0]?.querySelectorAll('.filter-btn');
+  if (!buttons) return;
+  const map = { semua: 0, positif: 1, negatif: 2, netral: 3 };
+  const idx = map[val];
+  if (idx === undefined) return;
+  filterTone(val, buttons[idx]);
+  document.getElementById('newsGrid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function filterTone(val, el) {
@@ -1275,6 +1331,85 @@ async function saveArticleToDB(idx) {
 }
 
 // ==================== RADAR PAPUA ====================
+// ==================== SPOKESPERSON RECAP ====================
+async function loadSpokespersonRecap() {
+  document.getElementById('spokespersonLoading').style.display = 'block';
+  document.getElementById('spokespersonContent').style.display = 'none';
+
+  let allArts = [];
+  let offset = 0;
+  const pageSize = 500;
+  try {
+    while (true) {
+      const resp = await fetch(`/api/articles?limit=${pageSize}&offset=${offset}`);
+      const data = await resp.json();
+      if (!data.articles || !data.articles.length) break;
+      allArts = allArts.concat(data.articles);
+      if (data.articles.length < pageSize) break;
+      offset += pageSize;
+    }
+  } catch (e) {
+    document.getElementById('spokespersonLoading').innerHTML = `⚠ Gagal memuat: ${e.message}`;
+    return;
+  }
+
+  function aggregate(nameField, stanceField) {
+    const map = {};
+    allArts.forEach(a => {
+      const names = (a[nameField] || '').split(';').map(s => s.trim()).filter(Boolean);
+      if (!names.length) return;
+      const ownStance = (a[stanceField] || '').trim();
+      const articleTone = (a.tone || '').trim();
+      names.forEach(name => {
+        if (!map[name]) {
+          map[name] = { count: 0, own: { positif: 0, negatif: 0, netral: 0, kosong: 0 }, art: { positif: 0, negatif: 0, netral: 0, kosong: 0 } };
+        }
+        map[name].count++;
+        map[name].own[ownStance || 'kosong'] = (map[name].own[ownStance || 'kosong'] || 0) + 1;
+        map[name].art[articleTone || 'kosong'] = (map[name].art[articleTone || 'kosong'] || 0) + 1;
+      });
+    });
+    return Object.entries(map).sort((a, b) => b[1].count - a[1].count);
+  }
+
+  function renderList(list, elId) {
+    const el = document.getElementById(elId);
+    if (!list.length) {
+      el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px;">Belum ada data narasumber yang teridentifikasi.</div>';
+      return;
+    }
+    el.innerHTML = list.map(([name, d]) => `
+      <div class="card" style="padding:12px 16px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;">
+          <div style="font-weight:700;font-size:14px;">${name}</div>
+          <div style="font-size:12px;color:var(--muted);">Muncul di ${d.count} artikel</div>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:600;">Sikap Pernyataan Sendiri</div>
+            <div style="font-size:12px;margin-top:2px;">
+              ✅ Positif: ${d.own.positif||0} &nbsp; ❌ Negatif: ${d.own.negatif||0} &nbsp; ➖ Netral: ${d.own.netral||0}
+              ${d.own.kosong ? ` &nbsp; <span style="color:var(--muted)">❔ Belum dianalisis: ${d.own.kosong}</span>` : ''}
+            </div>
+          </div>
+          <div style="opacity:0.6;">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:600;">(pembanding) Tone Artikel Keseluruhan</div>
+            <div style="font-size:12px;margin-top:2px;">
+              ✅ ${d.art.positif||0} &nbsp; ❌ ${d.art.negatif||0} &nbsp; ➖ ${d.art.netral||0}
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  renderList(aggregate('spokesperson_internal', 'spokesperson_internal_stance'), 'spkInternalList');
+  renderList(aggregate('spokesperson_eksternal', 'spokesperson_eksternal_stance'), 'spkExternalList');
+
+  document.getElementById('spokespersonLoading').style.display = 'none';
+  document.getElementById('spokespersonContent').style.display = 'block';
+}
+
 async function loadRadarPapua() {
   const el = document.getElementById('radarList');
   el.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;">⏳ Memuat...</div>';
@@ -1884,7 +2019,7 @@ function renderPagination() {
 
 // ==================== TAB SYSTEM ====================
 function switchTab(tab) {
-  const tabs = ['monitor', 'dashboard', 'radar', 'followups'];
+  const tabs = ['monitor', 'dashboard', 'radar', 'followups', 'spokesperson'];
   tabs.forEach(t => {
     const btn = document.getElementById(`tab-${t}`);
     btn.style.color = tab === t ? 'var(--accent)' : 'var(--muted)';
@@ -1897,6 +2032,7 @@ function switchTab(tab) {
   }
   if (tab === 'radar') loadRadarPapua();
   if (tab === 'followups') loadFollowups();
+  if (tab === 'spokesperson') loadSpokespersonRecap();
   // Scroll ke atas
   document.querySelector('.main').scrollTop = 0;
 }
