@@ -71,34 +71,6 @@ jobs:
           RESULT=$(curl -s "${BASE}?secret=${SECRET}&keyword=Papua&source=radar")
           echo "Radar Papua: $RESULT"
 
-      - name: Crawl Reddit (Fase 2)
-        run: |
-          SECRET="${{ secrets.CRON_SECRET }}"
-          BASE="https://pln-news-monitor.vercel.app/api/crawl"
-          echo "Crawling Reddit untuk beberapa keyword..."
-          for KW in \
-            "PLN+Papua" \
-            "listrik+Papua" \
-            "PLN+Sorong" \
-            "PLN+Jayapura" \
-            "PLN+Manokwari" \
-            "PLN+Merauke" \
-            "PLN+Biak" \
-            "PLN+Wamena" \
-            "PLN+Nabire" \
-            "PLN+Mimika" \
-            "PLN+Papua+Barat+Daya" \
-            "PLN+Papua+Tengah" \
-            "PLN+Papua+Pegunungan" \
-            "PLN+Papua+Selatan" \
-            ; do
-            echo "Keyword: $KW"
-            RESULT=$(curl -s "${BASE}?secret=${SECRET}&keyword=${KW}&source=reddit")
-            echo "Result: $RESULT"
-            sleep 2
-          done
-          echo "Reddit crawl done!"
-
       - name: Crawl YouTube (Fase 3)
         run: |
           SECRET="${{ secrets.CRON_SECRET }}"
