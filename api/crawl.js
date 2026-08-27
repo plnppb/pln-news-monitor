@@ -272,20 +272,49 @@ async function fetchFromYouTube(keyword) {
       return { articles: [], error: `YouTube ${response.status}: ${data.error?.message || 'unknown error'}` };
     }
     const items = data.items || [];
+    if (!items.length) return { articles: [], error: null };
+
+    // Ambil statistics (view/like/comment count) lewat videos.list — 1 unit per call, jauh lebih murah dari search (100 unit)
+    const videoIds = items.map(v => v.id.videoId).filter(Boolean).join(',');
+    const statsMap = {};
+    if (videoIds) {
+      try {
+        const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoIds}&key=${YOUTUBE_API_KEY}`;
+        const statsResp = await fetch(statsUrl, { signal: AbortSignal.timeout(8000) });
+        const statsData = await statsResp.json();
+        (statsData.items || []).forEach(v => {
+          statsMap[v.id] = {
+            view_count: v.statistics?.viewCount != null ? parseInt(v.statistics.viewCount) : null,
+            like_count: v.statistics?.likeCount != null ? parseInt(v.statistics.likeCount) : null,
+            comment_count: v.statistics?.commentCount != null ? parseInt(v.statistics.commentCount) : null
+          };
+        });
+      } catch (e) {
+        // Kalau gagal ambil statistics, tetap lanjut tanpa itu — jangan sampai gagalin seluruh crawl
+      }
+    }
+
     return {
-      articles: items.map(v => ({
-        title: v.snippet.title,
-        url: `https://www.youtube.com/watch?v=${v.id.videoId}`,
-        source: `YouTube - ${v.snippet.channelTitle}`,
-        published_at: v.snippet.publishedAt,
-        description: (v.snippet.description || '').substring(0, 500)
-      })),
+      articles: items.map(v => {
+        const stats = statsMap[v.id.videoId] || {};
+        return {
+          title: v.snippet.title,
+          url: `https://www.youtube.com/watch?v=${v.id.videoId}`,
+          source: `YouTube - ${v.snippet.channelTitle}`,
+          published_at: v.snippet.publishedAt,
+          description: (v.snippet.description || '').substring(0, 500),
+          view_count: stats.view_count ?? null,
+          like_count: stats.like_count ?? null,
+          comment_count: stats.comment_count ?? null
+        };
+      }),
       error: null
     };
   } catch (e) {
     return { articles: [], error: 'YouTube exception: ' + e.message };
   }
 }
+
 
 
 // PENTING: crawl.js SENGAJA tidak memanggil Gemini sama sekali. Artikel disimpan
@@ -310,7 +339,10 @@ async function saveToSupabase(articles, keyword) {
     spokesperson_internal: '',
     spokesperson_internal_stance: '',
     spokesperson_eksternal: '',
-    spokesperson_eksternal_stance: ''
+    spokesperson_eksternal_stance: '',
+    view_count: a.view_count ?? null,
+    like_count: a.like_count ?? null,
+    comment_count: a.comment_count ?? null
   }));
 
   const response = await fetch(`${SUPABASE_URL}/rest/v1/articles`, {
