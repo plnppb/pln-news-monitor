@@ -1175,8 +1175,8 @@ function renderCard(a, i) {
       : `<div class="card-resume" style="font-style:italic;color:var(--muted)">${(a.description||'').replace(/<[^>]+>/g,'').substring(0,150)||'—'}</div>`;
 
   const spkHtml = [
-    a._spkInternal ? `<span class="spk-badge internal">🏢 ${a._spkInternal}</span>` : '',
-    a._spkExternal ? `<span class="spk-badge external">👤 ${a._spkExternal}</span>` : ''
+    a._spkInternal ? `<span class="spk-badge internal">🏢 ${a._spkInternal}${a._fromDB ? ` <span onclick="clearSpokesperson(${gi},'internal')" style="cursor:pointer;font-weight:700;margin-left:4px;" title="Hapus kalau nama ini salah/hasil karangan AI">✕</span>` : ''}</span>` : '',
+    a._spkExternal ? `<span class="spk-badge external">👤 ${a._spkExternal}${a._fromDB ? ` <span onclick="clearSpokesperson(${gi},'eksternal')" style="cursor:pointer;font-weight:700;margin-left:4px;" title="Hapus kalau nama ini salah/hasil karangan AI">✕</span>` : ''}</span>` : ''
   ].filter(Boolean).join('');
 
   return `<div class="article-card ${tc}" id="card-${gi}">
@@ -1208,6 +1208,27 @@ function renderCard(a, i) {
     ${resumeHtml}
     ${spkHtml ? `<div class="card-footer">${spkHtml}</div>` : ''}
   </div>`;
+}
+
+async function clearSpokesperson(idx, type) {
+  const a = allArticles[idx];
+  if (!a) return;
+  if (!confirm(`Hapus nama spokesperson ${type} ini? Pakai ini kalau namanya salah/hasil karangan AI.`)) return;
+  try {
+    const resp = await fetch('/api/articles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'clear-spokesperson', url: a.url, type })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Gagal hapus');
+    if (type === 'internal') { a._spkInternal = ''; }
+    else { a._spkExternal = ''; }
+    updateCard(idx);
+    showToast('✅ Nama spokesperson dihapus');
+  } catch (e) {
+    showToast('⚠ Gagal hapus: ' + e.message);
+  }
 }
 
 async function changeArticleTone(idx, newTone) {
