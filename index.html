@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
   :root {
     --bg:#f0f4f8; --surface:#fff; --surface2:#f8fafc; --border:#e2e8f0; --border2:#cbd5e1;
@@ -552,6 +553,14 @@
         <div style="overflow-x:auto;">
           <div id="dashTrend" style="display:flex;gap:3px;align-items:flex-end;height:90px;min-width:400px;"></div>
           <div id="dashTrendLabels" style="display:flex;gap:3px;margin-top:4px;min-width:400px;"></div>
+        </div>
+      </div>
+
+      <!-- Trend Tonalitas Harian -->
+      <div class="dash-card dash-full">
+        <h4>📊 Tren Tonalitas Harian (Positif / Negatif / Netral)</h4>
+        <div style="height:260px;">
+          <canvas id="dashToneTrendChart"></canvas>
         </div>
       </div>
 
@@ -2347,6 +2356,52 @@ async function renderDashboard() {
     const dt = new Date(d);
     return `<div style="flex:1;font-size:9px;color:var(--muted);min-width:4px;">${dt.getDate()}/${dt.getMonth()+1}</div>`;
   }).join('');
+
+  // Tren Tonalitas Harian (bar chart bertumpuk: positif/negatif/netral)
+  const toneByDay = {};
+  days.forEach(d => toneByDay[d] = { positif: 0, negatif: 0, netral: 0 });
+  articles.forEach(a => {
+    const d = a.publishedAt?.split('T')[0];
+    if (!d || toneByDay[d] === undefined) return;
+    if (!a._analyzed) return; // belum dianalisis, jangan dihitung sebagai netral
+    const t = a._tone;
+    if (t === 'positif' || t === 'negatif' || t === 'netral') toneByDay[d][t]++;
+  });
+  const toneChartLabels = days.map(d => {
+    const dt = new Date(d);
+    return `${dt.getDate()}/${dt.getMonth() + 1}`;
+  });
+  const toneChartData = {
+    positif: days.map(d => toneByDay[d].positif),
+    negatif: days.map(d => toneByDay[d].negatif),
+    netral: days.map(d => toneByDay[d].netral)
+  };
+  if (window._toneTrendChart) window._toneTrendChart.destroy();
+  const toneCtx = document.getElementById('dashToneTrendChart');
+  if (toneCtx) {
+    window._toneTrendChart = new Chart(toneCtx, {
+      type: 'bar',
+      data: {
+        labels: toneChartLabels,
+        datasets: [
+          { label: 'Positif', data: toneChartData.positif, backgroundColor: '#22c55e' },
+          { label: 'Negatif', data: toneChartData.negatif, backgroundColor: '#ef4444' },
+          { label: 'Netral', data: toneChartData.netral, backgroundColor: '#94a3b8' }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { stacked: true, ticks: { autoSkip: true, maxTicksLimit: 15, font: { size: 9 } } },
+          y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+        },
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }
+        }
+      }
+    });
+  }
 
   // Top Media
   const mediaCounts = {};
