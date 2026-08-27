@@ -48,12 +48,20 @@ Field "tone" di atas menilai artikel SECARA KESELURUHAN, BUKAN sikap orang yang 
 Contoh: artikel soal keluhan warga (tone artikel = NEGATIF) tapi GM PLN dikutip menjelaskan solusi dengan tenang → sikap GM tersebut = NETRAL atau POSITIF, BUKAN otomatis negatif hanya karena muncul di artikel negatif.
 Kalau tidak ada spokesperson di kategori itu, isi stance dengan string kosong.
 
+ATURAN WAJIB PENULISAN NAMA SPOKESPERSON:
+1. HARUS ada NAMA ORANG SPESIFIK (nama depan+belakang). Kalau artikel cuma nyebut jabatan/kolektif tanpa nama jelas ("Manajemen PLN", "pihak PLN", "manajer terkait"), KOSONGKAN field itu — JANGAN isi dengan istilah kolektif/jabatan doang.
+2. Format SATU orang: "Nama Lengkap|Jabatan pada artikel ini" — pakai tanda pipe (|) memisahkan nama dan jabatan, BUKAN koma.
+3. Format LEBIH DARI SATU orang: pisahkan tiap orang dengan titik-koma (;). JANGAN PERNAH gabung dua nama pakai kata "dan" dalam satu entri — masing-masing orang harus jadi entri "Nama|Jabatan" sendiri, dipisah ";".
+   Contoh benar: "Alfons Manibui|Anggota Komisi XII DPR RI;Cheroline Chrisye Makalew|Anggota Komisi XII DPR RI"
+   Contoh SALAH (jangan begini): "Alfons Manibui dan Cheroline Chrisye Makalew|Anggota Komisi XII DPR RI"
+4. Tulis jabatan SESUAI KONTEKS ARTIKEL INI — kalau orang itu dikutip bukan dalam kapasitas jabatan struktural PLN-nya (misal sebagai ketua panitia acara), tulis jabatan itu, bukan jabatan struktural default dia.
+
 ## FORMAT RESPONS (JSON saja, tanpa teks lain, tanpa markdown):
 {
   "tone": "positif" | "negatif" | "netral",
-  "spokesperson_internal": "Nama, Jabatan PLN (kosongkan jika tidak ada, pisah semicolon jika lebih dari satu)",
+  "spokesperson_internal": "Nama|Jabatan (kosongkan jika tidak ada nama spesifik, pisah pakai ; jika lebih dari satu orang)",
   "spokesperson_internal_stance": "positif" | "negatif" | "netral" | "" (sikap pernyataan spokesperson internal itu sendiri, bukan tone artikel),
-  "spokesperson_eksternal": "Nama, Jabatan non-PLN (kosongkan jika tidak ada, pisah semicolon jika lebih dari satu)",
+  "spokesperson_eksternal": "Nama|Jabatan (kosongkan jika tidak ada nama spesifik, pisah pakai ; jika lebih dari satu orang)",
   "spokesperson_eksternal_stance": "positif" | "negatif" | "netral" | "" (sikap pernyataan spokesperson eksternal itu sendiri, bukan tone artikel),
   "resume": "Ringkasan 2-3 kalimat dalam Bahasa Indonesia yang menjelaskan isi berita secara objektif"
 }`;
