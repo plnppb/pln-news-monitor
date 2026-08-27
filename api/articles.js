@@ -258,11 +258,63 @@ async function handlePin(req, res) {
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         'Prefer': 'resolution=ignore-duplicates,return=representation'
       },
-      body: JSON.stringify([{ article_url, article_title, article_source, article_published_at }])
+      body: JSON.stringify([{
+        article_url, article_title, article_source, article_published_at,
+        articles: [{ url: article_url, title: article_title, source: article_source, published_at: article_published_at }]
+      }])
     });
     const data = await response.json();
     if (!response.ok) return res.status(response.status).json({ error: JSON.stringify(data) });
     return res.status(200).json({ success: true, followup: data[0] || null, alreadyExists: !data.length });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+// ===== POST mode=merge-followups: gabung 2 tiket jadi satu (misal beberapa media
+// muat berita yang sama tentang satu kejadian) =====
+async function handleMergeFollowups(req, res) {
+  const { sourceId, targetId } = req.body || {};
+  if (!sourceId || !targetId || sourceId === targetId) {
+    return res.status(400).json({ error: 'sourceId dan targetId (harus berbeda) wajib diisi' });
+  }
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/followups?id=in.(${sourceId},${targetId})&select=*`, {
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    const rows = await resp.json();
+    const source = rows.find(r => String(r.id) === String(sourceId));
+    const target = rows.find(r => String(r.id) === String(targetId));
+    if (!source || !target) return res.status(404).json({ error: 'Salah satu tiket tidak ditemukan' });
+
+    const seen = new Set();
+    const mergedArticles = [...(target.articles || []), ...(source.articles || [])].filter(a => {
+      if (!a?.url || seen.has(a.url)) return false;
+      seen.add(a.url);
+      return true;
+    });
+    const mergedNotes = [...(target.notes || []), ...(source.notes || [])]
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    const updResp = await fetch(`${SUPABASE_URL}/rest/v1/followups?id=eq.${targetId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({ articles: mergedArticles, notes: mergedNotes, updated_at: new Date().toISOString() })
+    });
+    const updData = await updResp.json();
+    if (!updResp.ok) return res.status(updResp.status).json({ error: JSON.stringify(updData) });
+
+    await fetch(`${SUPABASE_URL}/rest/v1/followups?id=eq.${sourceId}`, {
+      method: 'DELETE',
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+
+    return res.status(200).json({ success: true, followup: updData[0] });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -435,6 +487,7 @@ module.exports = async function handler(req, res) {
     if (mode === 'unpin') return handleUnpin(req, res);
     if (mode === 'update-status') return handleUpdateStatus(req, res);
     if (mode === 'add-note') return handleAddNote(req, res);
+    if (mode === 'merge-followups') return handleMergeFollowups(req, res);
     if (mode === 'update-tone') return handleUpdateTone(req, res);
     if (mode === 'clear-spokesperson') return handleClearSpokesperson(req, res);
     return res.status(400).json({ error: 'mode tidak dikenal' });
