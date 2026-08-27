@@ -5,6 +5,10 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 const GNEWSIO_API_KEY = process.env.GNEWSIO_API_KEY;
+const REDDIT_CLIENT_ID = process.env.REDDIT_CLIENT_ID;
+const REDDIT_CLIENT_SECRET = process.env.REDDIT_CLIENT_SECRET;
+const REDDIT_USER_AGENT = process.env.REDDIT_USER_AGENT || 'web:pln-news-monitor:v1.0';
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
 // Semua kabupaten/kota di wilayah kerja PLN UIW Papua & Papua Barat, mencakup
 // 6 provinsi hasil pemekaran (Papua, Papua Barat, Papua Tengah, Papua Pegunungan,
@@ -24,7 +28,7 @@ const PAPUA_REGION_TERMS = [
   // Papua Selatan
   'merauke', 'boven digoel', 'mappi', 'asmat',
   // Papua (induk)
-  'jayapura', 'keerom', 'sarmi', 'biak', 'supiori', 'waropen', 'mamberamo raya',
+  'jayapura', 'keerom', 'sarmi', 'biak', 'supiori', 'waropen', 'mamberamo raya', 'yapen', 'kepulauan yapen',
 ];
 
 function matchesPapuaRegion(text) {
@@ -197,7 +201,93 @@ async function fetchFromGNewsIo(keyword) {
   }
 }
 
-// ==================== SAVE (tanpa analisis — biar cepat & tidak kena rate limit Gemini) ====================
+// ==================== REDDIT (Fase 2: OAuth app-only, gratis, cukup untuk skala kecil-menengah) ====================
+let redditTokenCache = { token: null, expiresAt: 0 };
+
+async function getRedditToken() {
+  if (!REDDIT_CLIENT_ID || !REDDIT_CLIENT_SECRET) return null;
+  if (redditTokenCache.token && Date.now() < redditTokenCache.expiresAt) return redditTokenCache.token;
+  try {
+    const basicAuth = Buffer.from(`${REDDIT_CLIENT_ID}:${REDDIT_CLIENT_SECRET}`).toString('base64');
+    const response = await fetch('https://www.reddit.com/api/v1/access_token', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${basicAuth}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': REDDIT_USER_AGENT
+      },
+      body: 'grant_type=client_credentials',
+      signal: AbortSignal.timeout(8000)
+    });
+    const data = await response.json();
+    if (!data.access_token) return null;
+    redditTokenCache = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 60) * 1000 };
+    return data.access_token;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function fetchFromReddit(keyword) {
+  if (!REDDIT_CLIENT_ID || !REDDIT_CLIENT_SECRET) return { articles: [], error: 'REDDIT_CLIENT_ID/SECRET tidak diset' };
+  try {
+    const token = await getRedditToken();
+    if (!token) return { articles: [], error: 'Gagal ambil token Reddit (cek client id/secret)' };
+    const url = `https://oauth.reddit.com/search?q=${encodeURIComponent(keyword)}&sort=new&limit=25&t=month&raw_json=1`;
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}`, 'User-Agent': REDDIT_USER_AGENT },
+      signal: AbortSignal.timeout(8000)
+    });
+    const data = await response.json();
+    const children = data?.data?.children || [];
+    return {
+      articles: children.map(c => {
+        const p = c.data;
+        return {
+          title: p.title,
+          url: `https://www.reddit.com${p.permalink}`,
+          source: `Reddit r/${p.subreddit}`,
+          published_at: new Date(p.created_utc * 1000).toISOString(),
+          description: (p.selftext || '').substring(0, 500)
+        };
+      }),
+      error: null
+    };
+  } catch (e) {
+    return { articles: [], error: 'Reddit exception: ' + e.message };
+  }
+}
+
+// ==================== YOUTUBE (Fase 3: YouTube Data API v3, gratis 10.000 unit/hari) ====================
+async function fetchFromYouTube(keyword) {
+  if (!YOUTUBE_API_KEY) return { articles: [], error: 'YOUTUBE_API_KEY tidak diset' };
+  try {
+    const publishedAfter = (() => {
+      const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString();
+    })();
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=date&maxResults=25&relevanceLanguage=id&regionCode=ID&publishedAfter=${publishedAfter}&q=${encodeURIComponent(keyword)}&key=${YOUTUBE_API_KEY}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      return { articles: [], error: `YouTube ${response.status}: ${data.error?.message || 'unknown error'}` };
+    }
+    const items = data.items || [];
+    return {
+      articles: items.map(v => ({
+        title: v.snippet.title,
+        url: `https://www.youtube.com/watch?v=${v.id.videoId}`,
+        source: `YouTube - ${v.snippet.channelTitle}`,
+        published_at: v.snippet.publishedAt,
+        description: (v.snippet.description || '').substring(0, 500)
+      })),
+      error: null
+    };
+  } catch (e) {
+    return { articles: [], error: 'YouTube exception: ' + e.message };
+  }
+}
+
+
 // PENTING: crawl.js SENGAJA tidak memanggil Gemini sama sekali. Artikel disimpan
 // dengan tone/resume kosong, lalu disapu & dianalisis belakangan oleh
 // api/analyze-batch.js (yang punya jeda antar-request sesuai rate limit Gemini).
@@ -314,6 +404,60 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({
         success: true, source: 'radar', saved,
         funnel: { mentah: rawTotal, lolos_filter_papua: combined.length, tersimpan_baru: saved }
+      });
+    }
+
+    // ===== MODE: REDDIT (Fase 2) =====
+    if (source === 'reddit') {
+      const redditRes = await fetchFromReddit(keyword);
+      let combined = redditRes.articles;
+      const rawTotal = combined.length;
+
+      combined = combined.filter(a => {
+        const text = (a.title + ' ' + a.description).toLowerCase();
+        return keywordMatch(text, keywords);
+      });
+      const afterKeywordFilter = combined.length;
+
+      const seenUrls = new Set();
+      combined = combined.filter(a => {
+        if (seenUrls.has(a.url)) return false;
+        seenUrls.add(a.url);
+        return true;
+      });
+
+      const saved = await saveToSupabase(combined, keyword);
+      return res.status(200).json({
+        success: true, source: 'reddit', saved: saved.saved,
+        error: redditRes.error,
+        funnel: { mentah: rawTotal, lolos_kata_kunci: afterKeywordFilter, tersimpan_baru: saved.saved }
+      });
+    }
+
+    // ===== MODE: YOUTUBE (Fase 3) =====
+    if (source === 'youtube') {
+      const ytRes = await fetchFromYouTube(keyword);
+      let combined = ytRes.articles;
+      const rawTotal = combined.length;
+
+      combined = combined.filter(a => {
+        const text = (a.title + ' ' + a.description).toLowerCase();
+        return keywordMatch(text, keywords);
+      });
+      const afterKeywordFilter = combined.length;
+
+      const seenUrls = new Set();
+      combined = combined.filter(a => {
+        if (seenUrls.has(a.url)) return false;
+        seenUrls.add(a.url);
+        return true;
+      });
+
+      const saved = await saveToSupabase(combined, keyword);
+      return res.status(200).json({
+        success: true, source: 'youtube', saved: saved.saved,
+        error: ytRes.error,
+        funnel: { mentah: rawTotal, lolos_kata_kunci: afterKeywordFilter, tersimpan_baru: saved.saved }
       });
     }
 
