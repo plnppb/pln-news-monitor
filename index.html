@@ -1579,6 +1579,15 @@ function getToneBadgeHtml(tone) {
   return '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#f1f5f9;color:var(--muted);">Belum dianalisis</span>';
 }
 
+function formatCount(n) {
+  if (n === null || n === undefined) return '—';
+  n = Number(n);
+  if (isNaN(n)) return '—';
+  if (n >= 1000000) return (n / 1000000).toFixed(1).replace('.0', '').replace('.', ',') + 'jt';
+  if (n >= 1000) return (n / 1000).toFixed(1).replace('.0', '').replace('.', ',') + 'rb';
+  return String(n);
+}
+
 async function loadYoutubeMentions() {
   const el = document.getElementById('youtubeGrid');
   el.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:20px;">⏳ Memuat...</div>';
@@ -1595,12 +1604,19 @@ async function loadYoutubeMentions() {
       const thumb = vid ? `https://img.youtube.com/vi/${vid}/mqdefault.jpg` : '';
       const channel = (a.source || '').replace(/^YouTube\s*-\s*/, '');
       const date = a.published_at ? new Date(a.published_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+      const hasStats = a.view_count !== null && a.view_count !== undefined;
       return `
       <a href="${a.url}" target="_blank" rel="noopener" class="card" style="display:block;overflow:hidden;text-decoration:none;color:inherit;">
         ${thumb ? `<img src="${thumb}" style="width:100%;aspect-ratio:16/9;object-fit:cover;display:block;" loading="lazy"/>` : ''}
         <div style="padding:10px 12px;">
           <div style="font-size:13px;font-weight:600;color:var(--text);line-height:1.4;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${a.title || 'Tanpa judul'}</div>
-          <div style="font-size:11px;color:var(--accent2);font-weight:600;margin-bottom:4px;">${channel}</div>
+          <div style="font-size:11px;color:var(--accent2);font-weight:600;margin-bottom:6px;">${channel}</div>
+          ${hasStats ? `
+          <div style="display:flex;gap:10px;font-size:11px;color:var(--muted);margin-bottom:6px;">
+            <span title="Views">▶ ${formatCount(a.view_count)}</span>
+            <span title="Likes">👍 ${formatCount(a.like_count)}</span>
+            <span title="Komentar">💬 ${formatCount(a.comment_count)}</span>
+          </div>` : ''}
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <span style="font-size:11px;color:var(--muted);">${date}</span>
             ${getToneBadgeHtml(a.tone)}
