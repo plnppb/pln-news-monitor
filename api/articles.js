@@ -50,11 +50,12 @@ Kalau tidak ada spokesperson di kategori itu, isi stance dengan string kosong.
 
 ATURAN WAJIB PENULISAN NAMA SPOKESPERSON:
 1. HARUS ada NAMA ORANG SPESIFIK (nama depan+belakang). Kalau artikel cuma nyebut jabatan/kolektif tanpa nama jelas ("Manajemen PLN", "pihak PLN", "manajer terkait"), KOSONGKAN field itu — JANGAN isi dengan istilah kolektif/jabatan doang.
-2. Format SATU orang: "Nama Lengkap|Jabatan pada artikel ini" — pakai tanda pipe (|) memisahkan nama dan jabatan, BUKAN koma.
-3. Format LEBIH DARI SATU orang: pisahkan tiap orang dengan titik-koma (;). JANGAN PERNAH gabung dua nama pakai kata "dan" dalam satu entri — masing-masing orang harus jadi entri "Nama|Jabatan" sendiri, dipisah ";".
+2. **JANGAN PERNAH MENGARANG ATAU MENEBAK NAMA.** Nama yang kamu tulis WAJIB benar-benar tertulis KATA PER KATA di teks judul/deskripsi yang diberikan di bawah. Kalau teksnya cuma bilang "PLN memutuskan..." atau semacamnya TANPA menyebut nama orang sama sekali, KOSONGKAN field spokesperson — meskipun secara logika kamu bisa menebak siapa yang biasanya menjabat itu. Mengarang nama yang tidak ada di teks adalah kesalahan FATAL karena bisa salah mengutip orang sungguhan.
+3. Format SATU orang: "Nama Lengkap|Jabatan pada artikel ini" — pakai tanda pipe (|) memisahkan nama dan jabatan, BUKAN koma.
+4. Format LEBIH DARI SATU orang: pisahkan tiap orang dengan titik-koma (;). JANGAN PERNAH gabung dua nama pakai kata "dan" dalam satu entri — masing-masing orang harus jadi entri "Nama|Jabatan" sendiri, dipisah ";".
    Contoh benar: "Alfons Manibui|Anggota Komisi XII DPR RI;Cheroline Chrisye Makalew|Anggota Komisi XII DPR RI"
    Contoh SALAH (jangan begini): "Alfons Manibui dan Cheroline Chrisye Makalew|Anggota Komisi XII DPR RI"
-4. Tulis jabatan SESUAI KONTEKS ARTIKEL INI — kalau orang itu dikutip bukan dalam kapasitas jabatan struktural PLN-nya (misal sebagai ketua panitia acara), tulis jabatan itu, bukan jabatan struktural default dia.
+5. Tulis jabatan SESUAI KONTEKS ARTIKEL INI — kalau orang itu dikutip bukan dalam kapasitas jabatan struktural PLN-nya (misal sebagai ketua panitia acara), tulis jabatan itu, bukan jabatan struktural default dia.
 
 ## FORMAT RESPONS (JSON saja, tanpa teks lain, tanpa markdown):
 {
@@ -385,6 +386,35 @@ async function handleUpdateTone(req, res) {
   }
 }
 
+// ===== POST mode=clear-spokesperson: hapus nama spokesperson yang salah/hasil karangan AI =====
+async function handleClearSpokesperson(req, res) {
+  const { url, type } = req.body || {};
+  if (!url || !['internal', 'eksternal'].includes(type)) {
+    return res.status(400).json({ error: 'url dan type (internal/eksternal) wajib diisi' });
+  }
+  const patch = type === 'internal'
+    ? { spokesperson_internal: '', spokesperson_internal_stance: '' }
+    : { spokesperson_eksternal: '', spokesperson_eksternal_stance: '' };
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?url=eq.${encodeURIComponent(url)}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify(patch)
+    });
+    const data = await response.json();
+    if (!response.ok) return res.status(response.status).json({ error: JSON.stringify(data) });
+    if (!data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
+    return res.status(200).json({ success: true, article: data[0] });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -406,6 +436,7 @@ module.exports = async function handler(req, res) {
     if (mode === 'update-status') return handleUpdateStatus(req, res);
     if (mode === 'add-note') return handleAddNote(req, res);
     if (mode === 'update-tone') return handleUpdateTone(req, res);
+    if (mode === 'clear-spokesperson') return handleClearSpokesperson(req, res);
     return res.status(400).json({ error: 'mode tidak dikenal' });
   }
 
