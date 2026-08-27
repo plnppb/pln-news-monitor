@@ -8,7 +8,26 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script>
+  // Loader Chart.js dengan fallback CDN otomatis kalau CDN utama gagal/lambat (misal jaringan kantor tidak stabil)
+  window._chartLoadPromise = new Promise(function(resolve) {
+    function tryLoad(src, next) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = function() { resolve(true); };
+      s.onerror = function() {
+        if (next) tryLoad(next.src, next.next);
+        else resolve(false);
+      };
+      document.head.appendChild(s);
+    }
+    tryLoad(
+      'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js',
+      { src: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js',
+        next: { src: 'https://unpkg.com/chart.js@4.4.4/dist/chart.umd.min.js', next: null } }
+    );
+  });
+</script>
 <style>
   :root {
     --bg:#f0f4f8; --surface:#fff; --surface2:#f8fafc; --border:#e2e8f0; --border2:#cbd5e1;
@@ -2268,6 +2287,7 @@ async function loadFromDB() {
 }
 
 async function renderDashboard() {
+  if (window._chartLoadPromise) await window._chartLoadPromise;
   if (!dashAllArticles.length) {
     dashAllArticles = await loadFromDB();
   }
@@ -2380,8 +2400,15 @@ async function renderDashboard() {
     netral: days.map(d => toneByDay[d].netral)
   };
   if (window._toneTrendChart) window._toneTrendChart.destroy();
+  let chartJsMissing = false;
   try {
     const toneCtx = document.getElementById('dashToneTrendChart');
+    if (typeof Chart === 'undefined') {
+      chartJsMissing = true;
+      if (toneCtx && toneCtx.parentElement) {
+        toneCtx.parentElement.innerHTML = '<p style="color:#ef4444;font-size:12px;padding:12px;">⚠ Gagal memuat library grafik dari semua sumber (cek koneksi internet), coba muat ulang halaman.</p>';
+      }
+    } else {
     const totalAnalyzedInPeriod = toneChartData.positif.reduce((a,b)=>a+b,0)
       + toneChartData.negatif.reduce((a,b)=>a+b,0)
       + toneChartData.netral.reduce((a,b)=>a+b,0);
@@ -2416,6 +2443,7 @@ async function renderDashboard() {
           }
         }
       });
+    }
     }
   } catch (e) {
     console.error('Gagal render Tren Tonalitas Harian:', e);
