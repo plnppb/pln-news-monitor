@@ -218,7 +218,9 @@ async function saveToSupabase(articles, keyword) {
     tone: '',
     resume: '',
     spokesperson_internal: '',
-    spokesperson_eksternal: ''
+    spokesperson_internal_stance: '',
+    spokesperson_eksternal: '',
+    spokesperson_eksternal_stance: ''
   }));
 
   const response = await fetch(`${SUPABASE_URL}/rest/v1/articles`, {

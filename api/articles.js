@@ -43,11 +43,18 @@ const TONE_PROMPT = `Kamu adalah analis media senior untuk PT PLN (Persero) UIW 
 - "PLN teken MoU" / "PLN gandeng X" (PLN sebagai inisiator) → POSITIF
 - "PLN diminta teken MoU" / "X minta PLN kerja sama" → NETRAL
 
+## PENTING SOAL SPOKESPERSON
+Field "tone" di atas menilai artikel SECARA KESELURUHAN, BUKAN sikap orang yang dikutip. Kalau ada narasumber (spokesperson) yang dikutip, nilai TERPISAH bagaimana SIKAP/PERNYATAAN orang itu sendiri di dalam kutipannya — apakah pernyataannya sendiri terdengar membela/positif, mengkritik/negatif, atau sekadar informatif/netral. Ini WAJIB dinilai independen dari tone keseluruhan artikel.
+Contoh: artikel soal keluhan warga (tone artikel = NEGATIF) tapi GM PLN dikutip menjelaskan solusi dengan tenang → sikap GM tersebut = NETRAL atau POSITIF, BUKAN otomatis negatif hanya karena muncul di artikel negatif.
+Kalau tidak ada spokesperson di kategori itu, isi stance dengan string kosong.
+
 ## FORMAT RESPONS (JSON saja, tanpa teks lain, tanpa markdown):
 {
   "tone": "positif" | "negatif" | "netral",
   "spokesperson_internal": "Nama, Jabatan PLN (kosongkan jika tidak ada, pisah semicolon jika lebih dari satu)",
+  "spokesperson_internal_stance": "positif" | "negatif" | "netral" | "" (sikap pernyataan spokesperson internal itu sendiri, bukan tone artikel),
   "spokesperson_eksternal": "Nama, Jabatan non-PLN (kosongkan jika tidak ada, pisah semicolon jika lebih dari satu)",
+  "spokesperson_eksternal_stance": "positif" | "negatif" | "netral" | "" (sikap pernyataan spokesperson eksternal itu sendiri, bukan tone artikel),
   "resume": "Ringkasan 2-3 kalimat dalam Bahasa Indonesia yang menjelaskan isi berita secara objektif"
 }`;
 
@@ -159,7 +166,9 @@ async function handleSave(req, res) {
       tone: analysis.error ? '' : (analysis.tone || 'netral'),
       resume: analysis.error ? '' : (analysis.resume || ''),
       spokesperson_internal: analysis.error ? '' : (analysis.spokesperson_internal || ''),
-      spokesperson_eksternal: analysis.error ? '' : (analysis.spokesperson_eksternal || '')
+      spokesperson_internal_stance: analysis.error ? '' : (analysis.spokesperson_internal_stance || ''),
+      spokesperson_eksternal: analysis.error ? '' : (analysis.spokesperson_eksternal || ''),
+      spokesperson_eksternal_stance: analysis.error ? '' : (analysis.spokesperson_eksternal_stance || '')
     };
 
     const response = await fetch(`${SUPABASE_URL}/rest/v1/articles`, {
@@ -342,6 +351,32 @@ async function handleListRadar(req, res) {
   }
 }
 
+// ===== POST mode=update-tone: koreksi manual tone (kalau AI salah nilai) =====
+async function handleUpdateTone(req, res) {
+  const { url, tone } = req.body || {};
+  if (!url || !['positif', 'negatif', 'netral'].includes(tone)) {
+    return res.status(400).json({ error: 'url dan tone (positif/negatif/netral) wajib diisi' });
+  }
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?url=eq.${encodeURIComponent(url)}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({ tone })
+    });
+    const data = await response.json();
+    if (!response.ok) return res.status(response.status).json({ error: JSON.stringify(data) });
+    if (!data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
+    return res.status(200).json({ success: true, article: data[0] });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -362,8 +397,8 @@ module.exports = async function handler(req, res) {
     if (mode === 'unpin') return handleUnpin(req, res);
     if (mode === 'update-status') return handleUpdateStatus(req, res);
     if (mode === 'add-note') return handleAddNote(req, res);
-    if (mode === 'save') return handleSave(req, res);
-    return res.status(400).json({ error: 'mode wajib diisi: "check" atau "save"' });
+    if (mode === 'update-tone') return handleUpdateTone(req, res);
+    return res.status(400).json({ error: 'mode tidak dikenal' });
   }
 
   return res.status(405).json({ error: 'Method not allowed' });

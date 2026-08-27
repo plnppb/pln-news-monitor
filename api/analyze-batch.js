@@ -8,7 +8,7 @@ const GEMINI_KEYS = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY |
 
 const TONE_PROMPT = `Kamu adalah analis media senior untuk PT PLN (Persero) UIW Papua & Papua Barat. Tugasmu menganalisis artikel berita dan menentukan tonalitas dari sudut pandang citra PLN UIW Papua & Papua Barat.
 
-PANDUAN TONALITAS:
+PANDUAN TONALITAS (untuk field "tone" — ini menilai KESELURUHAN artikel):
 NEGATIF: keluhan warga, kritik DPR/DPRD (kata: soroti, desak, tegur), gangguan listrik (kata: padam, mati lampu, keluhkan, protes), kecelakaan PLN, tarif naik yang meresahkan.
 POSITIF: pencapaian konkret PLN (berhasil, capai, sukses), penghargaan, elektrifikasi desa, MoU di mana PLN sebagai inisiator, program EBT/SPKLU.
 NETRAL: komitmen tanpa bukti, kegiatan rutin, permintaan biasa, pemeliharaan terencana, berita kebijakan umum.
@@ -20,8 +20,12 @@ KASUS KHUSUS:
 - "DPR/DPRD soroti" = NEGATIF
 - "PLN teken MoU" (PLN inisiator) = POSITIF
 
+PENTING SOAL SPOKESPERSON: field "tone" di atas menilai artikel SECARA KESELURUHAN, BUKAN sikap orang yang dikutip. Kalau ada narasumber (spokesperson) yang dikutip, nilai TERPISAH bagaimana SIKAP/PERNYATAAN orang itu sendiri di dalam kutipannya — apakah pernyataannya sendiri terdengar membela/positif, mengkritik/negatif, atau sekadar informatif/netral. Ini WAJIB dinilai independen dari tone keseluruhan artikel.
+Contoh: artikel soal keluhan warga (tone artikel = NEGATIF) tapi GM PLN dikutip menjelaskan solusi dengan tenang → sikap GM tersebut = NETRAL atau POSITIF, BUKAN otomatis negatif hanya karena muncul di artikel negatif.
+Kalau tidak ada spokesperson di kategori itu, isi stance dengan string kosong.
+
 Balas HANYA JSON ini tanpa teks lain:
-{"tone":"netral","spokesperson_internal":"","spokesperson_eksternal":"","resume":"ringkasan 2-3 kalimat"}`;
+{"tone":"netral","spokesperson_internal":"","spokesperson_internal_stance":"","spokesperson_eksternal":"","spokesperson_eksternal_stance":"","resume":"ringkasan 2-3 kalimat"}`;
 
 async function analyzeArticle(title, description) {
   if (!GEMINI_KEYS.length) return { error: 'NO_API_KEY' };
@@ -128,7 +132,9 @@ module.exports = async function handler(req, res) {
           tone: result.tone,
           resume: result.resume || '',
           spokesperson_internal: result.spokesperson_internal || '',
-          spokesperson_eksternal: result.spokesperson_eksternal || ''
+          spokesperson_internal_stance: result.spokesperson_internal_stance || '',
+          spokesperson_eksternal: result.spokesperson_eksternal || '',
+          spokesperson_eksternal_stance: result.spokesperson_eksternal_stance || ''
         })
       });
 
