@@ -1575,10 +1575,21 @@ function renderKanban() {
       el.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:10px;">Kosong</div>';
       return;
     }
-    el.innerHTML = items.map(f => `
+    el.innerHTML = items.map(f => {
+      const arts = (f.articles && f.articles.length) ? f.articles : [{ url: f.article_url, title: f.article_title, source: f.article_source, published_at: f.article_published_at }];
+      const artsHtml = arts.map(a => `
+        <div style="margin-bottom:4px;">
+          <span style="font-size:10px;color:var(--accent2);font-weight:600;">${a.source || ''}${a.published_at ? ' · ' + new Date(a.published_at).toLocaleDateString('id-ID') : ''}</span>
+          <div style="font-weight:600;font-size:13px;"><a href="${a.url}" target="_blank" rel="noopener">${a.title}</a></div>
+        </div>
+      `).join('');
+
+      const otherTickets = allFollowups.filter(o => o.id !== f.id);
+
+      return `
       <div class="card" style="padding:10px 12px;">
-        <div style="font-size:11px;color:var(--accent2);font-weight:600;">${f.article_source || ''} · ${f.article_published_at ? new Date(f.article_published_at).toLocaleDateString('id-ID') : ''}</div>
-        <div style="font-weight:600;font-size:13px;margin-top:2px;"><a href="${f.article_url}" target="_blank" rel="noopener">${f.article_title}</a></div>
+        ${arts.length > 1 ? `<div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:4px;">📎 ${arts.length} artikel digabung dalam tiket ini</div>` : ''}
+        ${artsHtml}
 
         <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px;max-height:140px;overflow-y:auto;">
           ${(f.notes || []).map(n => `
@@ -1593,6 +1604,18 @@ function renderKanban() {
           <button class="btn-manage" style="padding:4px 8px;font-size:11px;" onclick="addFollowupNote(${f.id})">+</button>
         </div>
 
+        ${otherTickets.length ? `
+        <div style="display:flex;gap:4px;margin-top:8px;">
+          <select id="merge-target-${f.id}" style="flex:1;font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:6px;">
+            <option value="">Gabung ke tiket lain, kalau kejadiannya sama...</option>
+            ${otherTickets.map(o => {
+              const t = (o.articles && o.articles[0]?.title) || o.article_title || '(tanpa judul)';
+              return `<option value="${o.id}">${t.substring(0,50)}${t.length>50?'…':''}</option>`;
+            }).join('')}
+          </select>
+          <button class="btn-manage" style="padding:4px 8px;font-size:11px;" onclick="mergeFollowupTicket(${f.id})">🔗 Gabung</button>
+        </div>` : ''}
+
         <div style="display:flex;gap:4px;margin-top:8px;">
           <select onchange="moveFollowupStatus(${f.id}, this.value)" style="flex:1;font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:6px;">
             <option value="baru" ${f.status==='baru'?'selected':''}>Baru</option>
@@ -1602,8 +1625,29 @@ function renderKanban() {
           <button class="btn-danger-sm" onclick="unpinFollowup(${f.id})" title="Hapus dari Tindak Lanjut">🗑</button>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   });
+}
+
+async function mergeFollowupTicket(sourceId) {
+  const select = document.getElementById(`merge-target-${sourceId}`);
+  const targetId = select?.value;
+  if (!targetId) return showToast('⚠ Pilih dulu tiket tujuan gabungnya');
+  if (!confirm('Gabung tiket ini ke tiket yang dipilih? Tiket ini akan hilang, semua artikel & catatannya pindah ke tiket tujuan.')) return;
+  try {
+    const resp = await fetch('/api/articles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'merge-followups', sourceId, targetId })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Gagal gabung tiket');
+    await loadFollowups();
+    showToast('✅ Tiket berhasil digabung');
+  } catch (e) {
+    showToast('⚠ Gagal gabung: ' + e.message);
+  }
 }
 
 async function moveFollowupStatus(id, status) {
