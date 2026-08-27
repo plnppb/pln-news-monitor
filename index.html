@@ -2274,6 +2274,9 @@ async function renderDashboard() {
 
   let articles = filterByPeriod(dashAllArticles);
 
+  // Render Daftar Artikel lebih dulu, supaya tetap tampil walau section statistik lain di bawah error
+  try { renderDashArticleList(articles); } catch (e) { console.error('Gagal render Daftar Artikel:', e); }
+
   const now = new Date();
   const thisMonth = now.getMonth();
   const thisYear = now.getFullYear();
@@ -2377,32 +2380,39 @@ async function renderDashboard() {
     netral: days.map(d => toneByDay[d].netral)
   };
   if (window._toneTrendChart) window._toneTrendChart.destroy();
-  const toneCtx = document.getElementById('dashToneTrendChart');
-  if (toneCtx) {
-    window._toneTrendChart = new Chart(toneCtx, {
-      type: 'bar',
-      data: {
-        labels: toneChartLabels,
-        datasets: [
-          { label: 'Positif', data: toneChartData.positif, backgroundColor: '#22c55e' },
-          { label: 'Negatif', data: toneChartData.negatif, backgroundColor: '#ef4444' },
-          { label: 'Netral', data: toneChartData.netral, backgroundColor: '#94a3b8' }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { stacked: true, ticks: { autoSkip: true, maxTicksLimit: 15, font: { size: 9 } } },
-          y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+  try {
+    const toneCtx = document.getElementById('dashToneTrendChart');
+    if (toneCtx) {
+      const existingChart = Chart.getChart(toneCtx);
+      if (existingChart) existingChart.destroy();
+      window._toneTrendChart = new Chart(toneCtx, {
+        type: 'bar',
+        data: {
+          labels: toneChartLabels,
+          datasets: [
+            { label: 'Positif', data: toneChartData.positif, backgroundColor: '#22c55e' },
+            { label: 'Negatif', data: toneChartData.negatif, backgroundColor: '#ef4444' },
+            { label: 'Netral', data: toneChartData.netral, backgroundColor: '#94a3b8' }
+          ]
         },
-        plugins: {
-          legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { stacked: true, ticks: { autoSkip: true, maxTicksLimit: 15, font: { size: 9 } } },
+            y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+          },
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }
+          }
         }
-      }
-    });
+      });
+    }
+  } catch (e) {
+    console.error('Gagal render Tren Tonalitas Harian:', e);
   }
 
+  try {
   // Top Media
   const mediaCounts = {};
   articles.forEach(a => {
@@ -2484,9 +2494,9 @@ async function renderDashboard() {
         return `<div class="top-day-item"><span>${['🥇','🥈','🥉','4️⃣','5️⃣'][i]} ${label}</span><strong>${cnt}</strong></div>`;
       }).join('')
     : '<p style="font-size:12px;color:var(--muted);">Belum ada data</p>';
-
-  // Render daftar artikel
-  renderDashArticleList(articles);
+  } catch (e) {
+    console.error('Gagal render statistik dashboard (Top Media/Kalender/Keyword/Top Days):', e);
+  }
 }
 
 // ---- DASHBOARD ARTICLE LIST ----
