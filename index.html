@@ -643,7 +643,7 @@
   <!-- PANEL SPOKESPERSON RECAP -->
   <div id="panel-spokesperson-wrap" style="display:none;">
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#1e40af;line-height:1.6;">
-      🎙 <strong>Penting:</strong> "Sikap Pernyataan Sendiri" di bawah ini menilai apa yang <em>diucapkan orang itu sendiri</em> di dalam kutipannya — bukan tone keseluruhan artikel tempat dia muncul. Seorang GM bisa saja dikutip dengan tenang di artikel yang temanya negatif (misal soal keluhan warga); itu <strong>tidak</strong> otomatis membuat GM tersebut "sumber negatif". Kalau kolom ini kosong/"belum dianalisis", artinya artikel itu belum sempat dianalisis ulang dengan prompt baru — jalankan <code>reanalyzeAll()</code> lagi untuk melengkapinya.
+      🎙 Dikelompokkan berdasarkan <strong>nama orang</strong> (jabatan cuma info tambahan, karena bisa beda-beda tiap artikel). "Sikap pernyataannya sendiri" menilai apa yang <em>diucapkan orang itu sendiri</em> di kutipannya — bukan tone keseluruhan artikel tempat dia muncul. Kalau muncul catatan ⚠ kuning, itu artinya ada perbedaan berarti antara sikap orang tersebut dengan tone artikelnya — dibaca dulu sebelum menyimpulkan siapa "sumber" sentimen tertentu. Kalau banyak yang masih "belum dianalisis", jalankan <code>reanalyzeAll()</code> lagi.
     </div>
     <div id="spokespersonLoading" style="text-align:center;color:var(--muted);padding:20px;">⏳ Memuat data...</div>
     <div id="spokespersonContent" style="display:none;">
@@ -1332,6 +1332,56 @@ async function saveArticleToDB(idx) {
 
 // ==================== RADAR PAPUA ====================
 // ==================== SPOKESPERSON RECAP ====================
+// Pisah satu field spokesperson mentah jadi daftar {name, title} per orang.
+// Format baru: "Nama|Jabatan;Nama2|Jabatan2". Format lama (sebelum prompt
+// diperketat): "Nama, Jabatan" — tetap didukung sebagai fallback biar data
+// lama yang belum sempat dianalisis ulang tetap kebaca.
+function parseSpokespersonField(raw) {
+  if (!raw) return [];
+  let entries = raw.split(';').map(s => s.trim()).filter(Boolean);
+
+  // Fallback: kalau ada entri lama yang masih kegabung pakai kata "dan"
+  // (bug versi sebelumnya), coba pecah jadi dua.
+  const expanded = [];
+  entries.forEach(entry => {
+    const danMatch = entry.match(/^(.+?)\s+dan\s+(.+?)(\||,)\s*(.+)$/i);
+    if (danMatch) {
+      expanded.push(`${danMatch[1].trim()}${danMatch[3]}${danMatch[4].trim()}`);
+      expanded.push(`${danMatch[2].trim()}${danMatch[3]}${danMatch[4].trim()}`);
+    } else {
+      expanded.push(entry);
+    }
+  });
+
+  return expanded.map(entry => {
+    let name, title;
+    if (entry.includes('|')) {
+      const idx = entry.indexOf('|');
+      name = entry.substring(0, idx).trim();
+      title = entry.substring(idx + 1).trim();
+    } else if (entry.includes(',')) {
+      const idx = entry.indexOf(',');
+      name = entry.substring(0, idx).trim();
+      title = entry.substring(idx + 1).trim();
+    } else {
+      name = entry.trim();
+      title = '';
+    }
+    return { name, title };
+  }).filter(e => e.name);
+}
+
+function normalizeNameKey(name) {
+  return name.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+function normalizeTitleKey(title) {
+  return title.toLowerCase().trim()
+    .replace(/\bgm\b/g, 'general manager')
+    .replace(/&/g, 'dan')
+    .replace(/\s+/g, ' ');
+}
+
 async function loadSpokespersonRecap() {
   document.getElementById('spokespersonLoading').style.display = 'block';
   document.getElementById('spokespersonContent').style.display = 'none';
@@ -1356,51 +1406,70 @@ async function loadSpokespersonRecap() {
   function aggregate(nameField, stanceField) {
     const map = {};
     allArts.forEach(a => {
-      const names = (a[nameField] || '').split(';').map(s => s.trim()).filter(Boolean);
-      if (!names.length) return;
+      const entries = parseSpokespersonField(a[nameField]);
+      if (!entries.length) return;
       const ownStance = (a[stanceField] || '').trim();
       const articleTone = (a.tone || '').trim();
-      names.forEach(name => {
-        if (!map[name]) {
-          map[name] = { count: 0, own: { positif: 0, negatif: 0, netral: 0, kosong: 0 }, art: { positif: 0, negatif: 0, netral: 0, kosong: 0 } };
+
+      entries.forEach(({ name, title }) => {
+        const key = normalizeNameKey(name);
+        if (!key) return;
+        if (!map[key]) {
+          map[key] = { displayName: name, count: 0, titles: {}, own: { positif: 0, negatif: 0, netral: 0, kosong: 0 }, mismatch: 0 };
         }
-        map[name].count++;
-        map[name].own[ownStance || 'kosong'] = (map[name].own[ownStance || 'kosong'] || 0) + 1;
-        map[name].art[articleTone || 'kosong'] = (map[name].art[articleTone || 'kosong'] || 0) + 1;
+        const d = map[key];
+        d.count++;
+        if (title) {
+          const tKey = normalizeTitleKey(title);
+          if (!d.titles[tKey]) d.titles[tKey] = { display: title, count: 0 };
+          d.titles[tKey].count++;
+        }
+        d.own[ownStance || 'kosong'] = (d.own[ownStance || 'kosong'] || 0) + 1;
+        if (ownStance && articleTone && ownStance !== articleTone) d.mismatch++;
       });
     });
-    return Object.entries(map).sort((a, b) => b[1].count - a[1].count);
+    return Object.values(map).sort((a, b) => b.count - a.count);
   }
 
   function renderList(list, elId) {
     const el = document.getElementById(elId);
     if (!list.length) {
-      el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px;">Belum ada data narasumber yang teridentifikasi.</div>';
+      el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px;">Belum ada narasumber dengan nama spesifik yang teridentifikasi.</div>';
       return;
     }
-    el.innerHTML = list.map(([name, d]) => `
-      <div class="card" style="padding:12px 16px;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;">
-          <div style="font-weight:700;font-size:14px;">${name}</div>
-          <div style="font-size:12px;color:var(--muted);">Muncul di ${d.count} artikel</div>
-        </div>
-        <div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap;">
-          <div>
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:600;">Sikap Pernyataan Sendiri</div>
-            <div style="font-size:12px;margin-top:2px;">
-              ✅ Positif: ${d.own.positif||0} &nbsp; ❌ Negatif: ${d.own.negatif||0} &nbsp; ➖ Netral: ${d.own.netral||0}
-              ${d.own.kosong ? ` &nbsp; <span style="color:var(--muted)">❔ Belum dianalisis: ${d.own.kosong}</span>` : ''}
-            </div>
+    el.innerHTML = list.map(d => {
+      const titleParts = Object.values(d.titles)
+        .sort((a, b) => b.count - a.count)
+        .map(t => `${t.count}x sebagai ${t.display}`)
+        .join(', ');
+
+      const ownParts = [];
+      if (d.own.positif) ownParts.push(`${d.own.positif}x Positif`);
+      if (d.own.negatif) ownParts.push(`${d.own.negatif}x Negatif`);
+      if (d.own.netral) ownParts.push(`${d.own.netral}x Netral`);
+      const ownSummary = ownParts.length ? ownParts.join(', ') : '—';
+
+      const mismatchNote = d.mismatch > 0
+        ? `<div style="margin-top:8px;font-size:11px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;">
+             ⚠ ${d.mismatch} dari ${d.count} kemunculan, sikap pernyataannya sendiri BERBEDA dari tone keseluruhan artikel tempat dia dikutip (misal: artikel bertone negatif, tapi pernyataan orang ini sendiri netral/positif). Jangan langsung simpulkan orang ini "sumber sentimen negatif" hanya dari tone artikelnya.
+           </div>`
+        : '';
+
+      return `
+        <div class="card" style="padding:12px 16px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+            <div style="font-weight:700;font-size:14px;">${d.displayName}</div>
+            <div style="font-size:12px;color:var(--muted);white-space:nowrap;">Muncul di ${d.count} artikel</div>
           </div>
-          <div style="opacity:0.6;">
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:600;">(pembanding) Tone Artikel Keseluruhan</div>
-            <div style="font-size:12px;margin-top:2px;">
-              ✅ ${d.art.positif||0} &nbsp; ❌ ${d.art.negatif||0} &nbsp; ➖ ${d.art.netral||0}
-            </div>
+          ${titleParts ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">${titleParts}</div>` : ''}
+          <div style="font-size:12px;margin-top:8px;">
+            <span style="font-weight:600;">Sikap pernyataannya sendiri:</span> ${ownSummary}
+            ${d.own.kosong ? ` <span style="color:var(--muted)">(${d.own.kosong} belum dianalisis)</span>` : ''}
           </div>
+          ${mismatchNote}
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 
   renderList(aggregate('spokesperson_internal', 'spokesperson_internal_stance'), 'spkInternalList');
