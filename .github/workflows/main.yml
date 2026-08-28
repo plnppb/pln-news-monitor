@@ -101,13 +101,25 @@ jobs:
         run: |
           SECRET="${{ secrets.CRON_SECRET }}"
           echo "Running analyze batch (batch kecil, biar tidak timeout 10 detik Vercel Hobby)..."
+          OFFSET=0
           for i in $(seq 1 150); do
-            RESULT=$(curl -s "https://pln-news-monitor.vercel.app/api/analyze-batch?secret=${SECRET}&batch=2")
-            echo "Batch $i: $RESULT"
+            RESULT=$(curl -s "https://pln-news-monitor.vercel.app/api/analyze-batch?secret=${SECRET}&batch=2&offset=${OFFSET}")
+            echo "Batch $i (offset=$OFFSET): $RESULT"
             if echo "$RESULT" | grep -q "Semua artikel sudah dianalisis"; then
               echo "Semua artikel sudah dianalisis, berhenti."
               break
             fi
+            NOTE=$(echo "$RESULT" | jq -r '.note // empty' 2>/dev/null)
+            if [ "$NOTE" = "Selesai" ]; then
+              echo "Selesai, berhenti."
+              break
+            fi
+            NEXT_OFFSET=$(echo "$RESULT" | jq -r '.nextOffset // empty' 2>/dev/null)
+            if [ -z "$NEXT_OFFSET" ]; then
+              echo "Gagal baca nextOffset dari respons, berhenti supaya tidak stuck."
+              break
+            fi
+            OFFSET=$NEXT_OFFSET
             sleep 9
           done
           echo "Analyze done!"
