@@ -8,26 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script>
-  // Loader Chart.js dengan fallback CDN otomatis kalau CDN utama gagal/lambat (misal jaringan kantor tidak stabil)
-  window._chartLoadPromise = new Promise(function(resolve) {
-    function tryLoad(src, next) {
-      var s = document.createElement('script');
-      s.src = src;
-      s.onload = function() { resolve(true); };
-      s.onerror = function() {
-        if (next) tryLoad(next.src, next.next);
-        else resolve(false);
-      };
-      document.head.appendChild(s);
-    }
-    tryLoad(
-      'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js',
-      { src: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js',
-        next: { src: 'https://unpkg.com/chart.js@4.4.4/dist/chart.umd.min.js', next: null } }
-    );
-  });
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root {
     --bg:#f0f4f8; --surface:#fff; --surface2:#f8fafc; --border:#e2e8f0; --border2:#cbd5e1;
@@ -426,6 +407,48 @@
     </div>
   </div>
 
+  <!-- MODAL KELOLA KATA KUNCI -->
+  <div class="modal-overlay" id="keywordModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>🔑 Kelola Kata Kunci Auto-Crawl</h3>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button id="keywordSyncBtn" onclick="refreshKeywordsFromDB()" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;">🔄 Refresh dari DB</button>
+          <button class="modal-close" onclick="closeKeywordModal()">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div style="background:#fefce8;border:1px solid #fde047;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#854d0e;line-height:1.6;">
+          ⚠ Tiap kata kunci nambah beban ke kuota harian NewsAPI/GNews.io (kira-kira gratisan ~100 request/hari, dan tiap kata kunci dipanggil 4x/hari lewat auto-crawl). Kalau kata kunci kebanyakan, bisa kena limit — tambahkan secukupnya yang emang kepake.
+        </div>
+        <input type="text" id="keywordSearchInput" placeholder="🔍 Cari kata kunci..."
+          style="width:100%;padding:7px 10px;margin-bottom:10px;font-size:12px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text2);"
+          oninput="renderKeywordTable()"/>
+        <table class="rss-table" id="keywordTable">
+          <thead>
+            <tr>
+              <th>Kata Kunci</th>
+              <th>Status</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="keywordTableBody"></tbody>
+        </table>
+
+        <div class="add-feed-form">
+          <h4>+ Tambah Kata Kunci Baru</h4>
+          <div class="add-feed-grid">
+            <input type="text" id="newKeywordInput" placeholder="contoh: listrik Yahukimo" onkeydown="if(event.key==='Enter')addKeyword()"/>
+          </div>
+          <button class="btn-add-feed" onclick="addKeyword()">+ Tambah</button>
+        </div>
+      </div>
+      <div class="modal-footer" style="font-size:11px;color:var(--muted)">
+        <span id="keywordFooterCount"></span> · Perubahan di sini langsung tersimpan ke database, dipakai auto-crawl siklus berikutnya (tiap 6 jam).
+      </div>
+    </div>
+  </div>
+
     <!-- FILTERS -->
     <div>
       <div class="sidebar-label">Filter Tone</div>
@@ -450,6 +473,15 @@
       <div class="sidebar-label">Tindak Lanjut</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Artikel yang di-📌 tampil di tab "🗂 Tindak Lanjut" di atas.</div>
       <button class="btn btn-ghost" style="width:100%" onclick="switchTab('followups')">🗂 Buka Tindak Lanjut</button>
+    </div>
+
+    <!-- KEYWORD MANAGER (bottom) -->
+    <div>
+      <div class="rss-section-header">
+        <div class="sidebar-label" style="margin-bottom:0">Kata Kunci Auto-Crawl</div>
+        <button class="btn-manage" onclick="openKeywordModal()">⚙ Kelola</button>
+      </div>
+      <div id="keywordStatusList" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;font-size:11px;color:var(--muted);">Klik "Kelola" untuk lihat semua kata kunci yang dipakai auto-crawl.</div>
     </div>
 
     <!-- RSS MANAGER (bottom) -->
@@ -479,7 +511,6 @@
       <button id="tab-radar" onclick="switchTab('radar')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📡 Radar Papua</button>
       <button id="tab-followups" onclick="switchTab('followups')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🗂 Tindak Lanjut</button>
       <button id="tab-spokesperson" onclick="switchTab('spokesperson')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🎙 Spokesperson</button>
-      <button id="tab-youtube" onclick="switchTab('youtube')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🎥 YouTube</button>
     </div>
 
     <!-- PANEL MONITOR -->
@@ -683,14 +714,6 @@
     </div>
   </div><!-- end panel-spokesperson-wrap -->
 
-  <!-- PANEL YOUTUBE -->
-  <div id="panel-youtube-wrap" style="display:none;">
-    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#991b1b;">
-      🎥 Video YouTube yang menyebut PLN/listrik Papua & sekitarnya. Diperbarui otomatis tiap 6 jam, ikut dianalisis tone-nya sama seperti berita.
-    </div>
-    <div id="youtubeGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;"></div>
-  </div><!-- end panel-youtube-wrap -->
-
   </div><!-- end .main -->
 </div><!-- end .app -->
 <div class="toast" id="toast"></div>
@@ -816,6 +839,158 @@ async function openRssModal() {
     showToast('⚠ Gagal muat dari server, menampilkan cache terakhir: ' + e.message);
   }
   renderRssTable();
+}
+
+// ==================== KELOLA KATA KUNCI AUTO-CRAWL ====================
+let allKeywords = [];
+
+async function fetchKeywordsFromDB() {
+  const resp = await fetch('/api/feeds?resource=keywords');
+  if (!resp.ok) throw new Error('Gagal ambil data dari server (' + resp.status + ')');
+  const data = await resp.json();
+  if (data.error) throw new Error(data.error);
+  return data.keywords || [];
+}
+
+async function openKeywordModal() {
+  document.getElementById('keywordModal').classList.add('show');
+  const tbody = document.getElementById('keywordTableBody');
+  tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px">⏳ Memuat...</td></tr>';
+  try {
+    allKeywords = await fetchKeywordsFromDB();
+  } catch (e) {
+    showToast('⚠ Gagal memuat kata kunci: ' + e.message);
+  }
+  renderKeywordTable();
+  renderKeywordSidebar();
+}
+
+function closeKeywordModal() {
+  document.getElementById('keywordModal').classList.remove('show');
+}
+
+async function refreshKeywordsFromDB() {
+  const btn = document.getElementById('keywordSyncBtn');
+  btn.textContent = '⏳ Memuat...';
+  btn.disabled = true;
+  try {
+    allKeywords = await fetchKeywordsFromDB();
+    renderKeywordTable();
+    renderKeywordSidebar();
+    showToast('✅ Data disegarkan dari server');
+  } catch (e) {
+    showToast('⚠ Gagal memuat: ' + e.message);
+  }
+  btn.textContent = '🔄 Refresh dari DB';
+  btn.disabled = false;
+}
+
+function renderKeywordSidebar() {
+  const el = document.getElementById('keywordStatusList');
+  if (!allKeywords.length) {
+    el.innerHTML = 'Belum ada kata kunci. Klik "Kelola" untuk tambah.';
+    return;
+  }
+  const activeCount = allKeywords.filter(k => k.enabled).length;
+  el.innerHTML = `${activeCount} kata kunci aktif dari ${allKeywords.length} total.`;
+}
+
+function renderKeywordTable() {
+  const tbody = document.getElementById('keywordTableBody');
+  if (!tbody) return;
+  const footerCount = document.getElementById('keywordFooterCount');
+  if (footerCount) {
+    const activeN = allKeywords.filter(k => k.enabled).length;
+    footerCount.textContent = `${activeN} kata kunci aktif dari ${allKeywords.length} total`;
+  }
+  if (!allKeywords.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px">Belum ada kata kunci. Tambahkan di bawah.</td></tr>';
+    return;
+  }
+  const q = (document.getElementById('keywordSearchInput')?.value || '').trim().toLowerCase();
+  const rows = allKeywords
+    .map((k, i) => ({ k, i }))
+    .filter(({ k }) => !q || k.keyword.toLowerCase().includes(q));
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px">Tidak ada yang cocok dengan "${q}".</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(({ k, i }) => `
+    <tr>
+      <td>${k.keyword}</td>
+      <td>
+        <button class="rss-toggle ${k.enabled?'on':''}" onclick="toggleKeyword(${i})" title="${k.enabled?'Aktif':'Nonaktif'}"></button>
+      </td>
+      <td class="rss-actions">
+        <button class="btn-danger-sm" onclick="removeKeyword(${i})">🗑 Hapus</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function addKeyword() {
+  const input = document.getElementById('newKeywordInput');
+  const keyword = input.value.trim();
+  if (!keyword) return showToast('⚠ Isi dulu kata kuncinya');
+  if (allKeywords.some(k => k.keyword.toLowerCase() === keyword.toLowerCase())) {
+    return showToast('⚠ Kata kunci ini sudah ada');
+  }
+  try {
+    const resp = await fetch('/api/feeds?resource=keywords', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keywords: [keyword] })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Gagal simpan ke server');
+    allKeywords = await fetchKeywordsFromDB();
+    renderKeywordTable();
+    renderKeywordSidebar();
+    input.value = '';
+    showToast(`✅ "${keyword}" ditambahkan`);
+  } catch (e) {
+    showToast('⚠ Gagal tambah: ' + e.message);
+  }
+}
+
+async function toggleKeyword(i) {
+  const k = allKeywords[i];
+  const newEnabled = !k.enabled;
+  try {
+    const resp = await fetch('/api/feeds?resource=keywords', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ originalKeyword: k.keyword, enabled: newEnabled })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Gagal update');
+    k.enabled = newEnabled;
+    renderKeywordTable();
+    renderKeywordSidebar();
+  } catch (e) {
+    showToast('⚠ Gagal ubah status: ' + e.message);
+  }
+}
+
+async function removeKeyword(i) {
+  const k = allKeywords[i];
+  if (!confirm(`Hapus kata kunci "${k.keyword}"? Ini berlaku untuk semua orang.`)) return;
+  try {
+    const resp = await fetch('/api/feeds?resource=keywords', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keyword: k.keyword })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Gagal hapus');
+    allKeywords = await fetchKeywordsFromDB();
+    renderKeywordTable();
+    renderKeywordSidebar();
+    showToast(`🗑 "${k.keyword}" dihapus`);
+  } catch (e) {
+    showToast('⚠ Gagal hapus: ' + e.message);
+  }
 }
 
 async function refreshRssFromDB() {
@@ -1563,73 +1738,7 @@ async function loadRadarPapua() {
   }
 }
 
-// ==================== YOUTUBE MENTIONS ====================
-function getYoutubeVideoId(url) {
-  try {
-    const u = new URL(url);
-    return u.searchParams.get('v') || '';
-  } catch (e) { return ''; }
-}
-
-function getToneBadgeHtml(tone) {
-  const t = tone || '';
-  if (t === 'positif') return '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#dcfce7;color:var(--pos);">Positif</span>';
-  if (t === 'negatif') return '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#fee2e2;color:var(--neg);">Negatif</span>';
-  if (t === 'netral') return '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#f1f5f9;color:var(--neu);">Netral</span>';
-  return '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#f1f5f9;color:var(--muted);">Belum dianalisis</span>';
-}
-
-function formatCount(n) {
-  if (n === null || n === undefined) return '—';
-  n = Number(n);
-  if (isNaN(n)) return '—';
-  if (n >= 1000000) return (n / 1000000).toFixed(1).replace('.0', '').replace('.', ',') + 'jt';
-  if (n >= 1000) return (n / 1000).toFixed(1).replace('.0', '').replace('.', ',') + 'rb';
-  return String(n);
-}
-
-async function loadYoutubeMentions() {
-  const el = document.getElementById('youtubeGrid');
-  el.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:20px;">⏳ Memuat...</div>';
-  try {
-    const resp = await fetch('/api/articles?source=' + encodeURIComponent('YouTube') + '&limit=200');
-    const data = await resp.json();
-    const articles = data.articles || [];
-    if (!articles.length) {
-      el.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:20px;">Belum ada video yang kecrawl. Video diperbarui otomatis tiap 6 jam (butuh YOUTUBE_API_KEY sudah diset di Vercel).</div>';
-      return;
-    }
-    el.innerHTML = articles.map(a => {
-      const vid = getYoutubeVideoId(a.url);
-      const thumb = vid ? `https://img.youtube.com/vi/${vid}/mqdefault.jpg` : '';
-      const channel = (a.source || '').replace(/^YouTube\s*-\s*/, '');
-      const date = a.published_at ? new Date(a.published_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-      const hasStats = a.view_count !== null && a.view_count !== undefined;
-      return `
-      <a href="${a.url}" target="_blank" rel="noopener" class="card" style="display:block;overflow:hidden;text-decoration:none;color:inherit;">
-        ${thumb ? `<img src="${thumb}" style="width:100%;aspect-ratio:16/9;object-fit:cover;display:block;" loading="lazy"/>` : ''}
-        <div style="padding:10px 12px;">
-          <div style="font-size:13px;font-weight:600;color:var(--text);line-height:1.4;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${a.title || 'Tanpa judul'}</div>
-          <div style="font-size:11px;color:var(--accent2);font-weight:600;margin-bottom:6px;">${channel}</div>
-          ${hasStats ? `
-          <div style="display:flex;gap:10px;font-size:11px;color:var(--muted);margin-bottom:6px;">
-            <span title="Views">▶ ${formatCount(a.view_count)}</span>
-            <span title="Likes">👍 ${formatCount(a.like_count)}</span>
-            <span title="Komentar">💬 ${formatCount(a.comment_count)}</span>
-          </div>` : ''}
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:11px;color:var(--muted);">${date}</span>
-            ${getToneBadgeHtml(a.tone)}
-          </div>
-        </div>
-      </a>`;
-    }).join('');
-  } catch (e) {
-    el.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:#dc2626;padding:20px;">⚠ Gagal memuat: ${e.message}</div>`;
-  }
-}
-
-
+// ==================== TINDAK LANJUT (FOLLOW-UPS) ====================
 let allFollowups = [];
 
 async function pinArticle(idx) {
@@ -2256,7 +2365,7 @@ function renderPagination() {
 
 // ==================== TAB SYSTEM ====================
 function switchTab(tab) {
-  const tabs = ['monitor', 'dashboard', 'radar', 'followups', 'spokesperson', 'youtube'];
+  const tabs = ['monitor', 'dashboard', 'radar', 'followups', 'spokesperson'];
   tabs.forEach(t => {
     const btn = document.getElementById(`tab-${t}`);
     btn.style.color = tab === t ? 'var(--accent)' : 'var(--muted)';
@@ -2270,7 +2379,6 @@ function switchTab(tab) {
   if (tab === 'radar') loadRadarPapua();
   if (tab === 'followups') loadFollowups();
   if (tab === 'spokesperson') loadSpokespersonRecap();
-  if (tab === 'youtube') loadYoutubeMentions();
   // Scroll ke atas
   document.querySelector('.main').scrollTop = 0;
 }
@@ -2363,15 +2471,11 @@ async function loadFromDB() {
 }
 
 async function renderDashboard() {
-  if (window._chartLoadPromise) await window._chartLoadPromise;
   if (!dashAllArticles.length) {
     dashAllArticles = await loadFromDB();
   }
 
   let articles = filterByPeriod(dashAllArticles);
-
-  // Render Daftar Artikel lebih dulu, supaya tetap tampil walau section statistik lain di bawah error
-  try { renderDashArticleList(articles); } catch (e) { console.error('Gagal render Daftar Artikel:', e); }
 
   const now = new Date();
   const thisMonth = now.getMonth();
@@ -2476,60 +2580,36 @@ async function renderDashboard() {
     netral: days.map(d => toneByDay[d].netral)
   };
   if (window._toneTrendChart) window._toneTrendChart.destroy();
-  let chartJsMissing = false;
-  try {
-    const toneCtx = document.getElementById('dashToneTrendChart');
+  const toneCtx = document.getElementById('dashToneTrendChart');
+  if (toneCtx) {
     if (typeof Chart === 'undefined') {
-      chartJsMissing = true;
-      if (toneCtx && toneCtx.parentElement) {
-        toneCtx.parentElement.innerHTML = '<p style="color:#ef4444;font-size:12px;padding:12px;">⚠ Gagal memuat library grafik dari semua sumber (cek koneksi internet), coba muat ulang halaman.</p>';
-      }
+      toneCtx.parentElement.innerHTML = '<div style="text-align:center;color:#dc2626;padding:20px;font-size:12px;">⚠ Library grafik (Chart.js) gagal dimuat. Coba refresh halaman, atau cek koneksi internet.</div>';
     } else {
-    const totalAnalyzedInPeriod = toneChartData.positif.reduce((a,b)=>a+b,0)
-      + toneChartData.negatif.reduce((a,b)=>a+b,0)
-      + toneChartData.netral.reduce((a,b)=>a+b,0);
-    if (toneCtx && !totalAnalyzedInPeriod) {
-      const existingChart = Chart.getChart(toneCtx);
-      if (existingChart) existingChart.destroy();
-      if (toneCtx.parentElement) {
-        toneCtx.parentElement.innerHTML = '<p style="color:var(--muted);font-size:12px;padding:12px;">Belum ada artikel yang dianalisis AI pada periode ini.</p>';
-      }
-    } else if (toneCtx) {
-      const existingChart = Chart.getChart(toneCtx);
-      if (existingChart) existingChart.destroy();
-      window._toneTrendChart = new Chart(toneCtx, {
-        type: 'bar',
-        data: {
-          labels: toneChartLabels,
-          datasets: [
-            { label: 'Positif', data: toneChartData.positif, backgroundColor: '#22c55e' },
-            { label: 'Negatif', data: toneChartData.negatif, backgroundColor: '#ef4444' },
-            { label: 'Netral', data: toneChartData.netral, backgroundColor: '#94a3b8' }
-          ]
+    window._toneTrendChart = new Chart(toneCtx, {
+      type: 'bar',
+      data: {
+        labels: toneChartLabels,
+        datasets: [
+          { label: 'Positif', data: toneChartData.positif, backgroundColor: '#22c55e' },
+          { label: 'Negatif', data: toneChartData.negatif, backgroundColor: '#ef4444' },
+          { label: 'Netral', data: toneChartData.netral, backgroundColor: '#94a3b8' }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { stacked: true, ticks: { autoSkip: true, maxTicksLimit: 15, font: { size: 9 } } },
+          y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: { stacked: true, ticks: { autoSkip: true, maxTicksLimit: 15, font: { size: 9 } } },
-            y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
-          },
-          plugins: {
-            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }
-          }
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }
         }
-      });
-    }
-    }
-  } catch (e) {
-    console.error('Gagal render Tren Tonalitas Harian:', e);
-    const toneCtxErr = document.getElementById('dashToneTrendChart');
-    if (toneCtxErr && toneCtxErr.parentElement) {
-      toneCtxErr.parentElement.innerHTML = `<p style="color:#ef4444;font-size:12px;padding:12px;">⚠ Gagal memuat grafik: ${(e && e.message) || e}</p>`;
+      }
+    });
     }
   }
 
-  try {
   // Top Media
   const mediaCounts = {};
   articles.forEach(a => {
@@ -2611,9 +2691,9 @@ async function renderDashboard() {
         return `<div class="top-day-item"><span>${['🥇','🥈','🥉','4️⃣','5️⃣'][i]} ${label}</span><strong>${cnt}</strong></div>`;
       }).join('')
     : '<p style="font-size:12px;color:var(--muted);">Belum ada data</p>';
-  } catch (e) {
-    console.error('Gagal render statistik dashboard (Top Media/Kalender/Keyword/Top Days):', e);
-  }
+
+  // Render daftar artikel
+  renderDashArticleList(articles);
 }
 
 // ---- DASHBOARD ARTICLE LIST ----
@@ -2754,6 +2834,10 @@ function showToast(msg) {
 }
 
 initRssFeeds();
+(async () => {
+  try { allKeywords = await fetchKeywordsFromDB(); renderKeywordSidebar(); }
+  catch (e) { /* biarkan, sidebar akan tetap tampil pesan default */ }
+})();
 
 // Auto-load artikel dari database saat halaman dibuka
 async function autoLoadFromDB() {
@@ -2815,6 +2899,9 @@ setTimeout(autoLoadFromDB, 500);
 // Close modal on overlay click
 document.getElementById('rssModal').addEventListener('click', function(e) {
   if (e.target === this) closeRssModal();
+});
+document.getElementById('keywordModal').addEventListener('click', function(e) {
+  if (e.target === this) closeKeywordModal();
 });
 </script>
 </body>
