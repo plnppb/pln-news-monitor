@@ -31,33 +31,19 @@ jobs:
           SECRET="${{ secrets.CRON_SECRET }}"
           BASE="https://pln-news-monitor.vercel.app/api/crawl"
 
-          echo "Crawling external sources for multiple keywords..."
-          for KW in \
-            "PLN+Papua" \
-            "listrik+Papua" \
-            "PLN+Sorong" \
-            "listrik+Sorong" \
-            "PLN+Jayapura" \
-            "listrik+Jayapura" \
-            "PLN+Manokwari" \
-            "listrik+Manokwari" \
-            "PLN+Biak" \
-            "listrik+Biak" \
-            "PLN+Merauke" \
-            "listrik+Merauke" \
-            "PLN+Nabire" \
-            "listrik+Nabire" \
-            "PLN+Fakfak" \
-            "listrik+Fakfak" \
-            "PLN+Wamena" \
-            "listrik+Wamena" \
-            "PLN+Papua+Barat" \
-            "PLN+Papua+Selatan" \
-            "PLN+Papua+Tengah" \
-            "PLN+Papua+Pegunungan" \
-            ; do
+          echo "Mengambil daftar kata kunci aktif dari database..."
+          KEYWORDS=$(curl -s "https://pln-news-monitor.vercel.app/api/feeds?resource=keywords" | jq -r '.keywords[] | select(.enabled==true) | .keyword')
+
+          if [ -z "$KEYWORDS" ]; then
+            echo "Tidak ada kata kunci aktif di database, pakai default 'PLN Papua'"
+            KEYWORDS="PLN Papua"
+          fi
+
+          echo "$KEYWORDS" | while IFS= read -r KW; do
+            [ -z "$KW" ] && continue
+            ENCODED_KW=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$KW")
             echo "Keyword: $KW"
-            RESULT=$(curl -s "${BASE}?secret=${SECRET}&keyword=${KW}&source=external")
+            RESULT=$(curl -s "${BASE}?secret=${SECRET}&keyword=${ENCODED_KW}&source=external")
             echo "Result: $RESULT"
             sleep 4
           done
@@ -71,55 +57,17 @@ jobs:
           RESULT=$(curl -s "${BASE}?secret=${SECRET}&keyword=Papua&source=radar")
           echo "Radar Papua: $RESULT"
 
-      - name: Crawl YouTube (Fase 3)
-        run: |
-          SECRET="${{ secrets.CRON_SECRET }}"
-          BASE="https://pln-news-monitor.vercel.app/api/crawl"
-          echo "Crawling YouTube untuk beberapa keyword (dijaga di bawah kuota 10.000 unit/hari)..."
-          for KW in \
-            "PLN+Papua" \
-            "listrik+Papua" \
-            "PLN+Sorong" \
-            "PLN+Jayapura" \
-            "PLN+Manokwari" \
-            "PLN+Merauke" \
-            "PLN+Biak" \
-            "PLN+Wamena" \
-            "PLN+Nabire" \
-            "PLN+Papua+Barat+Daya" \
-            "PLN+Papua+Tengah" \
-            "PLN+Papua+Pegunungan" \
-            ; do
-            echo "Keyword: $KW"
-            RESULT=$(curl -s "${BASE}?secret=${SECRET}&keyword=${KW}&source=youtube")
-            echo "Result: $RESULT"
-            sleep 2
-          done
-          echo "YouTube crawl done!"
-
       - name: Analyze New Articles
         run: |
           SECRET="${{ secrets.CRON_SECRET }}"
           echo "Running analyze batch (batch kecil, biar tidak timeout 10 detik Vercel Hobby)..."
-          OFFSET=0
           for i in $(seq 1 150); do
-            RESULT=$(curl -s "https://pln-news-monitor.vercel.app/api/analyze-batch?secret=${SECRET}&batch=2&offset=${OFFSET}")
-            echo "Batch $i (offset=$OFFSET): $RESULT"
+            RESULT=$(curl -s "https://pln-news-monitor.vercel.app/api/analyze-batch?secret=${SECRET}&batch=2")
+            echo "Batch $i: $RESULT"
             if echo "$RESULT" | grep -q "Semua artikel sudah dianalisis"; then
               echo "Semua artikel sudah dianalisis, berhenti."
               break
             fi
-            NOTE=$(echo "$RESULT" | jq -r '.note // empty' 2>/dev/null)
-            if [ "$NOTE" = "Selesai" ]; then
-              echo "Selesai, berhenti."
-              break
-            fi
-            NEXT_OFFSET=$(echo "$RESULT" | jq -r '.nextOffset // empty' 2>/dev/null)
-            if [ -z "$NEXT_OFFSET" ]; then
-              echo "Gagal baca nextOffset dari respons, berhenti supaya tidak stuck."
-              break
-            fi
-            OFFSET=$NEXT_OFFSET
             sleep 9
           done
           echo "Analyze done!"
