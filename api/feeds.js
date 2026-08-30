@@ -7,17 +7,102 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // GET - ambil semua feeds dari DB (selalu sumber kebenaran, dipakai semua device)
+  const isKeywords = req.query.resource === 'keywords';
+
+  // GET - ambil semua feeds ATAU semua keyword dari DB
   if (req.method === 'GET') {
     try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/feeds?select=*&order=name.asc`, {
+      const table = isKeywords ? 'crawl_keywords' : 'feeds';
+      const order = isKeywords ? 'keyword.asc' : 'name.asc';
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*&order=${order}`, {
         headers: {
           'apikey': SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
         }
       });
       const data = await response.json();
-      return res.status(200).json({ feeds: data });
+      return res.status(200).json(isKeywords ? { keywords: data } : { feeds: data });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  // POST - tambah keyword baru (satu atau banyak)
+  if (req.method === 'POST' && isKeywords) {
+    const { keywords } = req.body;
+    if (!keywords || !keywords.length) {
+      return res.status(400).json({ error: 'No keywords provided' });
+    }
+    const rows = keywords.map(k => ({
+      keyword: (typeof k === 'string' ? k : k.keyword).trim(),
+      enabled: typeof k === 'string' ? true : (k.enabled !== false)
+    })).filter(r => r.keyword);
+
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/crawl_keywords?on_conflict=keyword`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Prefer': 'resolution=merge-duplicates,return=representation'
+        },
+        body: JSON.stringify(rows)
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        return res.status(response.status).json({ error: errText });
+      }
+      const saved = await response.json();
+      return res.status(200).json({ success: true, synced: saved.length, keywords: saved });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  // PATCH - update satu keyword (toggle enabled / ganti teks)
+  if (req.method === 'PATCH' && isKeywords) {
+    const { originalKeyword, keyword, enabled } = req.body;
+    if (!originalKeyword) return res.status(400).json({ error: 'originalKeyword wajib diisi' });
+    const patch = {};
+    if (keyword !== undefined) patch.keyword = keyword;
+    if (enabled !== undefined) patch.enabled = enabled;
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/crawl_keywords?keyword=eq.${encodeURIComponent(originalKeyword)}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(patch)
+      });
+      if (!response.ok) return res.status(response.status).json({ error: await response.text() });
+      const updated = await response.json();
+      if (!updated.length) return res.status(404).json({ error: 'Keyword tidak ditemukan' });
+      return res.status(200).json({ success: true, keyword: updated[0] });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  // DELETE - hapus satu keyword
+  if (req.method === 'DELETE' && isKeywords) {
+    const { keyword } = req.body;
+    if (!keyword) return res.status(400).json({ error: 'keyword wajib diisi' });
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/crawl_keywords?keyword=eq.${encodeURIComponent(keyword)}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Prefer': 'return=representation'
+        }
+      });
+      if (!response.ok) return res.status(response.status).json({ error: await response.text() });
+      const deleted = await response.json();
+      return res.status(200).json({ success: true, deleted: deleted.length });
     } catch (error) {
       return res.status(500).json({ error: error.message });
     }

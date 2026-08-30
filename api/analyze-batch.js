@@ -10,15 +10,18 @@ const TONE_PROMPT = `Kamu adalah analis media senior untuk PT PLN (Persero) UIW 
 
 PANDUAN TONALITAS (untuk field "tone" — ini menilai KESELURUHAN artikel):
 NEGATIF: keluhan warga, kritik DPR/DPRD (kata: soroti, desak, tegur), gangguan listrik (kata: padam, mati lampu, keluhkan, protes), kecelakaan PLN, tarif naik yang meresahkan.
-POSITIF: pencapaian konkret PLN (berhasil, capai, sukses), penghargaan, elektrifikasi desa, MoU di mana PLN sebagai inisiator, program EBT/SPKLU.
-NETRAL: komitmen tanpa bukti, kegiatan rutin, permintaan biasa, pemeliharaan terencana, berita kebijakan umum.
+POSITIF: pencapaian yang BENAR-BENAR signifikan/terukur — elektrifikasi wilayah yang sebelumnya belum teraliri listrik, penghargaan dari pihak eksternal independen (bukan klaim PLN sendiri), penurunan gangguan dengan angka konkret yang jelas, kolaborasi besar di mana PLN inisiator nyata.
+NETRAL: komitmen tanpa bukti, kegiatan rutin, permintaan biasa, pemeliharaan terencana, berita kebijakan umum, DAN siaran pers promosi rutin PLN sendiri (perpanjangan promo, edukasi/sosialisasi rutin, kunjungan kerja, laporan capaian rutin) — meskipun teksnya pakai kata "berhasil"/"capai"/"sukses", itu TETAP NETRAL kalau isinya cuma pengumuman rutin, bukan pencapaian luar biasa.
+
+PENTING SOAL BIAS: banyak artikel berasal dari siaran pers PLN sendiri yang rutin pakai kata "berhasil"/"capai"/"sukses" untuk kegiatan biasa. JANGAN otomatis menilai POSITIF hanya karena ada kata-kata itu — nilai dari SUBSTANSI dampaknya, bukan dari pilihan katanya. Kalau ragu antara POSITIF dan NETRAL untuk siaran pers rutin PLN, pilih NETRAL.
 
 KASUS KHUSUS:
 - "keluhkan pemadaman" atau "pemadaman bergilir" = NEGATIF
 - "kurangi durasi pemadaman X persen" = POSITIF  
 - "jadwalkan pemadaman pemeliharaan" = NETRAL
 - "DPR/DPRD soroti" = NEGATIF
-- "PLN teken MoU" (PLN inisiator) = POSITIF
+- "PLN teken MoU" (PLN inisiator, dampak nyata) = POSITIF
+- "PLN perpanjang/lanjutkan promo yang sudah ada" = NETRAL (bukan pencapaian baru)
 
 PENTING SOAL SPOKESPERSON: field "tone" di atas menilai artikel SECARA KESELURUHAN, BUKAN sikap orang yang dikutip. Kalau ada narasumber (spokesperson) yang dikutip, nilai TERPISAH bagaimana SIKAP/PERNYATAAN orang itu sendiri di dalam kutipannya — apakah pernyataannya sendiri terdengar membela/positif, mengkritik/negatif, atau sekadar informatif/netral. Ini WAJIB dinilai independen dari tone keseluruhan artikel.
 Contoh: artikel soal keluhan warga (tone artikel = NEGATIF) tapi GM PLN dikutip menjelaskan solusi dengan tenang → sikap GM tersebut = NETRAL atau POSITIF, BUKAN otomatis negatif hanya karena muncul di artikel negatif.
