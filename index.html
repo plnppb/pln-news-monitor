@@ -8,7 +8,26 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+  // Loader Chart.js dengan fallback CDN otomatis kalau CDN utama gagal/lambat (misal jaringan kantor tidak stabil)
+  window._chartLoadPromise = new Promise(function(resolve) {
+    function tryLoad(src, next) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = function() { resolve(true); };
+      s.onerror = function() {
+        if (next) tryLoad(next.src, next.next);
+        else resolve(false);
+      };
+      document.head.appendChild(s);
+    }
+    tryLoad(
+      'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js',
+      { src: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js',
+        next: { src: 'https://unpkg.com/chart.js@4.4.4/dist/chart.umd.min.js', next: null } }
+    );
+  });
+</script>
 <style>
   :root {
     --bg:#f0f4f8; --surface:#fff; --surface2:#f8fafc; --border:#e2e8f0; --border2:#cbd5e1;
@@ -515,6 +534,7 @@
       <button id="tab-radar" onclick="switchTab('radar')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📡 Radar Papua</button>
       <button id="tab-followups" onclick="switchTab('followups')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🗂 Tindak Lanjut</button>
       <button id="tab-spokesperson" onclick="switchTab('spokesperson')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🎙 Spokesperson</button>
+      <button id="tab-youtube" onclick="switchTab('youtube')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🎥 YouTube</button>
     </div>
 
     <!-- PANEL MONITOR -->
@@ -717,6 +737,14 @@
       <div id="spkExternalList" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
   </div><!-- end panel-spokesperson-wrap -->
+
+  <!-- PANEL YOUTUBE -->
+  <div id="panel-youtube-wrap" style="display:none;">
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#991b1b;">
+      🎥 Video YouTube yang menyebut PLN/listrik Papua & sekitarnya. Diperbarui otomatis tiap 6 jam, ikut dianalisis tone-nya sama seperti berita.
+    </div>
+    <div id="youtubeGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;"></div>
+  </div><!-- end panel-youtube-wrap -->
 
   </div><!-- end .main -->
 </div><!-- end .app -->
@@ -1742,7 +1770,73 @@ async function loadRadarPapua() {
   }
 }
 
-// ==================== TINDAK LANJUT (FOLLOW-UPS) ====================
+// ==================== YOUTUBE MENTIONS ====================
+function getYoutubeVideoId(url) {
+  try {
+    const u = new URL(url);
+    return u.searchParams.get('v') || '';
+  } catch (e) { return ''; }
+}
+
+function getToneBadgeHtml(tone) {
+  const t = tone || '';
+  if (t === 'positif') return '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#dcfce7;color:var(--pos);">Positif</span>';
+  if (t === 'negatif') return '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#fee2e2;color:var(--neg);">Negatif</span>';
+  if (t === 'netral') return '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#f1f5f9;color:var(--neu);">Netral</span>';
+  return '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#f1f5f9;color:var(--muted);">Belum dianalisis</span>';
+}
+
+function formatCount(n) {
+  if (n === null || n === undefined) return '—';
+  n = Number(n);
+  if (isNaN(n)) return '—';
+  if (n >= 1000000) return (n / 1000000).toFixed(1).replace('.0', '').replace('.', ',') + 'jt';
+  if (n >= 1000) return (n / 1000).toFixed(1).replace('.0', '').replace('.', ',') + 'rb';
+  return String(n);
+}
+
+async function loadYoutubeMentions() {
+  const el = document.getElementById('youtubeGrid');
+  el.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:20px;">⏳ Memuat...</div>';
+  try {
+    const resp = await fetch('/api/articles?source=' + encodeURIComponent('YouTube') + '&limit=200');
+    const data = await resp.json();
+    const articles = data.articles || [];
+    if (!articles.length) {
+      el.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:20px;">Belum ada video yang kecrawl. Video diperbarui otomatis tiap 6 jam (butuh YOUTUBE_API_KEY sudah diset di Vercel).</div>';
+      return;
+    }
+    el.innerHTML = articles.map(a => {
+      const vid = getYoutubeVideoId(a.url);
+      const thumb = vid ? `https://img.youtube.com/vi/${vid}/mqdefault.jpg` : '';
+      const channel = (a.source || '').replace(/^YouTube\s*-\s*/, '');
+      const date = a.published_at ? new Date(a.published_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+      const hasStats = a.view_count !== null && a.view_count !== undefined;
+      return `
+      <a href="${a.url}" target="_blank" rel="noopener" class="card" style="display:block;overflow:hidden;text-decoration:none;color:inherit;">
+        ${thumb ? `<img src="${thumb}" style="width:100%;aspect-ratio:16/9;object-fit:cover;display:block;" loading="lazy"/>` : ''}
+        <div style="padding:10px 12px;">
+          <div style="font-size:13px;font-weight:600;color:var(--text);line-height:1.4;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${a.title || 'Tanpa judul'}</div>
+          <div style="font-size:11px;color:var(--accent2);font-weight:600;margin-bottom:6px;">${channel}</div>
+          ${hasStats ? `
+          <div style="display:flex;gap:10px;font-size:11px;color:var(--muted);margin-bottom:6px;">
+            <span title="Views">▶ ${formatCount(a.view_count)}</span>
+            <span title="Likes">👍 ${formatCount(a.like_count)}</span>
+            <span title="Komentar">💬 ${formatCount(a.comment_count)}</span>
+          </div>` : ''}
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:11px;color:var(--muted);">${date}</span>
+            ${getToneBadgeHtml(a.tone)}
+          </div>
+        </div>
+      </a>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:#dc2626;padding:20px;">⚠ Gagal memuat: ${e.message}</div>`;
+  }
+}
+
+
 let allFollowups = [];
 
 async function pinArticle(idx) {
@@ -2394,7 +2488,7 @@ function renderPagination() {
 
 // ==================== TAB SYSTEM ====================
 function switchTab(tab) {
-  const tabs = ['monitor', 'dashboard', 'radar', 'followups', 'spokesperson'];
+  const tabs = ['monitor', 'dashboard', 'radar', 'followups', 'spokesperson', 'youtube'];
   tabs.forEach(t => {
     const btn = document.getElementById(`tab-${t}`);
     btn.style.color = tab === t ? 'var(--accent)' : 'var(--muted)';
@@ -2408,6 +2502,7 @@ function switchTab(tab) {
   if (tab === 'radar') loadRadarPapua();
   if (tab === 'followups') loadFollowups();
   if (tab === 'spokesperson') loadSpokespersonRecap();
+  if (tab === 'youtube') loadYoutubeMentions();
   // Scroll ke atas
   document.querySelector('.main').scrollTop = 0;
 }
@@ -2500,11 +2595,15 @@ async function loadFromDB() {
 }
 
 async function renderDashboard() {
+  if (window._chartLoadPromise) await window._chartLoadPromise;
   if (!dashAllArticles.length) {
     dashAllArticles = await loadFromDB();
   }
 
   let articles = filterByPeriod(dashAllArticles);
+
+  // Render Daftar Artikel lebih dulu, supaya tetap tampil walau section statistik lain di bawah error
+  try { renderDashArticleList(articles); } catch (e) { console.error('Gagal render Daftar Artikel:', e); }
 
   const now = new Date();
   const thisMonth = now.getMonth();
@@ -2609,36 +2708,60 @@ async function renderDashboard() {
     netral: days.map(d => toneByDay[d].netral)
   };
   if (window._toneTrendChart) window._toneTrendChart.destroy();
-  const toneCtx = document.getElementById('dashToneTrendChart');
-  if (toneCtx) {
+  let chartJsMissing = false;
+  try {
+    const toneCtx = document.getElementById('dashToneTrendChart');
     if (typeof Chart === 'undefined') {
-      toneCtx.parentElement.innerHTML = '<div style="text-align:center;color:#dc2626;padding:20px;font-size:12px;">⚠ Library grafik (Chart.js) gagal dimuat. Coba refresh halaman, atau cek koneksi internet.</div>';
-    } else {
-    window._toneTrendChart = new Chart(toneCtx, {
-      type: 'bar',
-      data: {
-        labels: toneChartLabels,
-        datasets: [
-          { label: 'Positif', data: toneChartData.positif, backgroundColor: '#22c55e' },
-          { label: 'Negatif', data: toneChartData.negatif, backgroundColor: '#ef4444' },
-          { label: 'Netral', data: toneChartData.netral, backgroundColor: '#94a3b8' }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { stacked: true, ticks: { autoSkip: true, maxTicksLimit: 15, font: { size: 9 } } },
-          y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
-        },
-        plugins: {
-          legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }
-        }
+      chartJsMissing = true;
+      if (toneCtx && toneCtx.parentElement) {
+        toneCtx.parentElement.innerHTML = '<p style="color:#ef4444;font-size:12px;padding:12px;">⚠ Gagal memuat library grafik dari semua sumber (cek koneksi internet), coba muat ulang halaman.</p>';
       }
-    });
+    } else {
+    const totalAnalyzedInPeriod = toneChartData.positif.reduce((a,b)=>a+b,0)
+      + toneChartData.negatif.reduce((a,b)=>a+b,0)
+      + toneChartData.netral.reduce((a,b)=>a+b,0);
+    if (toneCtx && !totalAnalyzedInPeriod) {
+      const existingChart = Chart.getChart(toneCtx);
+      if (existingChart) existingChart.destroy();
+      if (toneCtx.parentElement) {
+        toneCtx.parentElement.innerHTML = '<p style="color:var(--muted);font-size:12px;padding:12px;">Belum ada artikel yang dianalisis AI pada periode ini.</p>';
+      }
+    } else if (toneCtx) {
+      const existingChart = Chart.getChart(toneCtx);
+      if (existingChart) existingChart.destroy();
+      window._toneTrendChart = new Chart(toneCtx, {
+        type: 'bar',
+        data: {
+          labels: toneChartLabels,
+          datasets: [
+            { label: 'Positif', data: toneChartData.positif, backgroundColor: '#22c55e' },
+            { label: 'Negatif', data: toneChartData.negatif, backgroundColor: '#ef4444' },
+            { label: 'Netral', data: toneChartData.netral, backgroundColor: '#94a3b8' }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { stacked: true, ticks: { autoSkip: true, maxTicksLimit: 15, font: { size: 9 } } },
+            y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+          },
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }
+          }
+        }
+      });
+    }
+    }
+  } catch (e) {
+    console.error('Gagal render Tren Tonalitas Harian:', e);
+    const toneCtxErr = document.getElementById('dashToneTrendChart');
+    if (toneCtxErr && toneCtxErr.parentElement) {
+      toneCtxErr.parentElement.innerHTML = `<p style="color:#ef4444;font-size:12px;padding:12px;">⚠ Gagal memuat grafik: ${(e && e.message) || e}</p>`;
     }
   }
 
+  try {
   // Top Media
   const mediaCounts = {};
   articles.forEach(a => {
@@ -2720,9 +2843,9 @@ async function renderDashboard() {
         return `<div class="top-day-item"><span>${['🥇','🥈','🥉','4️⃣','5️⃣'][i]} ${label}</span><strong>${cnt}</strong></div>`;
       }).join('')
     : '<p style="font-size:12px;color:var(--muted);">Belum ada data</p>';
-
-  // Render daftar artikel
-  renderDashArticleList(articles);
+  } catch (e) {
+    console.error('Gagal render statistik dashboard (Top Media/Kalender/Keyword/Top Days):', e);
+  }
 }
 
 // ---- DASHBOARD ARTICLE LIST ----
