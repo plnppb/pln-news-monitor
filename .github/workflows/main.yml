@@ -83,6 +83,34 @@ jobs:
           done
           echo "YouTube crawl done!"
 
+      - name: Refresh Statistik Video YouTube (semua video lama di DB)
+        run: |
+          SECRET="${{ secrets.CRON_SECRET }}"
+          BASE="https://pln-news-monitor.vercel.app/api/crawl"
+          echo "Refresh view/like/comment count semua video YouTube di database..."
+          OFFSET=0
+          for i in $(seq 1 50); do
+            RESULT=$(curl -s "${BASE}?secret=${SECRET}&source=youtube-refresh-stats&batch=25&offset=${OFFSET}")
+            echo "Batch $i (offset=$OFFSET): $RESULT"
+            if echo "$RESULT" | grep -q "Semua video sudah di-refresh"; then
+              echo "Semua video sudah di-refresh, berhenti."
+              break
+            fi
+            NOTE=$(echo "$RESULT" | jq -r '.note // empty' 2>/dev/null)
+            if [ "$NOTE" = "Selesai" ]; then
+              echo "Selesai, berhenti."
+              break
+            fi
+            NEXT_OFFSET=$(echo "$RESULT" | jq -r '.nextOffset // empty' 2>/dev/null)
+            if [ -z "$NEXT_OFFSET" ]; then
+              echo "Gagal baca nextOffset dari respons, berhenti supaya tidak stuck."
+              break
+            fi
+            OFFSET=$NEXT_OFFSET
+            sleep 1
+          done
+          echo "Refresh statistik YouTube done!"
+
       - name: Analyze New Articles
         run: |
           SECRET="${{ secrets.CRON_SECRET }}"
