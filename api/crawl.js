@@ -345,7 +345,7 @@ async function saveToSupabase(articles, keyword) {
     comment_count: a.comment_count ?? null
   }));
 
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/articles`, {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?on_conflict=url`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

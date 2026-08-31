@@ -180,7 +180,7 @@ async function handleSave(req, res) {
       spokesperson_eksternal_stance: analysis.error ? '' : (analysis.spokesperson_eksternal_stance || '')
     };
 
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/articles`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?on_conflict=url`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
