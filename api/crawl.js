@@ -503,6 +503,73 @@ module.exports = async function handler(req, res) {
     }
 
     // ===== MODE: YOUTUBE (Fase 3) =====
+    // ===== MODE: REFRESH STATISTIK YOUTUBE (semua video lama di DB, bukan cuma yang baru ke-search) =====
+    if (source === 'youtube-refresh-stats') {
+      const batchSize = parseInt(req.query.batch) || 25;
+      const offset = parseInt(req.query.offset) || 0;
+
+      const listResp = await fetch(
+        `${SUPABASE_URL}/rest/v1/articles?select=id,url&url=ilike.*youtube.com%2Fwatch*&order=id.asc&limit=${batchSize}&offset=${offset}`,
+        { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+      );
+      const rows = await listResp.json();
+
+      if (!Array.isArray(rows) || !rows.length) {
+        return res.status(200).json({ success: true, message: 'Semua video sudah di-refresh statistiknya', updated: 0 });
+      }
+
+      const idMap = {};
+      rows.forEach(r => {
+        const m = r.url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+        if (m) idMap[m[1]] = r;
+      });
+      const videoIds = Object.keys(idMap);
+      const nextOffset = offset + batchSize;
+
+      if (!videoIds.length) {
+        return res.status(200).json({ success: true, updated: 0, nextOffset, note: rows.length < batchSize ? 'Selesai' : 'Lanjut' });
+      }
+      if (!YOUTUBE_API_KEY) {
+        return res.status(200).json({ error: 'YOUTUBE_API_KEY tidak diset' });
+      }
+
+      let updated = 0, failed = 0;
+      try {
+        const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoIds.join(',')}&key=${YOUTUBE_API_KEY}`;
+        const statsResp = await fetch(statsUrl, { signal: AbortSignal.timeout(8000) });
+        const statsData = await statsResp.json();
+        if (statsData.error) {
+          return res.status(200).json({ error: `YouTube ${statsData.error.message}` });
+        }
+        for (const v of (statsData.items || [])) {
+          const row = idMap[v.id];
+          if (!row) continue;
+          const patchResp = await fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${row.id}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({
+              view_count: v.statistics?.viewCount != null ? parseInt(v.statistics.viewCount) : null,
+              like_count: v.statistics?.likeCount != null ? parseInt(v.statistics.likeCount) : null,
+              comment_count: v.statistics?.commentCount != null ? parseInt(v.statistics.commentCount) : null
+            })
+          });
+          if (patchResp.ok) updated++; else failed++;
+        }
+      } catch (e) {
+        return res.status(500).json({ error: e.message });
+      }
+
+      return res.status(200).json({
+        success: true, updated, failed, nextOffset,
+        note: rows.length < batchSize ? 'Selesai' : `Masih ada, panggil lagi dengan offset=${nextOffset}`
+      });
+    }
+
     if (source === 'youtube') {
       const ytRes = await fetchFromYouTube(keyword);
       let combined = ytRes.articles;
