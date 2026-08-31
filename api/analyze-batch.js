@@ -109,7 +109,7 @@ module.exports = async function handler(req, res) {
     if (reanalyze) {
       url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description&limit=${batchSize}&offset=${offset}&order=id.asc`;
     } else {
-      url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description&tone=eq.&limit=${batchSize}&offset=${offset}&order=id.asc`;
+      url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description&or=(tone.is.null,tone.eq.)&limit=${batchSize}&offset=${offset}&order=id.asc`;
     }
 
     const response = await fetch(url, {
