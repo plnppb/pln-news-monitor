@@ -39,6 +39,29 @@ ATURAN WAJIB PENULISAN NAMA SPOKESPERSON:
 Balas HANYA JSON ini tanpa teks lain:
 {"tone":"netral","spokesperson_internal":"","spokesperson_internal_stance":"","spokesperson_eksternal":"","spokesperson_eksternal_stance":"","resume":"ringkasan 2-3 kalimat"}`;
 
+// Cek apakah nama beneran ada kata-katanya di teks sumber (judul+deskripsi),
+// bukan sekadar diklaim AI. Ini jaring pengaman kode, bukan andalin AI patuh
+// instruksi doang — soalnya AI kadang "nyampur" teks yang dikasih dengan
+// pengetahuan lamanya dari data training (makanya bisa nongol nama pejabat
+// yang udah pensiun, padahal nggak disebut di artikelnya).
+function nameAppearsInSource(name, sourceTextLower) {
+  const parts = name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  if (!parts.length) return false;
+  return parts.every(p => sourceTextLower.includes(p));
+}
+
+// Saring field spokesperson (format "Nama|Jabatan;Nama2|Jabatan2"), buang
+// entri yang namanya nggak ketemu di teks sumber sama sekali.
+function validateSpokespersonField(raw, sourceTextLower) {
+  if (!raw) return '';
+  const entries = raw.split(';').map(s => s.trim()).filter(Boolean);
+  const valid = entries.filter(entry => {
+    const name = entry.includes('|') ? entry.split('|')[0].trim() : entry.trim();
+    return nameAppearsInSource(name, sourceTextLower);
+  });
+  return valid.join(';');
+}
+
 async function analyzeArticle(title, description) {
   if (!GEMINI_KEYS.length) return { error: 'NO_API_KEY' };
   const prompt = `${TONE_PROMPT}\n\nJudul: ${title}\nDeskripsi: ${(description || '').replace(/<[^>]+>/g, '').substring(0, 400)}`;
@@ -73,6 +96,14 @@ async function analyzeArticle(title, description) {
 
       const result = JSON.parse(jsonMatch[0]);
       if (!['positif', 'negatif', 'netral'].includes(result.tone)) result.tone = 'netral';
+
+      // Validasi: buang nama spokesperson yang nggak ketemu di teks sumber
+      const sourceTextLower = (title + ' ' + description).toLowerCase();
+      result.spokesperson_internal = validateSpokespersonField(result.spokesperson_internal, sourceTextLower);
+      if (!result.spokesperson_internal) result.spokesperson_internal_stance = '';
+      result.spokesperson_eksternal = validateSpokespersonField(result.spokesperson_eksternal, sourceTextLower);
+      if (!result.spokesperson_eksternal) result.spokesperson_eksternal_stance = '';
+
       return result;
     } catch (e) {
       lastError = e.message;
