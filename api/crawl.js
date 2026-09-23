@@ -97,7 +97,7 @@ function parseRSS(xml, feedUrl) {
     const pubDate = getTag('pubDate');
     const description = getTag('description').replace(/<[^>]+>/g, '').substring(0, 500);
     if (!title || !link) continue;
-    items.push({ title, url: link, source: sourceName, published_at: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(), description });
+    items.push({ title, url: link, source: sourceName, published_at: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(), description, origin_api: 'rss' });
   }
   return items;
 }
@@ -128,7 +128,8 @@ async function fetchFromNewsAPI(keyword) {
         url: a.url,
         source: a.source?.name || 'NewsAPI',
         published_at: a.publishedAt || new Date().toISOString(),
-        description: (a.description || '').substring(0, 500)
+        description: (a.description || '').substring(0, 500),
+        origin_api: 'newsapi'
       })),
       error: null
     };
@@ -167,7 +168,8 @@ async function fetchFromGoogleNewsRSS(keyword) {
         url: link,
         source: source || 'Google News',
         published_at: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
-        description
+        description,
+        origin_api: 'googlenews'
       });
     }
     return items;
@@ -192,7 +194,8 @@ async function fetchFromGNewsIo(keyword) {
         url: a.url,
         source: a.source?.name || 'GNews.io',
         published_at: a.publishedAt || new Date().toISOString(),
-        description: (a.description || '').substring(0, 500)
+        description: (a.description || '').substring(0, 500),
+        origin_api: 'gnewsio'
       })),
       error: null
     };
@@ -305,7 +308,8 @@ async function fetchFromYouTube(keyword) {
           description: (v.snippet.description || '').substring(0, 500),
           view_count: stats.view_count ?? null,
           like_count: stats.like_count ?? null,
-          comment_count: stats.comment_count ?? null
+          comment_count: stats.comment_count ?? null,
+          origin_api: 'youtube'
         };
       }),
       error: null
@@ -342,7 +346,8 @@ async function saveToSupabase(articles, keyword) {
     spokesperson_eksternal_stance: '',
     view_count: a.view_count ?? null,
     like_count: a.like_count ?? null,
-    comment_count: a.comment_count ?? null
+    comment_count: a.comment_count ?? null,
+    origin_api: a.origin_api || null
   }));
 
   const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?on_conflict=url`, {
