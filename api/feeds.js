@@ -9,25 +9,30 @@ module.exports = async function handler(req, res) {
 
   const isKeywords = req.query.resource === 'keywords';
 
-  // GET - ambil semua feeds ATAU semua keyword dari DB
+  // GET - ambil semua feeds ATAU semua keyword dari DB (bisa difilter ?category= buat keyword)
   if (req.method === 'GET') {
     try {
-      const table = isKeywords ? 'crawl_keywords' : 'feeds';
-      const order = isKeywords ? 'keyword.asc' : 'name.asc';
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*&order=${order}`, {
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-        }
+      if (isKeywords) {
+        const category = req.query.category;
+        let url = `${SUPABASE_URL}/rest/v1/crawl_keywords?select=*&order=keyword.asc`;
+        if (category) url += `&category=eq.${encodeURIComponent(category)}`;
+        const response = await fetch(url, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        const data = await response.json();
+        return res.status(200).json({ keywords: data });
+      }
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/feeds?select=*&order=name.asc`, {
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
       });
       const data = await response.json();
-      return res.status(200).json(isKeywords ? { keywords: data } : { feeds: data });
+      return res.status(200).json({ feeds: data });
     } catch (error) {
       return res.status(500).json({ error: error.message });
     }
   }
 
-  // POST - tambah keyword baru (satu atau banyak)
+  // POST - tambah keyword baru (satu atau banyak), bisa disertai kategori
   if (req.method === 'POST' && isKeywords) {
     const { keywords } = req.body;
     if (!keywords || !keywords.length) {
@@ -35,11 +40,12 @@ module.exports = async function handler(req, res) {
     }
     const rows = keywords.map(k => ({
       keyword: (typeof k === 'string' ? k : k.keyword).trim(),
+      category: (typeof k === 'string' ? 'external' : (k.category || 'external')),
       enabled: typeof k === 'string' ? true : (k.enabled !== false)
     })).filter(r => r.keyword);
 
     try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/crawl_keywords?on_conflict=keyword`, {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/crawl_keywords?on_conflict=keyword,category`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -60,15 +66,17 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // PATCH - update satu keyword (toggle enabled / ganti teks)
+  // PATCH - update satu keyword (toggle enabled / ganti teks), dicari berdasarkan keyword+category
   if (req.method === 'PATCH' && isKeywords) {
-    const { originalKeyword, keyword, enabled } = req.body;
+    const { originalKeyword, originalCategory, keyword, enabled } = req.body;
     if (!originalKeyword) return res.status(400).json({ error: 'originalKeyword wajib diisi' });
     const patch = {};
     if (keyword !== undefined) patch.keyword = keyword;
     if (enabled !== undefined) patch.enabled = enabled;
     try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/crawl_keywords?keyword=eq.${encodeURIComponent(originalKeyword)}`, {
+      let url = `${SUPABASE_URL}/rest/v1/crawl_keywords?keyword=eq.${encodeURIComponent(originalKeyword)}`;
+      if (originalCategory) url += `&category=eq.${encodeURIComponent(originalCategory)}`;
+      const response = await fetch(url, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -87,12 +95,14 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // DELETE - hapus satu keyword
+  // DELETE - hapus satu keyword (dicari berdasarkan keyword+category)
   if (req.method === 'DELETE' && isKeywords) {
-    const { keyword } = req.body;
+    const { keyword, category } = req.body;
     if (!keyword) return res.status(400).json({ error: 'keyword wajib diisi' });
     try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/crawl_keywords?keyword=eq.${encodeURIComponent(keyword)}`, {
+      let url = `${SUPABASE_URL}/rest/v1/crawl_keywords?keyword=eq.${encodeURIComponent(keyword)}`;
+      if (category) url += `&category=eq.${encodeURIComponent(category)}`;
+      const response = await fetch(url, {
         method: 'DELETE',
         headers: {
           'apikey': SUPABASE_ANON_KEY,
