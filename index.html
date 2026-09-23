@@ -348,6 +348,11 @@
           ⚡ Jalankan Sekarang (Semua Feed RSS)
         </button>
         <div id="feedsCrawlStatus" style="font-size:10px;color:#0369a1;margin-top:6px;line-height:1.6;max-height:90px;overflow-y:auto;"></div>
+        <button onclick="runYoutubeCrawlNow()" id="youtubeCrawlBtn"
+          style="width:100%;margin-top:6px;background:#dc2626;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;">
+          ⚡ Jalankan Sekarang (YouTube)
+        </button>
+        <div id="youtubeCrawlStatus" style="font-size:10px;color:#0369a1;margin-top:6px;line-height:1.6;max-height:90px;overflow-y:auto;"></div>
       </div>
     </div>
 
@@ -2389,6 +2394,66 @@ async function runFeedsCrawlNow() {
   }
 
   statusEl.innerHTML = `<strong>Selesai. Total ${totalSaved} artikel baru tersimpan dari ${totalFeeds} feed${errors.length ? `, ada ${errors.length} error` : ''}.</strong><br>` + statusEl.innerHTML;
+
+  if (totalSaved > 0) {
+    statusEl.innerHTML = `🔄 Memuat ulang daftar artikel...<br>` + statusEl.innerHTML;
+    await autoLoadFromDB();
+    statusEl.innerHTML = `🔄 Daftar artikel sudah diperbarui.<br>` + statusEl.innerHTML;
+  }
+
+  btn.disabled = false;
+  btn.style.opacity = '1';
+}
+
+async function runYoutubeCrawlNow() {
+  const statusEl = document.getElementById('youtubeCrawlStatus');
+  const btn = document.getElementById('youtubeCrawlBtn');
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+  statusEl.innerHTML = '⏳ Mengambil daftar kata kunci YouTube...';
+
+  let keywords;
+  try {
+    const kws = await fetchKeywordsFromDB('youtube');
+    keywords = kws.filter(k => k.enabled).map(k => k.keyword);
+  } catch (e) {
+    statusEl.innerHTML = `⚠ Gagal ambil kata kunci: ${e.message}<br>` + statusEl.innerHTML;
+    btn.disabled = false; btn.style.opacity = '1';
+    return;
+  }
+  if (!keywords.length) {
+    statusEl.innerHTML = '⚠ Belum ada kata kunci aktif kategori YouTube. Tambahkan lewat "⚙ Kelola" di panel Kata Kunci Auto-Crawl.';
+    btn.disabled = false; btn.style.opacity = '1';
+    return;
+  }
+
+  let totalSaved = 0;
+  const errors = [];
+  statusEl.innerHTML = `⏳ Mulai crawl ${keywords.length} kata kunci YouTube...`;
+
+  for (let i = 0; i < keywords.length; i++) {
+    const kw = keywords[i];
+    statusEl.innerHTML = `⏳ (${i + 1}/${keywords.length}) Crawling "<strong>${kw}</strong>"...` + statusEl.innerHTML;
+    try {
+      const resp = await fetch(`/api/crawl?secret=${CRON_SECRET}&keyword=${encodeURIComponent(kw)}&source=youtube`);
+      const data = await resp.json();
+      if (data.success) {
+        totalSaved += data.saved || 0;
+        const f = data.funnel;
+        const funnelText = f ? ` <span style="color:#94a3b8">(mentah ${f.mentah} → lolos ${f.lolos_kata_kunci} → simpan ${f.tersimpan_baru})</span>` : '';
+        statusEl.innerHTML = `✅ "${kw}": ${data.saved || 0} video baru${funnelText}<br>` + statusEl.innerHTML;
+      } else {
+        errors.push(kw);
+        statusEl.innerHTML = `⚠ "${kw}": ${data.error || 'gagal'}<br>` + statusEl.innerHTML;
+      }
+    } catch (e) {
+      errors.push(kw);
+      statusEl.innerHTML = `⚠ "${kw}": ${e.message}<br>` + statusEl.innerHTML;
+    }
+    if (i < keywords.length - 1) await new Promise(r => setTimeout(r, 2000));
+  }
+
+  statusEl.innerHTML = `<strong>Selesai. Total ${totalSaved} video baru tersimpan${errors.length ? `, ${errors.length} keyword gagal` : ''}.</strong><br>` + statusEl.innerHTML;
 
   if (totalSaved > 0) {
     statusEl.innerHTML = `🔄 Memuat ulang daftar artikel...<br>` + statusEl.innerHTML;
