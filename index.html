@@ -441,9 +441,11 @@
         </div>
       </div>
       <div class="modal-body">
-        <div style="background:#fefce8;border:1px solid #fde047;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#854d0e;line-height:1.6;">
-          ⚠ Tiap kata kunci nambah beban ke kuota harian NewsAPI/GNews.io (kira-kira gratisan ~100 request/hari, dan tiap kata kunci dipanggil 4x/hari lewat auto-crawl). Kalau kata kunci kebanyakan, bisa kena limit — tambahkan secukupnya yang emang kepake.
+        <div style="display:flex;gap:6px;margin-bottom:10px;border-bottom:1px solid var(--border2);">
+          <div id="kwTabExternal" class="filter-btn active" style="border-radius:6px 6px 0 0;" onclick="switchKeywordCategory('external')">📰 External (Berita)</div>
+          <div id="kwTabYoutube" class="filter-btn" style="border-radius:6px 6px 0 0;" onclick="switchKeywordCategory('youtube')">🎥 YouTube</div>
         </div>
+        <div id="kwCategoryHint" style="background:#fefce8;border:1px solid #fde047;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#854d0e;line-height:1.6;"></div>
         <input type="text" id="keywordSearchInput" placeholder="🔍 Cari kata kunci..."
           style="width:100%;padding:7px 10px;margin-bottom:10px;font-size:12px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text2);"
           oninput="renderKeywordTable()"/>
@@ -876,8 +878,11 @@ async function openRssModal() {
 // ==================== KELOLA KATA KUNCI AUTO-CRAWL ====================
 let allKeywords = [];
 
-async function fetchKeywordsFromDB() {
-  const resp = await fetch('/api/feeds?resource=keywords');
+let currentKeywordCategory = 'external';
+
+async function fetchKeywordsFromDB(category) {
+  const q = category ? `&category=${encodeURIComponent(category)}` : '';
+  const resp = await fetch(`/api/feeds?resource=keywords${q}`);
   if (!resp.ok) throw new Error('Gagal ambil data dari server (' + resp.status + ')');
   const data = await resp.json();
   if (data.error) throw new Error(data.error);
@@ -886,19 +891,31 @@ async function fetchKeywordsFromDB() {
 
 async function openKeywordModal() {
   document.getElementById('keywordModal').classList.add('show');
-  const tbody = document.getElementById('keywordTableBody');
-  tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px">⏳ Memuat...</td></tr>';
-  try {
-    allKeywords = await fetchKeywordsFromDB();
-  } catch (e) {
-    showToast('⚠ Gagal memuat kata kunci: ' + e.message);
-  }
-  renderKeywordTable();
-  renderKeywordSidebar();
+  await switchKeywordCategory('external');
 }
 
 function closeKeywordModal() {
   document.getElementById('keywordModal').classList.remove('show');
+}
+
+async function switchKeywordCategory(category) {
+  currentKeywordCategory = category;
+  document.getElementById('kwTabExternal').classList.toggle('active', category === 'external');
+  document.getElementById('kwTabYoutube').classList.toggle('active', category === 'youtube');
+  document.getElementById('kwCategoryHint').textContent = category === 'external'
+    ? '⚠ Tiap kata kunci nambah beban ke kuota harian NewsAPI/GNews.io (gratisan ~100 request/hari, dipanggil 4x/hari). Kata kunci kebanyakan bisa kena limit.'
+    : '⚠ Pencarian YouTube (search.list) itu MAHAL: 100 unit per kata kunci per panggilan, dari jatah 10.000 unit/hari. Dipanggil 4x/hari, jadi maksimal aman sekitar 25 kata kunci total.';
+
+  const tbody = document.getElementById('keywordTableBody');
+  tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px">⏳ Memuat...</td></tr>';
+  try {
+    allKeywords = await fetchKeywordsFromDB(category);
+  } catch (e) {
+    showToast('⚠ Gagal memuat kata kunci: ' + e.message);
+    allKeywords = [];
+  }
+  renderKeywordTable();
+  renderKeywordSidebar();
 }
 
 async function refreshKeywordsFromDB() {
@@ -906,7 +923,7 @@ async function refreshKeywordsFromDB() {
   btn.textContent = '⏳ Memuat...';
   btn.disabled = true;
   try {
-    allKeywords = await fetchKeywordsFromDB();
+    allKeywords = await fetchKeywordsFromDB(currentKeywordCategory);
     renderKeywordTable();
     renderKeywordSidebar();
     showToast('✅ Data disegarkan dari server');
@@ -917,14 +934,16 @@ async function refreshKeywordsFromDB() {
   btn.disabled = false;
 }
 
-function renderKeywordSidebar() {
+async function renderKeywordSidebar() {
   const el = document.getElementById('keywordStatusList');
-  if (!allKeywords.length) {
-    el.innerHTML = 'Belum ada kata kunci. Klik "Kelola" untuk tambah.';
-    return;
+  try {
+    const [ext, yt] = await Promise.all([fetchKeywordsFromDB('external'), fetchKeywordsFromDB('youtube')]);
+    const extActive = ext.filter(k => k.enabled).length;
+    const ytActive = yt.filter(k => k.enabled).length;
+    el.innerHTML = `📰 External: ${extActive}/${ext.length} aktif &nbsp;·&nbsp; 🎥 YouTube: ${ytActive}/${yt.length} aktif`;
+  } catch (e) {
+    el.innerHTML = 'Klik "Kelola" untuk lihat semua kata kunci yang dipakai auto-crawl.';
   }
-  const activeCount = allKeywords.filter(k => k.enabled).length;
-  el.innerHTML = `${activeCount} kata kunci aktif dari ${allKeywords.length} total.`;
 }
 
 function renderKeywordTable() {
@@ -933,10 +952,10 @@ function renderKeywordTable() {
   const footerCount = document.getElementById('keywordFooterCount');
   if (footerCount) {
     const activeN = allKeywords.filter(k => k.enabled).length;
-    footerCount.textContent = `${activeN} kata kunci aktif dari ${allKeywords.length} total`;
+    footerCount.textContent = `${activeN} kata kunci aktif dari ${allKeywords.length} total (kategori ${currentKeywordCategory === 'external' ? 'External' : 'YouTube'})`;
   }
   if (!allKeywords.length) {
-    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px">Belum ada kata kunci. Tambahkan di bawah.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px">Belum ada kata kunci di kategori ini. Tambahkan di bawah.</td></tr>';
     return;
   }
   const q = (document.getElementById('keywordSearchInput')?.value || '').trim().toLowerCase();
@@ -966,21 +985,21 @@ async function addKeyword() {
   const keyword = input.value.trim();
   if (!keyword) return showToast('⚠ Isi dulu kata kuncinya');
   if (allKeywords.some(k => k.keyword.toLowerCase() === keyword.toLowerCase())) {
-    return showToast('⚠ Kata kunci ini sudah ada');
+    return showToast('⚠ Kata kunci ini sudah ada di kategori ini');
   }
   try {
     const resp = await fetch('/api/feeds?resource=keywords', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keywords: [keyword] })
+      body: JSON.stringify({ keywords: [{ keyword, category: currentKeywordCategory }] })
     });
     const data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || 'Gagal simpan ke server');
-    allKeywords = await fetchKeywordsFromDB();
+    allKeywords = await fetchKeywordsFromDB(currentKeywordCategory);
     renderKeywordTable();
     renderKeywordSidebar();
     input.value = '';
-    showToast(`✅ "${keyword}" ditambahkan`);
+    showToast(`✅ "${keyword}" ditambahkan ke kategori ${currentKeywordCategory === 'external' ? 'External' : 'YouTube'}`);
   } catch (e) {
     showToast('⚠ Gagal tambah: ' + e.message);
   }
@@ -993,7 +1012,7 @@ async function toggleKeyword(i) {
     const resp = await fetch('/api/feeds?resource=keywords', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ originalKeyword: k.keyword, enabled: newEnabled })
+      body: JSON.stringify({ originalKeyword: k.keyword, originalCategory: k.category, enabled: newEnabled })
     });
     const data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || 'Gagal update');
@@ -1007,16 +1026,16 @@ async function toggleKeyword(i) {
 
 async function removeKeyword(i) {
   const k = allKeywords[i];
-  if (!confirm(`Hapus kata kunci "${k.keyword}"? Ini berlaku untuk semua orang.`)) return;
+  if (!confirm(`Hapus kata kunci "${k.keyword}" (kategori ${k.category})? Ini berlaku untuk semua orang.`)) return;
   try {
     const resp = await fetch('/api/feeds?resource=keywords', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keyword: k.keyword })
+      body: JSON.stringify({ keyword: k.keyword, category: k.category })
     });
     const data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || 'Gagal hapus');
-    allKeywords = await fetchKeywordsFromDB();
+    allKeywords = await fetchKeywordsFromDB(currentKeywordCategory);
     renderKeywordTable();
     renderKeywordSidebar();
     showToast(`🗑 "${k.keyword}" dihapus`);
@@ -2264,7 +2283,7 @@ async function renderMkwChips() {
   wrap.innerHTML = '<div style="color:var(--muted);font-size:11px;">⏳ Memuat kata kunci dari database...</div>';
   let kwList;
   try {
-    const data = await fetchKeywordsFromDB();
+    const data = await fetchKeywordsFromDB('external');
     kwList = data.filter(k => k.enabled).map(k => k.keyword);
     if (!kwList.length) kwList = MKW_DEFAULTS;
   } catch (e) {
@@ -2986,10 +3005,7 @@ function showToast(msg) {
 }
 
 initRssFeeds();
-(async () => {
-  try { allKeywords = await fetchKeywordsFromDB(); renderKeywordSidebar(); }
-  catch (e) { /* biarkan, sidebar akan tetap tampil pesan default */ }
-})();
+renderKeywordSidebar();
 
 // Auto-load artikel dari database saat halaman dibuka
 async function autoLoadFromDB() {
