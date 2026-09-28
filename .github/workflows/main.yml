@@ -2,7 +2,8 @@ name: Auto Crawl PLN Papua
 
 on:
   schedule:
-    - cron: '0 0,6,12,18 * * *'  # Setiap 6 jam
+    - cron: '0 0,12 * * *'   # 07:00 & 19:00 WIT — semua langkah, termasuk pencarian YouTube
+    - cron: '0 6,18 * * *'   # 13:00 & 01:00 WIT — semua langkah KECUALI pencarian YouTube (hemat kuota)
   workflow_dispatch:
 
 jobs:
@@ -58,6 +59,7 @@ jobs:
           echo "Radar Papua: $RESULT"
 
       - name: Crawl YouTube (Fase 3)
+        if: ${{ github.event.schedule != '0 6,18 * * *' }}
         run: |
           SECRET="${{ secrets.CRON_SECRET }}"
           BASE="https://pln-news-monitor.vercel.app/api/crawl"
