@@ -608,7 +608,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({
         success: true, source: 'youtube', saved: saved.saved,
         error: ytRes.error || saved.error,
-        funnel: { mentah: rawTotal, lolos_kata_kunci: afterKeywordFilter, tersimpan_baru: saved.saved, statistik_diupdate: statsUpdate.updated, statistik_gagal: statsUpdate.failed }
+        funnel: { mentah: rawTotal, lolos_kata_kunci: afterKeywordFilter, tersimpan_baru: saved.saved, sudah_ada: Math.max(0, (saved.attempted || 0) - (saved.saved || 0)), statistik_diupdate: statsUpdate.updated, statistik_gagal: statsUpdate.failed }
       });
     }
 
@@ -675,8 +675,10 @@ module.exports = async function handler(req, res) {
           lolos_tanggal: afterDateFilter,
           setelah_dedup: afterDedup,
           tersimpan_baru: saved.saved,
+          sudah_ada: Math.max(0, (saved.attempted || 0) - (saved.saved || 0)),
           analisis_gagal: saved.analysisFailures || 0
-        }
+        },
+        error: saved.error || undefined
       });
     }
 
