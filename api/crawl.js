@@ -268,7 +268,7 @@ async function fetchFromYouTube(keyword) {
     const publishedAfter = (() => {
       const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString();
     })();
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=date&maxResults=25&relevanceLanguage=id&regionCode=ID&publishedAfter=${publishedAfter}&q=${encodeURIComponent(keyword)}&key=${YOUTUBE_API_KEY}`;
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=date&maxResults=50&relevanceLanguage=id&regionCode=ID&publishedAfter=${publishedAfter}&q=${encodeURIComponent(keyword)}&key=${YOUTUBE_API_KEY}`;
     const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
     const data = await response.json();
     if (!response.ok || data.error) {
@@ -382,29 +382,36 @@ async function saveToSupabase(articles, keyword) {
 // jadi statistiknya nggak pernah ke-update kalau cuma andalin insert doang).
 // Sengaja cuma update 3 kolom ini, TIDAK menyentuh tone/resume yang mungkin udah dianalisis.
 async function updateYoutubeStats(articles) {
+  // Paralel per 10 video (bukan satu-satu) supaya tetap aman dari batas
+  // eksekusi 10 detik Vercel Hobby, walau hasil pencarian sampai 50 video.
   let updated = 0;
   let failed = 0;
-  for (const a of articles) {
-    if (a.view_count == null && a.like_count == null && a.comment_count == null) continue;
-    try {
-      const resp = await fetch(`${SUPABASE_URL}/rest/v1/articles?url=eq.${encodeURIComponent(a.url)}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify({
-          view_count: a.view_count ?? null,
-          like_count: a.like_count ?? null,
-          comment_count: a.comment_count ?? null
-        })
-      });
-      if (resp.ok) updated++; else failed++;
-    } catch (e) {
-      failed++;
-    }
+  const targets = articles.filter(a => !(a.view_count == null && a.like_count == null && a.comment_count == null));
+  const CHUNK = 10;
+  for (let i = 0; i < targets.length; i += CHUNK) {
+    const chunk = targets.slice(i, i + CHUNK);
+    const results = await Promise.all(chunk.map(async a => {
+      try {
+        const resp = await fetch(`${SUPABASE_URL}/rest/v1/articles?url=eq.${encodeURIComponent(a.url)}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            view_count: a.view_count ?? null,
+            like_count: a.like_count ?? null,
+            comment_count: a.comment_count ?? null
+          })
+        });
+        return resp.ok;
+      } catch (e) {
+        return false;
+      }
+    }));
+    results.forEach(ok => ok ? updated++ : failed++);
   }
   return { updated, failed };
 }
