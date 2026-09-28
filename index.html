@@ -909,7 +909,7 @@ async function switchKeywordCategory(category) {
   document.getElementById('kwTabYoutube').classList.toggle('active', category === 'youtube');
   document.getElementById('kwCategoryHint').textContent = category === 'external'
     ? '⚠ Tiap kata kunci nambah beban ke kuota harian NewsAPI/GNews.io (gratisan ~100 request/hari, dipanggil 4x/hari). Kata kunci kebanyakan bisa kena limit.'
-    : '⚠ Pencarian YouTube (search.list) itu MAHAL: 100 unit per kata kunci per panggilan, dari jatah 10.000 unit/hari. Dipanggil 4x/hari, jadi maksimal aman sekitar 25 kata kunci total.';
+    : '⚠ Pencarian YouTube itu MAHAL: 100 unit per kata kunci per panggilan, dari jatah 10.000 unit/hari. Auto-crawl YouTube jalan 2x/hari (07:00 & 19:00 WIT), jadi tiap kata kunci aktif ≈ 200 unit/hari. Tombol manual memakai jatah yang sama.';
 
   const tbody = document.getElementById('keywordTableBody');
   tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px">⏳ Memuat...</td></tr>';
@@ -2405,6 +2405,24 @@ async function runFeedsCrawlNow() {
   btn.style.opacity = '1';
 }
 
+// Hitung kapan kuota YouTube reset (tengah malam waktu Pasifik), ditampilkan dalam WIT
+function waktuResetKuotaYoutube() {
+  try {
+    const laFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' });
+    const start = new Date(); start.setSeconds(0, 0);
+    for (let i = 1; i <= 1440; i++) {
+      const t = new Date(start.getTime() + i * 60000);
+      const parts = laFmt.formatToParts(t);
+      const h = parseInt(parts.find(p => p.type === 'hour').value, 10);
+      const m = parseInt(parts.find(p => p.type === 'minute').value, 10);
+      if (h === 0 && m === 0) {
+        return t.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jayapura', hour: '2-digit', minute: '2-digit' }).replace(':', '.') + ' WIT';
+      }
+    }
+  } catch (e) { /* jatuh ke teks default di bawah */ }
+  return 'sekitar jam 16.00 WIT';
+}
+
 async function runYoutubeCrawlNow() {
   const statusEl = document.getElementById('youtubeCrawlStatus');
   const btn = document.getElementById('youtubeCrawlBtn');
@@ -2427,7 +2445,15 @@ async function runYoutubeCrawlNow() {
     return;
   }
 
+  const biaya = keywords.length * 100;
+  if (!confirm(`Crawl YouTube manual akan memakai sekitar ${biaya.toLocaleString('id-ID')} unit kuota (${keywords.length} kata kunci × 100 unit), dari jatah 10.000 unit/hari yang JUGA dipakai auto-crawl.\n\nLanjut?`)) {
+    statusEl.innerHTML = 'Dibatalkan.';
+    btn.disabled = false; btn.style.opacity = '1';
+    return;
+  }
+
   let totalSaved = 0;
+  let kuotaHabis = false;
   const errors = [];
   statusEl.innerHTML = `⏳ Mulai crawl ${keywords.length} kata kunci YouTube...`;
 
@@ -2444,6 +2470,11 @@ async function runYoutubeCrawlNow() {
         const funnelText = f ? ` <span style="color:#94a3b8">(mentah ${f.mentah} → lolos ${f.lolos_kata_kunci} → simpan ${f.tersimpan_baru}${sudahAda})</span>` : '';
         const errText = data.error ? `<br><span style="color:#dc2626">⚠ ${String(data.error).substring(0, 200)}</span>` : '';
         statusEl.innerHTML = `${data.error ? '⚠' : '✅'} "${kw}": ${data.saved || 0} video baru${funnelText}${errText}<br>` + statusEl.innerHTML;
+        if (data.error && /quota/i.test(String(data.error))) {
+          kuotaHabis = true;
+          statusEl.innerHTML = `🛑 <strong>Kuota YouTube harian habis</strong> — crawl dihentikan. Kuota reset sekitar ${waktuResetKuotaYoutube()}.<br>` + statusEl.innerHTML;
+          break;
+        }
       } else {
         errors.push(kw);
         statusEl.innerHTML = `⚠ "${kw}": ${data.error || 'gagal'}<br>` + statusEl.innerHTML;
@@ -2455,7 +2486,7 @@ async function runYoutubeCrawlNow() {
     if (i < keywords.length - 1) await new Promise(r => setTimeout(r, 2000));
   }
 
-  statusEl.innerHTML = `<strong>Selesai. Total ${totalSaved} video baru tersimpan${errors.length ? `, ${errors.length} keyword gagal` : ''}.</strong><br>` + statusEl.innerHTML;
+  statusEl.innerHTML = `<strong>${kuotaHabis ? 'Berhenti (kuota habis)' : 'Selesai'}. Total ${totalSaved} video baru tersimpan${errors.length ? `, ${errors.length} keyword gagal` : ''}.</strong><br>` + statusEl.innerHTML;
 
   if (totalSaved > 0) {
     statusEl.innerHTML = `🔄 Memuat ulang daftar artikel...<br>` + statusEl.innerHTML;
