@@ -356,7 +356,7 @@ async function saveToSupabase(articles, keyword) {
       'Content-Type': 'application/json',
       'apikey': SUPABASE_ANON_KEY,
       'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      'Prefer': 'resolution=ignore-duplicates'
+      'Prefer': 'resolution=ignore-duplicates,return=representation'
     },
     body: JSON.stringify(rows)
   });
@@ -364,7 +364,17 @@ async function saveToSupabase(articles, keyword) {
     const errText = await response.text().catch(() => '');
     return { saved: 0, status: response.status, error: errText, analysisFailures: 0 };
   }
-  return { saved: rows.length, status: response.status, analysisFailures: 0 };
+  // Dengan return=representation, Supabase cuma ngembaliin baris yang BENERAN
+  // masuk baru (yang duplikat dilewatin dan nggak ikut dikembaliin). Jadi ini
+  // hitungan artikel baru yang sesungguhnya, bukan jumlah yang dicoba disimpan.
+  let inserted = [];
+  try { inserted = await response.json(); } catch (e) { inserted = []; }
+  return {
+    saved: Array.isArray(inserted) ? inserted.length : 0,
+    attempted: rows.length,
+    status: response.status,
+    analysisFailures: 0
+  };
 }
 
 // Update view/like/comment count untuk video YouTube yang SUDAH ADA di database
