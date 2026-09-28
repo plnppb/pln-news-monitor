@@ -2440,8 +2440,10 @@ async function runYoutubeCrawlNow() {
       if (data.success) {
         totalSaved += data.saved || 0;
         const f = data.funnel;
-        const funnelText = f ? ` <span style="color:#94a3b8">(mentah ${f.mentah} → lolos ${f.lolos_kata_kunci} → simpan ${f.tersimpan_baru})</span>` : '';
-        statusEl.innerHTML = `✅ "${kw}": ${data.saved || 0} video baru${funnelText}<br>` + statusEl.innerHTML;
+        const sudahAda = f && f.sudah_ada ? `, ${f.sudah_ada} sudah ada di database` : '';
+        const funnelText = f ? ` <span style="color:#94a3b8">(mentah ${f.mentah} → lolos ${f.lolos_kata_kunci} → simpan ${f.tersimpan_baru}${sudahAda})</span>` : '';
+        const errText = data.error ? `<br><span style="color:#dc2626">⚠ ${String(data.error).substring(0, 200)}</span>` : '';
+        statusEl.innerHTML = `${data.error ? '⚠' : '✅'} "${kw}": ${data.saved || 0} video baru${funnelText}${errText}<br>` + statusEl.innerHTML;
       } else {
         errors.push(kw);
         statusEl.innerHTML = `⚠ "${kw}": ${data.error || 'gagal'}<br>` + statusEl.innerHTML;
@@ -2499,11 +2501,14 @@ async function runMultiKeywordCrawl() {
         totalSaved += data.saved || 0;
         const f = data.funnel;
         const funnelText = f
-          ? ` <span style="color:#94a3b8">(mentah ${f.mentah} → kata kunci ${f.lolos_kata_kunci} → tanggal ${f.lolos_tanggal} → dedup ${f.setelah_dedup} → simpan ${f.tersimpan_baru})</span>`
+          ? ` <span style="color:#94a3b8">(mentah ${f.mentah} → kata kunci ${f.lolos_kata_kunci} → tanggal ${f.lolos_tanggal} → dedup ${f.setelah_dedup} → simpan ${f.tersimpan_baru}${f.sudah_ada ? `, ${f.sudah_ada} sudah ada di database` : ''})</span>`
           : '';
-        const errText = (data.sourceErrors && Object.keys(data.sourceErrors).length)
-          ? `<br><span style="color:#dc2626">⚠ ${Object.entries(data.sourceErrors).map(([src,msg]) => `${src}: ${msg}`).join(' | ')}</span>`
+        const srcErr = (data.sourceErrors && Object.keys(data.sourceErrors).length)
+          ? Object.entries(data.sourceErrors).map(([src,msg]) => `${src}: ${msg}`).join(' | ')
           : '';
+        const saveErr = data.error ? `gagal simpan: ${String(data.error).substring(0, 200)}` : '';
+        const allErr = [srcErr, saveErr].filter(Boolean).join(' | ');
+        const errText = allErr ? `<br><span style="color:#dc2626">⚠ ${allErr}</span>` : '';
         statusEl.innerHTML = `✅ "${kw}": ${data.saved || 0} artikel baru${funnelText}${errText}<br>` + statusEl.innerHTML;
       } else {
         errors.push(kw);
