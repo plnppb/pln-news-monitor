@@ -8,8 +8,12 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const isKeywords = req.query.resource === 'keywords';
+  // Alias penggabungan nama spokesperson (lihat ?resource=spokesperson-aliases
+  // di bawah) — murni mapping tampilan "nama A dianggap sama dengan nama B",
+  // TIDAK mengubah data mentah artikel sama sekali, jadi gampang di-undo.
+  const isAliases = req.query.resource === 'spokesperson-aliases';
 
-  // GET - ambil semua feeds ATAU semua keyword dari DB (bisa difilter ?category= buat keyword)
+  // GET - ambil semua feeds, ATAU keyword (bisa difilter ?category=), ATAU alias spokesperson
   if (req.method === 'GET') {
     try {
       if (isKeywords) {
@@ -22,11 +26,67 @@ module.exports = async function handler(req, res) {
         const data = await response.json();
         return res.status(200).json({ keywords: data });
       }
+      if (isAliases) {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/spokesperson_aliases?select=*&order=alias_name.asc`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        const data = await response.json();
+        return res.status(200).json({ aliases: data });
+      }
       const response = await fetch(`${SUPABASE_URL}/rest/v1/feeds?select=*&order=name.asc`, {
         headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
       });
       const data = await response.json();
       return res.status(200).json({ feeds: data });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  // POST - tambah satu alias (gabungkan satu nama ke nama kanonik yang dipilih user)
+  if (req.method === 'POST' && isAliases) {
+    const { alias_name, canonical_name } = req.body || {};
+    if (!alias_name || !canonical_name) {
+      return res.status(400).json({ error: 'alias_name dan canonical_name wajib diisi' });
+    }
+    if (alias_name.trim().toLowerCase() === canonical_name.trim().toLowerCase()) {
+      return res.status(400).json({ error: 'Nama alias dan nama kanonik tidak boleh sama' });
+    }
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/spokesperson_aliases?on_conflict=alias_name`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Prefer': 'resolution=merge-duplicates,return=representation'
+        },
+        body: JSON.stringify([{ alias_name: alias_name.trim(), canonical_name: canonical_name.trim() }])
+      });
+      if (!response.ok) return res.status(response.status).json({ error: await response.text() });
+      const saved = await response.json();
+      return res.status(200).json({ success: true, alias: saved[0] });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  // DELETE - pisahkan lagi (hapus satu alias), dicari berdasarkan alias_name
+  if (req.method === 'DELETE' && isAliases) {
+    const { alias_name } = req.body || {};
+    if (!alias_name) return res.status(400).json({ error: 'alias_name wajib diisi' });
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/spokesperson_aliases?alias_name=eq.${encodeURIComponent(alias_name)}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Prefer': 'return=representation'
+        }
+      });
+      if (!response.ok) return res.status(response.status).json({ error: await response.text() });
+      const deleted = await response.json();
+      return res.status(200).json({ success: true, deleted: deleted.length });
     } catch (error) {
       return res.status(500).json({ error: error.message });
     }
