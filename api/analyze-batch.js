@@ -146,6 +146,82 @@ module.exports = async function handler(req, res) {
   const reanalyze = req.query.reanalyze === 'true';
   const offset = parseInt(req.query.offset) || 0;
 
+  // MODE REVALIDASI (?mode=revalidate): bersihkan nama spokesperson yang
+  // SUDAH TERSIMPAN dari dulu, tanpa panggil Gemini sama sekali — murni
+  // jalankan ulang validator kode (yang sekarang sudah dibenerin: cek nama
+  // sebagai frasa utuh + terhadap teks yang sama persis dibaca Gemini dulu,
+  // 400 karakter pertama deskripsi) terhadap data yang udah ada di DB.
+  // Ini jauh lebih cepat & gratis dibanding reanalyze=true (yang manggil
+  // Gemini ulang buat SEMUA artikel) — pas buat bersih-bersih data lama,
+  // termasuk yang kesimpan lewat /api/analyze (jalur "Cari Berita" manual)
+  // yang sebelumnya sama sekali nggak divalidasi.
+  if (req.query.mode === 'revalidate') {
+    try {
+      const url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description,spokesperson_internal,spokesperson_eksternal&or=(spokesperson_internal.neq.,spokesperson_eksternal.neq.)&limit=${batchSize}&offset=${offset}&order=id.asc`;
+      const response = await fetch(url, {
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      const articles = await response.json();
+
+      if (!Array.isArray(articles) || !articles.length) {
+        return res.status(200).json({ success: true, message: 'Semua artikel ber-spokesperson sudah dicek ulang', processed: 0, cleaned: 0 });
+      }
+
+      let processed = 0, cleaned = 0;
+      const examples = [];
+
+      for (const article of articles) {
+        processed++;
+        const truncatedDescription = (article.description || '').replace(/<[^>]+>/g, '').substring(0, 400);
+        const sourceTextNormalized = normalizeForMatch(article.title + ' ' + truncatedDescription);
+
+        const beforeInternal = article.spokesperson_internal || '';
+        const beforeEksternal = article.spokesperson_eksternal || '';
+        const afterInternal = validateSpokespersonField(beforeInternal, sourceTextNormalized);
+        const afterEksternal = validateSpokespersonField(beforeEksternal, sourceTextNormalized);
+
+        if (afterInternal === beforeInternal && afterEksternal === beforeEksternal) continue;
+
+        const patchBody = {
+          spokesperson_internal: afterInternal,
+          spokesperson_eksternal: afterEksternal
+        };
+        if (!afterInternal) patchBody.spokesperson_internal_stance = '';
+        if (!afterEksternal) patchBody.spokesperson_eksternal_stance = '';
+
+        const patchResp = await fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${article.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify(patchBody)
+        });
+
+        if (patchResp.ok) {
+          cleaned++;
+          if (examples.length < 10) {
+            examples.push({
+              id: article.id,
+              title: article.title,
+              internal: { sebelum: beforeInternal, sesudah: afterInternal },
+              eksternal: { sebelum: beforeEksternal, sesudah: afterEksternal }
+            });
+          }
+        }
+      }
+
+      const nextOffset = offset + batchSize;
+      return res.status(200).json({
+        success: true, processed, cleaned, examples, nextOffset,
+        note: articles.length < batchSize ? 'Selesai' : `Masih ada, panggil lagi dengan offset=${nextOffset}`
+      });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
   // MODE DEBUG: test 1 artikel dan tampilkan hasil lengkap
   if (req.query.debug === 'true') {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/articles?select=id,title,description&limit=1&offset=${offset}&order=id.asc`, {
