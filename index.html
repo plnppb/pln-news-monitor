@@ -735,6 +735,10 @@
   <div id="panel-spokesperson-wrap" style="display:none;">
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#1e40af;line-height:1.6;">
       🎙 Dikelompokkan berdasarkan <strong>nama orang</strong> (jabatan cuma info tambahan, karena bisa beda-beda tiap artikel). "Sikap pernyataannya sendiri" menilai apa yang <em>diucapkan orang itu sendiri</em> di kutipannya — bukan tone keseluruhan artikel tempat dia muncul. Kalau muncul catatan ⚠ kuning, itu artinya ada perbedaan berarti antara sikap orang tersebut dengan tone artikelnya — dibaca dulu sebelum menyimpulkan siapa "sumber" sentimen tertentu. Kalau banyak yang masih "belum dianalisis", jalankan <code>reanalyzeAll()</code> lagi.
+      <br>Nama yang sebenarnya orang yang sama tapi tertulis beda (typo, nama panggilan, dll) bisa digabung manual lewat tombol <strong>🔗 Gabung</strong> di tiap kartu.
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+      <button onclick="openManageAliasModal()" style="padding:6px 12px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;">⚙ Kelola Nama yang Sudah Digabung</button>
     </div>
     <div id="spokespersonLoading" style="text-align:center;color:var(--muted);padding:20px;">⏳ Memuat data...</div>
     <div id="spokespersonContent" style="display:none;">
@@ -744,6 +748,31 @@
       <div id="spkExternalList" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
   </div><!-- end panel-spokesperson-wrap -->
+
+  <!-- MODAL: gabungkan dua nama spokesperson -->
+  <div id="mergeAliasModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:10px;padding:20px;max-width:420px;width:90%;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:10px;">🔗 Gabungkan Nama</div>
+      <div id="mergeAliasModalSourceLabel" style="font-size:13px;margin-bottom:10px;color:var(--muted);"></div>
+      <div style="font-size:12px;margin-bottom:6px;">Ini orang yang sama dengan:</div>
+      <select id="mergeAliasModalSelect" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:14px;"></select>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closeMergeModal()" style="padding:7px 14px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Batal</button>
+        <button onclick="confirmMergeAlias()" style="padding:7px 14px;border:none;background:var(--accent2);color:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Gabungkan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: kelola alias yang sudah ada (bisa dipisahkan lagi) -->
+  <div id="manageAliasModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:10px;padding:20px;max-width:480px;width:90%;max-height:70vh;overflow-y:auto;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:10px;">⚙ Nama yang Sudah Digabung</div>
+      <div id="manageAliasModalList" style="display:flex;flex-direction:column;gap:6px;font-size:13px;"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+        <button onclick="closeManageAliasModal()" style="padding:7px 14px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Tutup</button>
+      </div>
+    </div>
+  </div>
 
   <!-- PANEL YOUTUBE -->
   <div id="panel-youtube-wrap" style="display:none;">
@@ -1671,6 +1700,24 @@ function normalizeTitleKey(title) {
     .replace(/\s+/g, ' ');
 }
 
+// ---- Alias (gabung nama manual) ----
+// Mapping tampilan "nama A = nama B" yang disimpan terpisah dari artikel,
+// supaya bisa gabung/pisah kapan saja tanpa menyentuh data mentah.
+window._spkAliasesCache = [];
+window._spkListByType = { internal: [], eksternal: [] };
+window._spkMergeContext = null; // {type, fromName}
+
+async function fetchSpokespersonAliases() {
+  try {
+    const resp = await fetch('/api/feeds?resource=spokesperson-aliases');
+    const data = await resp.json();
+    window._spkAliasesCache = data.aliases || [];
+  } catch (e) {
+    window._spkAliasesCache = [];
+  }
+  return window._spkAliasesCache;
+}
+
 async function loadSpokespersonRecap() {
   document.getElementById('spokespersonLoading').style.display = 'block';
   document.getElementById('spokespersonContent').style.display = 'none';
@@ -1692,6 +1739,10 @@ async function loadSpokespersonRecap() {
     return;
   }
 
+  const aliases = await fetchSpokespersonAliases();
+  const aliasMap = {}; // normalizeNameKey(alias) -> canonical display name
+  aliases.forEach(al => { aliasMap[normalizeNameKey(al.alias_name)] = al.canonical_name; });
+
   function aggregate(nameField, stanceField) {
     const map = {};
     allArts.forEach(a => {
@@ -1701,10 +1752,14 @@ async function loadSpokespersonRecap() {
       const articleTone = (a.tone || '').trim();
 
       entries.forEach(({ name, title }) => {
-        const key = normalizeNameKey(name);
+        // Kalau nama ini sudah pernah digabung manual ke nama lain, pakai
+        // nama kanoniknya buat pengelompokan — data mentah artikel TIDAK diubah.
+        const aliasKey = normalizeNameKey(name);
+        const resolvedName = aliasMap[aliasKey] || name;
+        const key = normalizeNameKey(resolvedName);
         if (!key) return;
         if (!map[key]) {
-          map[key] = { displayName: name, count: 0, titles: {}, own: { positif: 0, negatif: 0, netral: 0, kosong: 0 }, mismatch: 0 };
+          map[key] = { displayName: resolvedName, count: 0, titles: {}, own: { positif: 0, negatif: 0, netral: 0, kosong: 0 }, mismatch: 0 };
         }
         const d = map[key];
         d.count++;
@@ -1720,13 +1775,14 @@ async function loadSpokespersonRecap() {
     return Object.values(map).sort((a, b) => b.count - a.count);
   }
 
-  function renderList(list, elId) {
+  function renderList(list, elId, type) {
+    window._spkListByType[type] = list;
     const el = document.getElementById(elId);
     if (!list.length) {
       el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px;">Belum ada narasumber dengan nama spesifik yang teridentifikasi.</div>';
       return;
     }
-    el.innerHTML = list.map(d => {
+    el.innerHTML = list.map((d, i) => {
       const titleParts = Object.values(d.titles)
         .sort((a, b) => b.count - a.count)
         .map(t => `${t.count}x sebagai ${t.display}`)
@@ -1748,7 +1804,10 @@ async function loadSpokespersonRecap() {
         <div class="card" style="padding:12px 16px;">
           <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
             <div style="font-weight:700;font-size:14px;">${d.displayName}</div>
-            <div style="font-size:12px;color:var(--muted);white-space:nowrap;">Muncul di ${d.count} artikel</div>
+            <div style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
+              <div style="font-size:12px;color:var(--muted);">Muncul di ${d.count} artikel</div>
+              <button onclick="openMergeModal('${type}', ${i})" style="padding:3px 8px;border:1px solid var(--border);background:#fff;border-radius:5px;font-size:11px;cursor:pointer;">🔗 Gabung</button>
+            </div>
           </div>
           ${titleParts ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">${titleParts}</div>` : ''}
           <div style="font-size:12px;margin-top:8px;">
@@ -1761,11 +1820,129 @@ async function loadSpokespersonRecap() {
     }).join('');
   }
 
-  renderList(aggregate('spokesperson_internal', 'spokesperson_internal_stance'), 'spkInternalList');
-  renderList(aggregate('spokesperson_eksternal', 'spokesperson_eksternal_stance'), 'spkExternalList');
+  renderList(aggregate('spokesperson_internal', 'spokesperson_internal_stance'), 'spkInternalList', 'internal');
+  renderList(aggregate('spokesperson_eksternal', 'spokesperson_eksternal_stance'), 'spkExternalList', 'eksternal');
 
   document.getElementById('spokespersonLoading').style.display = 'none';
   document.getElementById('spokespersonContent').style.display = 'block';
+}
+
+// ---- Modal: gabungkan dua nama ----
+function openMergeModal(type, index) {
+  const list = window._spkListByType[type] || [];
+  const source = list[index];
+  if (!source) return;
+  window._spkMergeContext = { type, fromName: source.displayName };
+
+  document.getElementById('mergeAliasModalSourceLabel').textContent = `"${source.displayName}" akan disatukan ke bawah nama yang kamu pilih di bawah ini.`;
+
+  const select = document.getElementById('mergeAliasModalSelect');
+  const others = list.filter((d, i) => i !== index).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  window._spkMergeContext.others = others;
+  if (!others.length) {
+    select.innerHTML = '<option value="">(tidak ada nama lain di daftar ini)</option>';
+  } else {
+    select.innerHTML = others
+      .map((d, i) => `<option value="${i}"></option>`)
+      .join('');
+    // Isi teks tampilan lewat textContent (bukan nulis ke atribut HTML),
+    // biar nama yang ada tanda kutip di dalamnya tetap aman.
+    Array.from(select.options).forEach((opt, i) => { opt.textContent = others[i].displayName; });
+  }
+
+  document.getElementById('mergeAliasModalOverlay').style.display = 'flex';
+}
+
+function closeMergeModal() {
+  document.getElementById('mergeAliasModalOverlay').style.display = 'none';
+  window._spkMergeContext = null;
+}
+
+async function confirmMergeAlias() {
+  const ctx = window._spkMergeContext;
+  const select = document.getElementById('mergeAliasModalSelect');
+  if (!ctx || select.value === '') return;
+  const targetName = ctx.others[parseInt(select.value, 10)].displayName;
+
+  if (!confirm(`Apakah "${ctx.fromName}" dan "${targetName}" orang yang sama?\n\nSemua kemunculan "${ctx.fromName}" akan ditampilkan sebagai "${targetName}" di tab Spokesperson. Bisa dipisahkan lagi kapan saja lewat "Kelola Nama yang Sudah Digabung".`)) {
+    return;
+  }
+
+  try {
+    const resp = await fetch('/api/feeds?resource=spokesperson-aliases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alias_name: ctx.fromName, canonical_name: targetName })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      alert('Gagal menggabungkan: ' + (data.error || resp.statusText));
+      return;
+    }
+  } catch (e) {
+    alert('Gagal menggabungkan: ' + e.message);
+    return;
+  }
+
+  closeMergeModal();
+  loadSpokespersonRecap();
+}
+
+// ---- Modal: kelola alias yang sudah ada ----
+async function openManageAliasModal() {
+  const el = document.getElementById('manageAliasModalList');
+  el.innerHTML = '<div style="color:var(--muted);padding:10px 0;">⏳ Memuat...</div>';
+  document.getElementById('manageAliasModalOverlay').style.display = 'flex';
+
+  const aliases = await fetchSpokespersonAliases();
+  if (!aliases.length) {
+    el.innerHTML = '<div style="color:var(--muted);padding:10px 0;">Belum ada nama yang digabung.</div>';
+    return;
+  }
+  el.innerHTML = aliases.map((al, i) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid var(--border);border-radius:6px;padding:8px 10px;">
+      <div class="aliasRowLabel" data-idx="${i}"></div>
+      <button onclick="removeAlias(${i})" style="padding:3px 8px;border:1px solid var(--border);background:#fff;border-radius:5px;font-size:11px;cursor:pointer;white-space:nowrap;">✕ Pisahkan</button>
+    </div>
+  `).join('');
+  // Isi teks lewat textContent (bukan nulis ke HTML), biar nama yang ada
+  // tanda kutip/karakter khusus di dalamnya tetap aman ditampilkan.
+  document.querySelectorAll('.aliasRowLabel').forEach(div => {
+    const al = aliases[parseInt(div.dataset.idx, 10)];
+    const span1 = document.createElement('span');
+    span1.textContent = `"${al.alias_name}" → `;
+    const strong = document.createElement('strong');
+    strong.textContent = `"${al.canonical_name}"`;
+    div.appendChild(span1);
+    div.appendChild(strong);
+  });
+}
+
+function closeManageAliasModal() {
+  document.getElementById('manageAliasModalOverlay').style.display = 'none';
+}
+
+async function removeAlias(index) {
+  const al = window._spkAliasesCache[index];
+  if (!al) return;
+  if (!confirm(`Pisahkan lagi "${al.alias_name}"? Dia akan muncul sebagai entri tersendiri lagi di tab Spokesperson.`)) return;
+  try {
+    const resp = await fetch('/api/feeds?resource=spokesperson-aliases', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alias_name: al.alias_name })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) {
+      alert('Gagal memisahkan: ' + (data.error || resp.statusText));
+      return;
+    }
+  } catch (e) {
+    alert('Gagal memisahkan: ' + e.message);
+    return;
+  }
+  openManageAliasModal();
+  loadSpokespersonRecap();
 }
 
 async function loadRadarPapua() {
