@@ -67,32 +67,45 @@ ATURAN WAJIB PENULISAN NAMA SPOKESPERSON:
   "resume": "Ringkasan 2-3 kalimat dalam Bahasa Indonesia yang menjelaskan isi berita secara objektif"
 }`;
 
-// Cek apakah nama beneran ada kata-katanya di teks sumber (judul+deskripsi),
-// bukan sekadar diklaim AI — jaring pengaman kode, bukan andalin AI patuh
-// instruksi doang.
-function nameAppearsInSource(name, sourceTextLower) {
-  const parts = name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-  if (!parts.length) return false;
-  return parts.every(p => sourceTextLower.includes(p));
+// Cek apakah nama beneran ada di teks sumber — jaring pengaman kode, bukan
+// andalin AI patuh instruksi doang. Dicek sebagai SATU FRASA UTUH (nama
+// depan+belakang berurutan persis), BUKAN kata-kata yang dicek terpisah-
+// pisah — versi lama cuma cek "tiap kata dari nama ada DI MANA SAJA di
+// teks", jadi AI yang "menggabungkan" dua nama/fragmen berbeda yang
+// masing-masing beneran ada di teks (tapi bukan orang yang sama) tetap lolos.
+function normalizeForMatch(s) {
+  return (s || '').toLowerCase().replace(/[.,]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-function validateSpokespersonField(raw, sourceTextLower) {
+function nameAppearsInSource(name, sourceTextNormalized) {
+  const normalizedName = normalizeForMatch(name);
+  const words = normalizedName.split(' ').filter(Boolean);
+  if (words.length < 2) return false;
+  return sourceTextNormalized.includes(normalizedName);
+}
+
+function validateSpokespersonField(raw, sourceTextNormalized) {
   if (!raw) return '';
   const entries = raw.split(';').map(s => s.trim()).filter(Boolean);
   const valid = entries.filter(entry => {
     const name = entry.includes('|') ? entry.split('|')[0].trim() : entry.trim();
-    return nameAppearsInSource(name, sourceTextLower);
+    return nameAppearsInSource(name, sourceTextNormalized);
   });
   return valid.join(';');
 }
 
 async function analyzeArticle(title, description) {
   if (!GEMINI_KEYS.length) return { error: 'NO_API_KEY' };
+  // Potong deskripsi SEKALI, pakai hasil yang sama persis buat prompt ke
+  // Gemini maupun buat validasi nama — biar nggak ada nama yang "ketemu"
+  // cuma gara-gara nongol di bagian artikel yang Gemini sendiri nggak pernah
+  // baca.
+  const truncatedDescription = (description || '').replace(/<[^>]+>/g, '').substring(0, 400);
   const prompt = `${TONE_PROMPT}
 
 ## ARTIKEL YANG DIANALISIS:
 Judul: ${title}
-Deskripsi: ${(description || '').replace(/<[^>]+>/g, '').substring(0, 400)}
+Deskripsi: ${truncatedDescription}
 
 Berikan analisis dalam format JSON:`;
 
@@ -126,10 +139,10 @@ Berikan analisis dalam format JSON:`;
       const result = JSON.parse(jsonMatch[0]);
       if (!['positif', 'negatif', 'netral'].includes(result.tone)) result.tone = 'netral';
 
-      const sourceTextLower = (title + ' ' + description).toLowerCase();
-      result.spokesperson_internal = validateSpokespersonField(result.spokesperson_internal, sourceTextLower);
+      const sourceTextNormalized = normalizeForMatch(title + ' ' + truncatedDescription);
+      result.spokesperson_internal = validateSpokespersonField(result.spokesperson_internal, sourceTextNormalized);
       if (!result.spokesperson_internal) result.spokesperson_internal_stance = '';
-      result.spokesperson_eksternal = validateSpokespersonField(result.spokesperson_eksternal, sourceTextLower);
+      result.spokesperson_eksternal = validateSpokespersonField(result.spokesperson_eksternal, sourceTextNormalized);
       if (!result.spokesperson_eksternal) result.spokesperson_eksternal_stance = '';
 
       return result;

@@ -39,32 +39,53 @@ ATURAN WAJIB PENULISAN NAMA SPOKESPERSON:
 Balas HANYA JSON ini tanpa teks lain:
 {"tone":"netral","spokesperson_internal":"","spokesperson_internal_stance":"","spokesperson_eksternal":"","spokesperson_eksternal_stance":"","resume":"ringkasan 2-3 kalimat"}`;
 
-// Cek apakah nama beneran ada kata-katanya di teks sumber (judul+deskripsi),
-// bukan sekadar diklaim AI. Ini jaring pengaman kode, bukan andalin AI patuh
-// instruksi doang — soalnya AI kadang "nyampur" teks yang dikasih dengan
-// pengetahuan lamanya dari data training (makanya bisa nongol nama pejabat
-// yang udah pensiun, padahal nggak disebut di artikelnya).
-function nameAppearsInSource(name, sourceTextLower) {
-  const parts = name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-  if (!parts.length) return false;
-  return parts.every(p => sourceTextLower.includes(p));
+// Cek apakah nama beneran ada di teks sumber — jaring pengaman kode, bukan
+// andalin AI patuh instruksi doang, soalnya AI kadang "nyampur" teks yang
+// dikasih dengan pengetahuan lamanya dari data training (makanya bisa nongol
+// nama pejabat yang udah pensiun, padahal nggak disebut di artikelnya).
+//
+// Dicek sebagai SATU FRASA UTUH (nama depan+belakang berurutan persis),
+// BUKAN kata-kata yang dicek terpisah-pisah — versi lama cuma cek "tiap kata
+// dari nama ada DI MANA SAJA di teks", jadi kalau teks nyebut dua orang
+// berbeda ("...Bambang menyampaikan..." di satu kalimat, "...Pak Suharto
+// hadir..." di kalimat lain), AI yang "menggabungkan" jadi nama fiktif
+// "Bambang Suharto" akan tetap LOLOS validasi lama. Dicek sebagai frasa utuh
+// menutup celah ini.
+function normalizeForMatch(s) {
+  return (s || '').toLowerCase().replace(/[.,]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function nameAppearsInSource(name, sourceTextNormalized) {
+  const normalizedName = normalizeForMatch(name);
+  const words = normalizedName.split(' ').filter(Boolean);
+  // Nama orang minimal 2 suku kata (nama depan+belakang/inisial) — satu
+  // kata doang gampang "kebetulan cocok" dengan kata lain di teks.
+  if (words.length < 2) return false;
+  return sourceTextNormalized.includes(normalizedName);
 }
 
 // Saring field spokesperson (format "Nama|Jabatan;Nama2|Jabatan2"), buang
 // entri yang namanya nggak ketemu di teks sumber sama sekali.
-function validateSpokespersonField(raw, sourceTextLower) {
+function validateSpokespersonField(raw, sourceTextNormalized) {
   if (!raw) return '';
   const entries = raw.split(';').map(s => s.trim()).filter(Boolean);
   const valid = entries.filter(entry => {
     const name = entry.includes('|') ? entry.split('|')[0].trim() : entry.trim();
-    return nameAppearsInSource(name, sourceTextLower);
+    return nameAppearsInSource(name, sourceTextNormalized);
   });
   return valid.join(';');
 }
 
 async function analyzeArticle(title, description) {
   if (!GEMINI_KEYS.length) return { error: 'NO_API_KEY' };
-  const prompt = `${TONE_PROMPT}\n\nJudul: ${title}\nDeskripsi: ${(description || '').replace(/<[^>]+>/g, '').substring(0, 400)}`;
+  // PENTING: potong deskripsi SEKALI, pakai hasil yang sama persis baik buat
+  // prompt ke Gemini maupun buat validasi nama nanti. Sebelumnya validasi
+  // pakai description PENUH (tidak dipotong) sementara Gemini cuma dikasih
+  // 400 karakter pertama — jadi nama asli yang nongol di bagian artikel yang
+  // Gemini sendiri NGGAK PERNAH BACA bisa ikut "tervalidasi" padahal
+  // kecocokannya kebetulan/tidak terkait sama sekali dengan apa yang dibaca AI.
+  const truncatedDescription = (description || '').replace(/<[^>]+>/g, '').substring(0, 400);
+  const prompt = `${TONE_PROMPT}\n\nJudul: ${title}\nDeskripsi: ${truncatedDescription}`;
 
   let lastError = null;
   for (let i = 0; i < GEMINI_KEYS.length; i++) {
@@ -97,11 +118,12 @@ async function analyzeArticle(title, description) {
       const result = JSON.parse(jsonMatch[0]);
       if (!['positif', 'negatif', 'netral'].includes(result.tone)) result.tone = 'netral';
 
-      // Validasi: buang nama spokesperson yang nggak ketemu di teks sumber
-      const sourceTextLower = (title + ' ' + description).toLowerCase();
-      result.spokesperson_internal = validateSpokespersonField(result.spokesperson_internal, sourceTextLower);
+      // Validasi: buang nama spokesperson yang nggak ketemu di teks YANG
+      // SAMA PERSIS dibaca Gemini (truncatedDescription, bukan description penuh)
+      const sourceTextNormalized = normalizeForMatch(title + ' ' + truncatedDescription);
+      result.spokesperson_internal = validateSpokespersonField(result.spokesperson_internal, sourceTextNormalized);
       if (!result.spokesperson_internal) result.spokesperson_internal_stance = '';
-      result.spokesperson_eksternal = validateSpokespersonField(result.spokesperson_eksternal, sourceTextLower);
+      result.spokesperson_eksternal = validateSpokespersonField(result.spokesperson_eksternal, sourceTextNormalized);
       if (!result.spokesperson_eksternal) result.spokesperson_eksternal_stance = '';
 
       return result;
