@@ -125,6 +125,9 @@ async function analyzeArticle(title, description) {
       if (!result.spokesperson_internal) result.spokesperson_internal_stance = '';
       result.spokesperson_eksternal = validateSpokespersonField(result.spokesperson_eksternal, sourceTextNormalized);
       if (!result.spokesperson_eksternal) result.spokesperson_eksternal_stance = '';
+      // Tone komentar yang tidak diisi AI: samakan dengan tone pemberitaan (bisa diubah manual)
+      if (result.spokesperson_internal && !result.spokesperson_internal_stance) result.spokesperson_internal_stance = result.tone;
+      if (result.spokesperson_eksternal && !result.spokesperson_eksternal_stance) result.spokesperson_eksternal_stance = result.tone;
 
       return result;
     } catch (e) {
@@ -133,6 +136,16 @@ async function analyzeArticle(title, description) {
     }
   }
   return { error: `Semua ${GEMINI_KEYS.length} API key gagal/kehabisan kuota. Error terakhir: ${lastError}` };
+}
+
+// Artikel yang sudah diedit manual (manual_locked = true) TIDAK ikut dianalisis
+// ulang, supaya hasil edit (narasumber, tone) tidak ditimpa AI. Kalau kolom
+// manual_locked belum dibuat di DB, jatuh balik ke query tanpa filter.
+async function fetchArticlesSkippingLocked(url) {
+  const headers = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` };
+  let response = await fetch(url + '&manual_locked=eq.false', { headers });
+  if (!response.ok) response = await fetch(url, { headers });
+  return response;
 }
 
 module.exports = async function handler(req, res) {
@@ -158,9 +171,7 @@ module.exports = async function handler(req, res) {
   if (req.query.mode === 'revalidate') {
     try {
       const url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description,spokesperson_internal,spokesperson_eksternal&or=(spokesperson_internal.neq.,spokesperson_eksternal.neq.)&limit=${batchSize}&offset=${offset}&order=id.asc`;
-      const response = await fetch(url, {
-        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-      });
+      const response = await fetchArticlesSkippingLocked(url);
       const articles = await response.json();
 
       if (!Array.isArray(articles) || !articles.length) {
@@ -241,9 +252,7 @@ module.exports = async function handler(req, res) {
       url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description&or=(tone.is.null,tone.eq.)&limit=${batchSize}&offset=${offset}&order=id.asc`;
     }
 
-    const response = await fetch(url, {
-      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-    });
+    const response = await fetchArticlesSkippingLocked(url);
     const articles = await response.json();
 
     if (!Array.isArray(articles) || !articles.length) {

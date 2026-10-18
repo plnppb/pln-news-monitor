@@ -144,6 +144,9 @@ Berikan analisis dalam format JSON:`;
       if (!result.spokesperson_internal) result.spokesperson_internal_stance = '';
       result.spokesperson_eksternal = validateSpokespersonField(result.spokesperson_eksternal, sourceTextNormalized);
       if (!result.spokesperson_eksternal) result.spokesperson_eksternal_stance = '';
+      // Tone komentar yang tidak diisi AI: samakan dengan tone pemberitaan (bisa diubah manual)
+      if (result.spokesperson_internal && !result.spokesperson_internal_stance) result.spokesperson_internal_stance = result.tone;
+      if (result.spokesperson_eksternal && !result.spokesperson_eksternal_stance) result.spokesperson_eksternal_stance = result.tone;
 
       return result;
     } catch (e) {
@@ -454,6 +457,30 @@ async function handleListRadar(req, res) {
   }
 }
 
+// PATCH satu artikel berdasarkan url. Kalau lock=true, artikel ikut ditandai
+// manual_locked (sudah diedit manual -> tidak ditimpa analisis ulang AI).
+// Kalau kolom manual_locked belum dibuat di DB, otomatis diulang tanpa kolom itu
+// supaya edit tetap jalan (kuncinya baru aktif setelah SQL dijalankan).
+async function patchArticleByUrl(url, patch, lock) {
+  const doPatch = body => fetch(`${SUPABASE_URL}/rest/v1/articles?url=eq.${encodeURIComponent(url)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Prefer': 'return=representation'
+    },
+    body: JSON.stringify(body)
+  });
+  let resp = await doPatch(lock ? { ...patch, manual_locked: true } : patch);
+  if (!resp.ok && lock) {
+    const txt = await resp.clone().text();
+    if (/manual_locked/i.test(txt)) resp = await doPatch(patch);
+  }
+  const data = await resp.json();
+  return { ok: resp.ok, status: resp.status, data };
+}
+
 // ===== POST mode=update-tone: koreksi manual tone (kalau AI salah nilai) =====
 async function handleUpdateTone(req, res) {
   const { url, tone } = req.body || {};
@@ -461,20 +488,10 @@ async function handleUpdateTone(req, res) {
     return res.status(400).json({ error: 'url dan tone (positif/negatif/netral) wajib diisi' });
   }
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?url=eq.${encodeURIComponent(url)}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Prefer': 'return=representation'
-      },
-      body: JSON.stringify({ tone })
-    });
-    const data = await response.json();
-    if (!response.ok) return res.status(response.status).json({ error: JSON.stringify(data) });
-    if (!data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
-    return res.status(200).json({ success: true, article: data[0] });
+    const r = await patchArticleByUrl(url, { tone }, true);
+    if (!r.ok) return res.status(r.status).json({ error: JSON.stringify(r.data) });
+    if (!r.data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
+    return res.status(200).json({ success: true, article: r.data[0] });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -490,20 +507,10 @@ async function handleClearSpokesperson(req, res) {
     ? { spokesperson_internal: '', spokesperson_internal_stance: '' }
     : { spokesperson_eksternal: '', spokesperson_eksternal_stance: '' };
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?url=eq.${encodeURIComponent(url)}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Prefer': 'return=representation'
-      },
-      body: JSON.stringify(patch)
-    });
-    const data = await response.json();
-    if (!response.ok) return res.status(response.status).json({ error: JSON.stringify(data) });
-    if (!data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
-    return res.status(200).json({ success: true, article: data[0] });
+    const r = await patchArticleByUrl(url, patch, true);
+    if (!r.ok) return res.status(r.status).json({ error: JSON.stringify(r.data) });
+    if (!r.data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
+    return res.status(200).json({ success: true, article: r.data[0] });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -527,19 +534,48 @@ async function handleSetSpokesperson(req, res) {
   if (!value.trim()) patch[stanceKey] = '';
   else if (stance !== undefined) patch[stanceKey] = stance;
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?url=eq.${encodeURIComponent(url)}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Prefer': 'return=representation'
-      },
-      body: JSON.stringify(patch)
-    });
-    const data = await response.json();
-    if (!response.ok) return res.status(response.status).json({ error: JSON.stringify(data) });
-    if (!data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
+    const r = await patchArticleByUrl(url, patch, true);
+    if (!r.ok) return res.status(r.status).json({ error: JSON.stringify(r.data) });
+    if (!r.data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+// ===== POST mode=set-stance: ubah tone komentar (stance) satu artikel saja =====
+async function handleSetStance(req, res) {
+  const { url, type, stance } = req.body || {};
+  if (!url || !['internal', 'eksternal'].includes(type) || !['positif', 'negatif', 'netral'].includes(stance)) {
+    return res.status(400).json({ error: 'url, type (internal/eksternal), dan stance (positif/negatif/netral) wajib diisi' });
+  }
+  const patch = type === 'internal'
+    ? { spokesperson_internal_stance: stance }
+    : { spokesperson_eksternal_stance: stance };
+  try {
+    const r = await patchArticleByUrl(url, patch, true);
+    if (!r.ok) return res.status(r.status).json({ error: JSON.stringify(r.data) });
+    if (!r.data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+// ===== POST mode=set-lock: kunci / buka kunci artikel dari analisis ulang AI =====
+async function handleSetLock(req, res) {
+  const { url, locked } = req.body || {};
+  if (!url || typeof locked !== 'boolean') {
+    return res.status(400).json({ error: 'url dan locked (true/false) wajib diisi' });
+  }
+  try {
+    const r = await patchArticleByUrl(url, { manual_locked: locked }, false);
+    if (!r.ok) {
+      const msg = JSON.stringify(r.data);
+      const hint = /manual_locked/i.test(msg) ? ' — kolom "manual_locked" belum ada, jalankan SQL add-manual-lock-and-backfill.sql dulu di Supabase.' : '';
+      return res.status(r.status).json({ error: msg + hint });
+    }
+    if (!r.data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
     return res.status(200).json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -598,6 +634,8 @@ module.exports = async function handler(req, res) {
     if (mode === 'update-tone') return handleUpdateTone(req, res);
     if (mode === 'clear-spokesperson') return handleClearSpokesperson(req, res);
     if (mode === 'set-spokesperson') return handleSetSpokesperson(req, res);
+    if (mode === 'set-stance') return handleSetStance(req, res);
+    if (mode === 'set-lock') return handleSetLock(req, res);
     if (mode === 'hide-article') return handleHideArticle(req, res);
     return res.status(400).json({ error: 'mode tidak dikenal' });
   }
