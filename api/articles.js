@@ -506,6 +506,40 @@ async function handleClearSpokesperson(req, res) {
   }
 }
 
+// ===== POST mode=set-spokesperson: edit nama/jabatan spokesperson satu artikel (nilai field sudah dirakit client) =====
+async function handleSetSpokesperson(req, res) {
+  const { url, type, value } = req.body || {};
+  if (!url || !['internal', 'eksternal'].includes(type) || typeof value !== 'string') {
+    return res.status(400).json({ error: 'url, type (internal/eksternal), dan value (string) wajib diisi' });
+  }
+  const patch = type === 'internal'
+    ? { spokesperson_internal: value }
+    : { spokesperson_eksternal: value };
+  // Kalau field jadi kosong, stance-nya ikut dikosongkan biar nggak yatim.
+  if (!value.trim()) {
+    if (type === 'internal') patch.spokesperson_internal_stance = '';
+    else patch.spokesperson_eksternal_stance = '';
+  }
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?url=eq.${encodeURIComponent(url)}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify(patch)
+    });
+    const data = await response.json();
+    if (!response.ok) return res.status(response.status).json({ error: JSON.stringify(data) });
+    if (!data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -529,6 +563,7 @@ module.exports = async function handler(req, res) {
     if (mode === 'merge-followups') return handleMergeFollowups(req, res);
     if (mode === 'update-tone') return handleUpdateTone(req, res);
     if (mode === 'clear-spokesperson') return handleClearSpokesperson(req, res);
+    if (mode === 'set-spokesperson') return handleSetSpokesperson(req, res);
     return res.status(400).json({ error: 'mode tidak dikenal' });
   }
 
