@@ -734,10 +734,11 @@
   <!-- PANEL SPOKESPERSON RECAP -->
   <div id="panel-spokesperson-wrap" style="display:none;">
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#1e40af;line-height:1.6;">
-      🎙 Dikelompokkan berdasarkan <strong>nama orang</strong> (jabatan cuma info tambahan, karena bisa beda-beda tiap artikel). "Sikap pernyataannya sendiri" menilai apa yang <em>diucapkan orang itu sendiri</em> di kutipannya — bukan tone keseluruhan artikel tempat dia muncul. Kalau muncul catatan ⚠ kuning, itu artinya ada perbedaan berarti antara sikap orang tersebut dengan tone artikelnya — dibaca dulu sebelum menyimpulkan siapa "sumber" sentimen tertentu. Kalau banyak yang masih "belum dianalisis", jalankan <code>reanalyzeAll()</code> lagi.
-      <br>Nama/jabatan yang keliru bisa diperbaiki lewat <strong>✏ Edit</strong>; nama yang sebenarnya orang yang sama tapi tertulis beda bisa digabung lewat <strong>🔗 Gabung</strong>. Klik <strong>📰 Dikutip di N berita</strong> di tiap kartu untuk lihat daftar beritanya: <strong>Tone berita</strong> = nada keseluruhan artikel, <strong>Tone kutipan</strong> = sikap pernyataan orang itu sendiri (misal berita negatif tapi pembelaan PLN → kutipan positif).
+      🎙 Satu baris = satu narasumber. <strong>Tone Pemberitaan</strong> = nada keseluruhan berita tempat dia dikutip. <strong>Tone Komentar</strong> = sikap pernyataan orang itu sendiri (misal berita negatif tentang PLN, tapi komentar pejabat PLN-nya membela → komentar positif).
+      <br>Klik <strong>📰 N berita</strong> untuk melihat daftar beritanya. <strong>✏ Edit</strong> mengubah nama/jabatan. <strong>🔗 Gabung</strong> menyatukan baris lain ke baris ini (nama di baris ini yang dipakai) — jabatan dari baris yang digabung ikut terkumpul.
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px;">
+      <input id="spkFilterInput" type="text" placeholder="🔍 Cari nama / jabatan..." oninput="window._spkRerender && window._spkRerender()" style="flex:1;max-width:280px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;">
       <button onclick="openManageAliasModal()" style="padding:6px 12px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;">⚙ Kelola Nama yang Sudah Digabung</button>
     </div>
     <div id="spokespersonLoading" style="text-align:center;color:var(--muted);padding:20px;">⏳ Memuat data...</div>
@@ -769,16 +770,17 @@
     </div>
   </div>
 
-  <!-- MODAL: gabungkan dua nama spokesperson -->
+  <!-- MODAL: gabungkan beberapa baris ke satu narasumber -->
   <div id="mergeAliasModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
-    <div style="background:#fff;border-radius:10px;padding:20px;max-width:420px;width:90%;">
-      <div style="font-weight:700;font-size:15px;margin-bottom:10px;">🔗 Gabungkan Nama</div>
-      <div id="mergeAliasModalSourceLabel" style="font-size:13px;margin-bottom:10px;color:var(--muted);"></div>
-      <div style="font-size:12px;margin-bottom:6px;">Ini orang yang sama dengan:</div>
-      <select id="mergeAliasModalSelect" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:14px;"></select>
+    <div style="background:#fff;border-radius:10px;padding:20px;max-width:460px;width:92%;max-height:85vh;display:flex;flex-direction:column;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:6px;">🔗 Gabungkan ke satu orang</div>
+      <div id="mergeAliasModalSourceLabel" style="font-size:13px;margin-bottom:10px;line-height:1.5;"></div>
+      <input id="mergeAliasFilter" type="text" placeholder="Cari nama..." oninput="renderMergeChecklist()" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+      <div id="mergeAliasChecklist" style="overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px;margin:8px 0 8px;min-height:120px;max-height:40vh;"></div>
+      <div id="mergeAliasSummary" style="font-size:12px;color:var(--muted);margin-bottom:10px;"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button onclick="closeMergeModal()" style="padding:7px 14px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Batal</button>
-        <button onclick="confirmMergeAlias()" style="padding:7px 14px;border:none;background:var(--accent2);color:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Gabungkan</button>
+        <button id="mergeAliasConfirmBtn" onclick="confirmMergeAlias()" style="padding:7px 14px;border:none;background:var(--accent2);color:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Gabungkan</button>
       </div>
     </div>
   </div>
@@ -788,7 +790,8 @@
     <div style="background:#fff;border-radius:10px;padding:20px;max-width:480px;width:90%;max-height:70vh;overflow-y:auto;">
       <div style="font-weight:700;font-size:15px;margin-bottom:10px;">⚙ Nama yang Sudah Digabung</div>
       <div id="manageAliasModalList" style="display:flex;flex-direction:column;gap:6px;font-size:13px;"></div>
-      <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+      <div style="display:flex;justify-content:space-between;margin-top:14px;">
+        <button onclick="removeAllAliases()" style="padding:7px 14px;border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:6px;font-size:12px;cursor:pointer;">Pisahkan semua</button>
         <button onclick="closeManageAliasModal()" style="padding:7px 14px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Tutup</button>
       </div>
     </div>
@@ -1727,6 +1730,25 @@ window._spkAliasesCache = [];
 window._spkListByType = { internal: [], eksternal: [] };
 window._spkMergeContext = null; // {type, fromName}
 
+const SPK_TITLE_RE = /\b(gm|general\s+manager|manager|manajer|direktur|dirut|ketua|kepala|bupati|wakil|gubernur|menteri|anggota|presiden|dosen|rektor|pj|penjabat|juru\s+bicara|warga|masyarakat|pelanggan|kapolres|camat|lurah|sekretaris|staf|pegawai)\b/i;
+function spkLooksLikeTitle(s) { return SPK_TITLE_RE.test(s || ''); }
+
+// Ikuti rantai alias sampai ujung (A->B->C jadi C), dengan penjaga siklus.
+function spkResolve(name) {
+  const map = window._spkAliasMap || {};
+  let cur = name;
+  const seen = new Set();
+  for (let i = 0; i < 10; i++) {
+    const k = normalizeNameKey(cur);
+    if (seen.has(k)) break;
+    seen.add(k);
+    const next = map[k];
+    if (!next) break;
+    cur = next;
+  }
+  return cur;
+}
+
 async function fetchSpokespersonAliases() {
   try {
     const resp = await fetch('/api/feeds?resource=spokesperson-aliases');
@@ -1773,21 +1795,25 @@ async function loadSpokespersonRecap() {
       const articleTone = (a.tone || '').trim();
 
       entries.forEach(({ name, title }) => {
-        // Kalau nama ini sudah pernah digabung manual ke nama lain, pakai
-        // nama kanoniknya buat pengelompokan — data mentah artikel TIDAK diubah.
-        const aliasKey = normalizeNameKey(name);
-        const resolvedName = aliasMap[aliasKey] || name;
+        // Nama yang sudah digabung manual dipetakan ke nama kanoniknya (bisa
+        // berantai, diikuti sampai ujung). Data mentah artikel TIDAK diubah.
+        const resolvedName = spkResolve(name);
         const key = normalizeNameKey(resolvedName);
         if (!key) return;
+        // Kalau baris yang digabung itu sebenarnya cuma jabatan (mis. "GM PLN
+        // UIW Papua"), jadikan jabatan milik orang yang dituju.
+        let effTitle = title;
+        if (!effTitle && key !== normalizeNameKey(name) && spkLooksLikeTitle(name)) effTitle = name;
         if (!map[key]) {
-          map[key] = { displayName: resolvedName, count: 0, titles: {}, own: { positif: 0, negatif: 0, netral: 0, kosong: 0 }, mismatch: 0, articles: [] };
+          map[key] = { displayName: resolvedName, count: 0, titles: {}, own: { positif: 0, negatif: 0, netral: 0, kosong: 0 }, news: { positif: 0, negatif: 0, netral: 0, kosong: 0 }, mismatch: 0, articles: [] };
         }
         const d = map[key];
         d.count++;
-        d.articles.push({ art: a, nameField, title, ownStance, articleTone });
-        if (title) {
-          const tKey = normalizeTitleKey(title);
-          if (!d.titles[tKey]) d.titles[tKey] = { display: title, count: 0 };
+        d.articles.push({ art: a, nameField, title: effTitle, ownStance, articleTone });
+        d.news[(articleTone in d.news) ? articleTone : 'kosong']++;
+        if (effTitle) {
+          const tKey = normalizeTitleKey(effTitle);
+          if (!d.titles[tKey]) d.titles[tKey] = { display: effTitle, count: 0 };
           d.titles[tKey].count++;
         }
         d.own[ownStance || 'kosong'] = (d.own[ownStance || 'kosong'] || 0) + 1;
@@ -1797,6 +1823,15 @@ async function loadSpokespersonRecap() {
     return Object.values(map).sort((a, b) => b.count - a.count);
   }
 
+  function toneCountsHtml(o) {
+    const part = (n, label, color) => `<span style="color:${color};font-weight:600;white-space:nowrap;">${n} ${label}</span>`;
+    const h = [part(o.positif || 0, 'Positif', 'var(--pos)'), part(o.negatif || 0, 'Negatif', 'var(--neg)')];
+    if (o.netral) h.push(part(o.netral, 'Netral', 'var(--neu)'));
+    let out = h.join(' · ');
+    if (o.kosong) out += `<div style="font-size:11px;color:var(--muted);">(${o.kosong} belum dianalisis)</div>`;
+    return out;
+  }
+
   function renderList(list, elId, type) {
     window._spkListByType[type] = list;
     const el = document.getElementById(elId);
@@ -1804,48 +1839,53 @@ async function loadSpokespersonRecap() {
       el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px;">Belum ada narasumber dengan nama spesifik yang teridentifikasi.</div>';
       return;
     }
-    el.innerHTML = list.map((d, i) => {
-      const titleParts = Object.values(d.titles)
-        .sort((a, b) => b.count - a.count)
-        .map(t => `${t.count}x sebagai ${t.display}`)
-        .join(', ');
-
-      const ownParts = [];
-      if (d.own.positif) ownParts.push(`${d.own.positif}x Positif`);
-      if (d.own.negatif) ownParts.push(`${d.own.negatif}x Negatif`);
-      if (d.own.netral) ownParts.push(`${d.own.netral}x Netral`);
-      const ownSummary = ownParts.length ? ownParts.join(', ') : '—';
-
-      const mismatchNote = d.mismatch > 0
-        ? `<div style="margin-top:8px;font-size:11px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;">
-             ⚠ ${d.mismatch} dari ${d.count} kemunculan, sikap pernyataannya sendiri BERBEDA dari tone keseluruhan artikel tempat dia dikutip (misal: artikel bertone negatif, tapi pernyataan orang ini sendiri netral/positif). Jangan langsung simpulkan orang ini "sumber sentimen negatif" hanya dari tone artikelnya.
-           </div>`
+    const filter = ((document.getElementById('spkFilterInput') || {}).value || '').toLowerCase().trim();
+    const th = 'padding:8px;font-weight:600;border-bottom:1px solid var(--border);';
+    const rows = list.map((d, i) => {
+      const titles = Object.values(d.titles).sort((a, b) => b.count - a.count);
+      if (filter) {
+        const hay = (d.displayName + ' ' + titles.map(t => t.display).join(' ')).toLowerCase();
+        if (!hay.includes(filter)) return '';
+      }
+      const titleHtml = !titles.length ? '<span style="color:var(--muted);">—</span>'
+        : titles.length === 1 ? spkEsc(titles[0].display)
+        : titles.map(t => `<div>${spkEsc(t.display)} <span style="color:var(--muted);">(${t.count}x)</span></div>`).join('');
+      const detailId = `spkd-${type}-${i}`;
+      const mismatch = d.mismatch > 0
+        ? `<div style="font-size:11px;color:#92400e;margin-top:2px;" title="Jangan langsung simpulkan orang ini sumber sentimen negatif hanya dari tone beritanya.">⚠ ${d.mismatch} dari ${d.count} komentar berbeda dari tone beritanya</div>`
         : '';
-
+      const btn = 'padding:3px 8px;border:1px solid var(--border);background:#fff;border-radius:5px;font-size:11px;cursor:pointer;';
       return `
-        <div class="card" style="padding:12px 16px;">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
-            <div style="font-weight:700;font-size:14px;">${d.displayName}</div>
-            <div style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
-              <div style="font-size:12px;color:var(--muted);">Muncul di ${d.count} artikel</div>
-              <button onclick="openSpkEditModal('${type}', ${i}, null)" style="padding:3px 8px;border:1px solid var(--border);background:#fff;border-radius:5px;font-size:11px;cursor:pointer;">✏ Edit</button>
-              <button onclick="openMergeModal('${type}', ${i})" style="padding:3px 8px;border:1px solid var(--border);background:#fff;border-radius:5px;font-size:11px;cursor:pointer;">🔗 Gabung</button>
-            </div>
-          </div>
-          ${titleParts ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">${titleParts}</div>` : ''}
-          <div style="font-size:12px;margin-top:8px;">
-            <span style="font-weight:600;">Sikap pernyataannya sendiri:</span> ${ownSummary}
-            ${d.own.kosong ? ` <span style="color:var(--muted)">(${d.own.kosong} belum dianalisis)</span>` : ''}
-          </div>
-          ${mismatchNote}
-          ${renderSpkArticleList(d, type, i)}
-        </div>
-      `;
+        <tr style="border-top:1px solid var(--border);vertical-align:top;">
+          <td style="padding:10px 8px;min-width:150px;">
+            <div style="font-weight:700;">${spkEsc(d.displayName)}</div>
+            <button onclick="toggleSpkDetail('${detailId}')" style="border:none;background:none;padding:0;margin-top:3px;font-size:11px;font-weight:600;color:var(--accent2);cursor:pointer;">📰 ${d.articles.length} berita ▾</button>
+          </td>
+          <td style="padding:10px 8px;min-width:190px;font-size:12px;">${titleHtml}</td>
+          <td style="padding:10px 8px;min-width:150px;font-size:12px;">${toneCountsHtml(d.news)}</td>
+          <td style="padding:10px 8px;min-width:150px;font-size:12px;">${toneCountsHtml(d.own)}${mismatch}</td>
+          <td style="padding:10px 8px;white-space:nowrap;">
+            <button onclick="openSpkEditModal('${type}', ${i}, null)" style="${btn}">✏ Edit</button>
+            <button onclick="openMergeModal('${type}', ${i})" style="${btn}">🔗 Gabung</button>
+          </td>
+        </tr>
+        <tr id="${detailId}" style="display:none;background:#fafbfc;"><td colspan="5" style="padding:0 12px 10px;">${renderSpkArticleList(d, type, i)}</td></tr>`;
     }).join('');
+    el.innerHTML = rows.trim()
+      ? `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid var(--border);">
+           <thead><tr style="background:#f8fafc;text-align:left;font-size:12px;">
+             <th style="${th}">Nama</th><th style="${th}">Jabatan</th><th style="${th}">Tone Pemberitaan</th><th style="${th}">Tone Komentar</th><th style="${th}"></th>
+           </tr></thead><tbody>${rows}</tbody></table></div>`
+      : '<div style="color:var(--muted);font-size:12px;padding:10px;">Tidak ada yang cocok dengan pencarian.</div>';
   }
 
-  renderList(aggregate('spokesperson_internal', 'spokesperson_internal_stance'), 'spkInternalList', 'internal');
-  renderList(aggregate('spokesperson_eksternal', 'spokesperson_eksternal_stance'), 'spkExternalList', 'eksternal');
+  const internalList = aggregate('spokesperson_internal', 'spokesperson_internal_stance');
+  const externalList = aggregate('spokesperson_eksternal', 'spokesperson_eksternal_stance');
+  window._spkRerender = () => {
+    renderList(internalList, 'spkInternalList', 'internal');
+    renderList(externalList, 'spkExternalList', 'eksternal');
+  };
+  window._spkRerender();
 
   document.getElementById('spokespersonLoading').style.display = 'none';
   document.getElementById('spokespersonContent').style.display = 'block';
@@ -1863,8 +1903,13 @@ function spkToneBadge(label, tone) {
   return `<span style="font-size:11px;">${label}: <span class="tone-badge ${spkEsc(t)}">${spkEsc(t)}</span></span>`;
 }
 
+function toggleSpkDetail(id) {
+  const tr = document.getElementById(id);
+  if (tr) tr.style.display = tr.style.display === 'none' ? 'table-row' : 'none';
+}
+
 function renderSpkArticleList(d, type, personIdx) {
-  const rows = d.articles
+  return d.articles
     .map((x, ai) => ({ x, ai }))
     .sort((a, b) => new Date(b.x.art.published_at || 0) - new Date(a.x.art.published_at || 0))
     .map(({ x, ai }) => {
@@ -1880,16 +1925,11 @@ function renderSpkArticleList(d, type, personIdx) {
           <div style="color:var(--muted);margin-top:2px;">${spkEsc(a.source || '')}${date ? ' · ' + date : ''}${x.title ? ' · sbg. <em>' + spkEsc(x.title) + '</em>' : ''}</div>
           <div style="display:flex;gap:14px;margin-top:4px;flex-wrap:wrap;">
             ${spkToneBadge('Tone berita', x.articleTone)}
-            ${spkToneBadge('Tone kutipan', x.ownStance)}
+            ${spkToneBadge('Tone komentar', x.ownStance)}
             ${beda ? '<span style="font-size:11px;color:#92400e;">⚠ berbeda</span>' : ''}
           </div>
         </div>`;
     }).join('');
-  return `
-    <details style="margin-top:10px;">
-      <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--accent2);">📰 Dikutip di ${d.articles.length} berita</summary>
-      <div style="margin-top:6px;">${rows}</div>
-    </details>`;
 }
 
 window._spkEditCtx = null; // {type, personIdx, artIdx|null}
@@ -1926,16 +1966,18 @@ function closeSpkEditModal() {
 // Rakit ulang isi field satu artikel: entri milik orang ini diganti/dihapus,
 // entri orang lain dibiarkan. mode: 'edit' | 'remove'
 function rebuildSpkField(art, nameField, personKey, mode, newName, newTitle, keepTitleIfBlank) {
-  const aliasMap = window._spkAliasMap || {};
   const entries = parseSpokespersonField(art[nameField]);
   const out = [];
   const seen = new Set();
   entries.forEach(e => {
-    const resolved = aliasMap[normalizeNameKey(e.name)] || e.name;
+    const resolved = spkResolve(e.name);
     let cur = e;
     if (normalizeNameKey(resolved) === personKey) {
       if (mode === 'remove') return;
-      cur = { name: newName, title: (newTitle === '' && keepTitleIfBlank) ? e.title : newTitle };
+      // Entri hasil gabungan yang aslinya cuma jabatan: jabatannya dibawa ke nama baru.
+      let keepTitle = e.title;
+      if (!keepTitle && normalizeNameKey(e.name) !== normalizeNameKey(resolved) && spkLooksLikeTitle(e.name)) keepTitle = e.name;
+      cur = { name: newName, title: (newTitle === '' && keepTitleIfBlank) ? keepTitle : newTitle };
     }
     const k = normalizeNameKey(cur.name);
     if (seen.has(k)) return; // hindari nama ganda dalam satu berita
@@ -1980,7 +2022,7 @@ async function applySpkChange(mode) {
     // Edit nama untuk SEMUA berita: alias yang menunjuk ke nama lama sudah
     // tidak diperlukan (semua entri sudah ditulis ulang), hapus biar bersih.
     if (mode === 'edit' && !single && !failed) {
-      const stale = (window._spkAliasesCache || []).filter(al => normalizeNameKey(al.canonical_name) === personKey);
+      const stale = (window._spkAliasesCache || []).filter(al => normalizeNameKey(al.canonical_name) === personKey || normalizeNameKey(spkResolve(al.alias_name)) === personKey);
       for (const al of stale) {
         await fetch('/api/feeds?resource=spokesperson-aliases', {
           method: 'DELETE',
@@ -2006,30 +2048,53 @@ function removeSpkEntry() {
   return applySpkChange('remove');
 }
 
-// ---- Modal: gabungkan dua nama ----
+// ---- Modal: gabungkan beberapa baris ke satu narasumber ----
 function openMergeModal(type, index) {
   const list = window._spkListByType[type] || [];
-  const source = list[index];
-  if (!source) return;
-  window._spkMergeContext = { type, fromName: source.displayName };
-
-  document.getElementById('mergeAliasModalSourceLabel').textContent = `"${source.displayName}" akan disatukan ke bawah nama yang kamu pilih di bawah ini.`;
-
-  const select = document.getElementById('mergeAliasModalSelect');
+  const keep = list[index];
+  if (!keep) return;
   const others = list.filter((d, i) => i !== index).sort((a, b) => a.displayName.localeCompare(b.displayName));
-  window._spkMergeContext.others = others;
-  if (!others.length) {
-    select.innerHTML = '<option value="">(tidak ada nama lain di daftar ini)</option>';
-  } else {
-    select.innerHTML = others
-      .map((d, i) => `<option value="${i}"></option>`)
-      .join('');
-    // Isi teks tampilan lewat textContent (bukan nulis ke atribut HTML),
-    // biar nama yang ada tanda kutip di dalamnya tetap aman.
-    Array.from(select.options).forEach((opt, i) => { opt.textContent = others[i].displayName; });
-  }
+  window._spkMergeContext = { type, keepName: keep.displayName, others, picked: new Set() };
 
+  const lbl = document.getElementById('mergeAliasModalSourceLabel');
+  lbl.textContent = '';
+  lbl.append('Nama yang dipakai (tetap): ');
+  const st = document.createElement('strong');
+  st.textContent = keep.displayName;
+  lbl.append(st, '. Centang baris lain yang sebenarnya orang yang sama — semuanya akan digabung ke sini.');
+
+  document.getElementById('mergeAliasFilter').value = '';
+  renderMergeChecklist();
   document.getElementById('mergeAliasModalOverlay').style.display = 'flex';
+}
+
+function renderMergeChecklist() {
+  const ctx = window._spkMergeContext;
+  if (!ctx) return;
+  const q = (document.getElementById('mergeAliasFilter').value || '').toLowerCase().trim();
+  const html = ctx.others.map((d, i) => {
+    if (q && !d.displayName.toLowerCase().includes(q)) return '';
+    return `<label style="display:flex;gap:8px;align-items:flex-start;padding:5px 4px;font-size:13px;cursor:pointer;">
+      <input type="checkbox" ${ctx.picked.has(i) ? 'checked' : ''} onchange="toggleMergePick(${i}, this.checked)" style="margin-top:3px;">
+      <span>${spkEsc(d.displayName)} <span style="color:var(--muted);font-size:11px;">· ${d.articles.length} berita</span></span>
+    </label>`;
+  }).join('');
+  document.getElementById('mergeAliasChecklist').innerHTML = html || '<div style="color:var(--muted);font-size:12px;padding:8px;">Tidak ada nama yang cocok.</div>';
+  updateMergeSummary();
+}
+
+function toggleMergePick(i, checked) {
+  const ctx = window._spkMergeContext;
+  if (!ctx) return;
+  if (checked) ctx.picked.add(i); else ctx.picked.delete(i);
+  updateMergeSummary();
+}
+
+function updateMergeSummary() {
+  const ctx = window._spkMergeContext;
+  if (!ctx) return;
+  const n = ctx.picked.size;
+  document.getElementById('mergeAliasSummary').textContent = n ? `${n} baris dipilih untuk digabung ke "${ctx.keepName}".` : 'Belum ada yang dipilih.';
 }
 
 function closeMergeModal() {
@@ -2039,30 +2104,42 @@ function closeMergeModal() {
 
 async function confirmMergeAlias() {
   const ctx = window._spkMergeContext;
-  const select = document.getElementById('mergeAliasModalSelect');
-  if (!ctx || select.value === '') return;
-  const targetName = ctx.others[parseInt(select.value, 10)].displayName;
+  if (!ctx || !ctx.picked.size) { alert('Centang dulu minimal satu baris yang mau digabung.'); return; }
+  const picked = Array.from(ctx.picked).map(i => ctx.others[i]);
 
-  if (!confirm(`Apakah "${ctx.fromName}" dan "${targetName}" orang yang sama?\n\nSemua kemunculan "${ctx.fromName}" akan ditampilkan sebagai "${targetName}" di tab Spokesperson. Bisa dipisahkan lagi kapan saja lewat "Kelola Nama yang Sudah Digabung".`)) {
-    return;
-  }
+  if (!confirm(`Apakah ini orang yang sama dengan "${ctx.keepName}"?\n\n${picked.map(p => '• ' + p.displayName).join('\n')}\n\nSemuanya akan ditampilkan sebagai "${ctx.keepName}". Bisa dipisahkan lagi lewat "Kelola Nama yang Sudah Digabung".`)) return;
 
-  try {
-    const resp = await fetch('/api/feeds?resource=spokesperson-aliases', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ alias_name: ctx.fromName, canonical_name: targetName })
+  // Rantai alias lama ikut dialihkan langsung ke tujuan baru, supaya tidak
+  // ada alias yang menunjuk ke alias lain.
+  const keepKey = normalizeNameKey(ctx.keepName);
+  const jobs = new Map();
+  picked.forEach(p => {
+    const srcKey = normalizeNameKey(p.displayName);
+    if (srcKey !== keepKey) jobs.set(srcKey, { alias_name: p.displayName, canonical_name: ctx.keepName });
+    (window._spkAliasesCache || []).forEach(al => {
+      const aKey = normalizeNameKey(al.alias_name);
+      if (aKey !== keepKey && normalizeNameKey(spkResolve(al.alias_name)) === srcKey) {
+        jobs.set(aKey, { alias_name: al.alias_name, canonical_name: ctx.keepName });
+      }
     });
-    const data = await resp.json();
-    if (!resp.ok || data.error) {
-      alert('Gagal menggabungkan: ' + (data.error || resp.statusText));
-      return;
-    }
-  } catch (e) {
-    alert('Gagal menggabungkan: ' + e.message);
-    return;
-  }
+  });
 
+  const btn = document.getElementById('mergeAliasConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Menggabungkan...';
+  let failed = 0;
+  const list = Array.from(jobs.values());
+  for (let i = 0; i < list.length; i += 5) {
+    const res = await Promise.all(list.slice(i, i + 5).map(j =>
+      fetch('/api/feeds?resource=spokesperson-aliases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(j)
+      }).then(r => r.ok).catch(() => false)
+    ));
+    failed += res.filter(ok => !ok).length;
+  }
+  btn.disabled = false; btn.textContent = 'Gabungkan';
+  if (failed) alert(`${failed} penggabungan gagal disimpan. Coba lagi.`);
   closeMergeModal();
   loadSpokespersonRecap();
 }
@@ -2099,6 +2176,21 @@ async function openManageAliasModal() {
 
 function closeManageAliasModal() {
   document.getElementById('manageAliasModalOverlay').style.display = 'none';
+}
+
+async function removeAllAliases() {
+  const all = window._spkAliasesCache || [];
+  if (!all.length) return;
+  if (!confirm(`Pisahkan SEMUA ${all.length} nama yang sudah digabung? Semuanya akan muncul sebagai baris tersendiri lagi.`)) return;
+  for (const al of all) {
+    await fetch('/api/feeds?resource=spokesperson-aliases', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alias_name: al.alias_name })
+    }).catch(() => {});
+  }
+  openManageAliasModal();
+  loadSpokespersonRecap();
 }
 
 async function removeAlias(index) {
