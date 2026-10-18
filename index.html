@@ -750,6 +750,56 @@
     </div>
   </div><!-- end panel-spokesperson-wrap -->
 
+  <!-- MODAL: kelola narasumber satu berita (tab Monitor) -->
+  <div id="mgrSpkModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:10px;padding:20px;max-width:560px;width:94%;max-height:90vh;overflow-y:auto;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:4px;">👥 Kelola Narasumber</div>
+      <div id="mgrSpkTitle" style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5;"></div>
+
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px;">Narasumber di berita ini</div>
+      <div id="mgrSpkList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;"></div>
+
+      <div style="border:1px solid var(--border);border-radius:8px;padding:12px;background:#fafbfc;">
+        <div id="mgrFormTitle" style="font-size:12px;font-weight:600;margin-bottom:8px;">➕ Tambah narasumber</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <select id="mgrType" onchange="mgrRefreshLists()" style="padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <option value="internal">🏢 Internal PLN</option>
+            <option value="eksternal">👤 Eksternal</option>
+          </select>
+          <input id="mgrName" list="mgrNameList" oninput="mgrNameChanged()" placeholder="Nama (pilih dari daftar atau ketik baru)" style="flex:1;min-width:180px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+        </div>
+        <input id="mgrTitle" list="mgrTitleList" placeholder="Jabatan" style="width:100%;box-sizing:border-box;margin-top:8px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+        <datalist id="mgrNameList"></datalist>
+        <datalist id="mgrTitleList"></datalist>
+        <div id="mgrMasterHint" style="font-size:11px;color:var(--muted);margin-top:6px;">⏳ Memuat daftar narasumber...</div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button id="mgrAddBtn" onclick="mgrAddEntry()" style="padding:7px 14px;border:none;background:var(--accent2);color:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Tambah</button>
+          <button id="mgrCancelEditBtn" onclick="mgrCancelEdit()" style="display:none;padding:7px 14px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Batal ubah</button>
+        </div>
+      </div>
+
+      <div id="mgrStanceWrap" style="margin-top:14px;font-size:12px;display:flex;flex-direction:column;gap:8px;">
+        <div id="mgrStanceRowInternal" style="display:none;align-items:center;gap:8px;">
+          <span style="min-width:190px;">Tone komentar narasumber internal:</span>
+          <select id="mgrStanceInternal" style="padding:5px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
+            <option value="">(belum diisi)</option><option value="positif">Positif</option><option value="negatif">Negatif</option><option value="netral">Netral</option>
+          </select>
+        </div>
+        <div id="mgrStanceRowEksternal" style="display:none;align-items:center;gap:8px;">
+          <span style="min-width:190px;">Tone komentar narasumber eksternal:</span>
+          <select id="mgrStanceEksternal" style="padding:5px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
+            <option value="">(belum diisi)</option><option value="positif">Positif</option><option value="negatif">Negatif</option><option value="netral">Netral</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+        <button onclick="closeMgrSpkModal()" style="padding:7px 14px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Batal</button>
+        <button id="mgrSaveBtn" onclick="saveMgrSpk()" style="padding:7px 14px;border:none;background:var(--accent2);color:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Simpan</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: edit nama/jabatan spokesperson -->
   <div id="spkEditModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
     <div style="background:#fff;border-radius:10px;padding:20px;max-width:440px;width:90%;">
@@ -1494,10 +1544,9 @@ function renderCard(a, i) {
       : a._analyzed ? ''
       : `<div class="card-resume" style="font-style:italic;color:var(--muted)">${(a.description||'').replace(/<[^>]+>/g,'').substring(0,150)||'—'}</div>`;
 
-  const spkHtml = [
-    a._spkInternal ? `<span class="spk-badge internal">🏢 ${a._spkInternal}${a._fromDB ? ` <span onclick="clearSpokesperson(${gi},'internal')" style="cursor:pointer;font-weight:700;margin-left:4px;" title="Hapus kalau nama ini salah/hasil karangan AI">✕</span>` : ''}</span>` : '',
-    a._spkExternal ? `<span class="spk-badge external">👤 ${a._spkExternal}${a._fromDB ? ` <span onclick="clearSpokesperson(${gi},'eksternal')" style="cursor:pointer;font-weight:700;margin-left:4px;" title="Hapus kalau nama ini salah/hasil karangan AI">✕</span>` : ''}</span>` : ''
-  ].filter(Boolean).join('');
+  const spkChip = (raw, cls, icon) => parseSpokespersonField(raw).map(e =>
+    `<span class="spk-badge ${cls}">${icon} <strong>${spkEsc(e.name)}</strong>${e.title ? ' · ' + spkEsc(e.title) : ''}</span>`).join('');
+  const spkHtml = spkChip(a._spkInternal, 'internal', '🏢') + spkChip(a._spkExternal, 'external', '👤');
 
   return `<div class="article-card ${tc}" id="card-${gi}">
     <div class="card-top">
@@ -1515,6 +1564,7 @@ function renderCard(a, i) {
           : ''}
       </div>
       <div class="card-actions">
+        <button class="icon-btn" onclick="openMgrSpkModal(${gi})" title="Kelola narasumber: tambah / edit / hapus">👥</button>
         <button class="icon-btn" onclick="pinArticle(${gi})" title="Tambahkan ke Tindak Lanjut">📌</button>
         <a href="${url}" target="_blank" rel="noopener" style="text-decoration:none">
           <button class="icon-btn" title="Buka artikel">↗</button>
@@ -1522,6 +1572,7 @@ function renderCard(a, i) {
         ${a._fromDB
           ? `<button class="icon-btn" disabled title="Sudah ada di database" style="opacity:0.6;cursor:default">✅</button>`
           : `<button class="icon-btn" id="savedb-${gi}" onclick="saveArticleToDB(${gi})" title="Masukkan ke database, biar auto-crawl selanjutnya nangkep ini terus">💾</button>`}
+        <button class="icon-btn" onclick="deleteArticle(${gi})" title="Hapus berita ini dari monitoring">🗑</button>
       </div>
     </div>
     <div class="card-title"><a href="${url}" target="_blank" rel="noopener">${a.title||'Tanpa judul'}</a></div>
@@ -2046,6 +2097,323 @@ function saveSpkEdit() { return applySpkChange('edit'); }
 function removeSpkEntry() {
   if (!confirm('Hapus narasumber ini dari berita tersebut saja? (Narasumber lain di berita yang sama tidak terpengaruh.)')) return;
   return applySpkChange('remove');
+}
+
+
+// ==================== KELOLA NARASUMBER & HAPUS BERITA (TAB MONITOR) ====================
+// Daftar narasumber (master data) diambil dari semua berita + alias penggabungan
+// di tab Spokesperson, jadi nama & jabatan yang dipilih konsisten dengan di sana.
+window._spkMaster = null;
+window._spkMasterPromise = null;
+window._mgr = null;
+
+async function buildSpkMasterData() {
+  await fetchSpokespersonAliases();
+  const aliasMap = {};
+  (window._spkAliasesCache || []).forEach(al => { aliasMap[normalizeNameKey(al.alias_name)] = al.canonical_name; });
+  window._spkAliasMap = aliasMap;
+
+  let all = [], offset = 0;
+  while (true) {
+    const r = await fetch(`/api/articles?limit=500&offset=${offset}`);
+    const d = await r.json();
+    if (!d.articles || !d.articles.length) break;
+    all = all.concat(d.articles);
+    if (d.articles.length < 500) break;
+    offset += 500;
+  }
+  const out = {};
+  [['internal', 'spokesperson_internal'], ['eksternal', 'spokesperson_eksternal']].forEach(([type, field]) => {
+    const map = {};
+    all.forEach(a => parseSpokespersonField(a[field]).forEach(({ name, title }) => {
+      const resolved = spkResolve(name);
+      const key = normalizeNameKey(resolved);
+      if (!key) return;
+      let eff = title;
+      if (!eff && key !== normalizeNameKey(name) && spkLooksLikeTitle(name)) eff = name;
+      const m = map[key] || (map[key] = { name: resolved, count: 0, titles: {} });
+      m.count++;
+      if (eff) {
+        const tk = normalizeTitleKey(eff);
+        (m.titles[tk] = m.titles[tk] || { title: eff, count: 0 }).count++;
+      }
+    }));
+    out[type] = Object.values(map)
+      .map(m => ({ name: m.name, count: m.count, titles: Object.values(m.titles).sort((a, b) => b.count - a.count) }))
+      .sort((a, b) => b.count - a.count);
+  });
+  return out;
+}
+
+function ensureSpkMaster() {
+  if (window._spkMaster) return Promise.resolve(window._spkMaster);
+  if (!window._spkMasterPromise) {
+    window._spkMasterPromise = buildSpkMasterData()
+      .then(m => { window._spkMaster = m; return m; })
+      .catch(e => { console.error('Gagal memuat master narasumber:', e); return null; })
+      .finally(() => { window._spkMasterPromise = null; });
+  }
+  return window._spkMasterPromise;
+}
+
+function mgrSerialize(entries, type) {
+  return entries.filter(e => e.type === type)
+    .map(e => e.title ? `${e.name}|${e.title}` : e.name).join(';');
+}
+
+function openMgrSpkModal(gi) {
+  const a = allArticles[gi];
+  if (!a) return;
+  if (!a._fromDB) {
+    showToast('💾 Simpan berita ke database dulu, baru narasumbernya bisa dikelola');
+    return;
+  }
+  const entries = [
+    ...parseSpokespersonField(a._spkInternal).map(e => ({ type: 'internal', name: e.name, title: e.title })),
+    ...parseSpokespersonField(a._spkExternal).map(e => ({ type: 'eksternal', name: e.name, title: e.title }))
+  ];
+  window._mgr = {
+    gi, a, entries, editing: null,
+    origValue: { internal: mgrSerialize(entries, 'internal'), eksternal: mgrSerialize(entries, 'eksternal') },
+    origStance: { internal: a._spkInternalStance || '', eksternal: a._spkExternalStance || '' }
+  };
+  document.getElementById('mgrSpkTitle').textContent = a.title || '';
+  document.getElementById('mgrStanceInternal').value = window._mgr.origStance.internal;
+  document.getElementById('mgrStanceEksternal').value = window._mgr.origStance.eksternal;
+  mgrResetForm();
+  mgrRender();
+  document.getElementById('mgrSpkModalOverlay').style.display = 'flex';
+
+  document.getElementById('mgrMasterHint').textContent = window._spkMaster ? '' : '⏳ Memuat daftar narasumber...';
+  ensureSpkMaster().then(m => {
+    if (!window._mgr) return;
+    document.getElementById('mgrMasterHint').textContent = m
+      ? 'Pilih dari daftar nama yang muncul saat mengetik (sama dengan tab Spokesperson), atau ketik nama baru.'
+      : '⚠ Daftar narasumber gagal dimuat — tetap bisa mengetik manual.';
+    mgrRefreshLists();
+  });
+}
+
+function closeMgrSpkModal() {
+  document.getElementById('mgrSpkModalOverlay').style.display = 'none';
+  window._mgr = null;
+}
+
+function mgrResetForm() {
+  document.getElementById('mgrName').value = '';
+  document.getElementById('mgrTitle').value = '';
+  document.getElementById('mgrFormTitle').textContent = '➕ Tambah narasumber';
+  document.getElementById('mgrAddBtn').textContent = 'Tambah';
+  document.getElementById('mgrCancelEditBtn').style.display = 'none';
+  if (window._mgr) window._mgr.editing = null;
+  mgrRefreshLists();
+}
+
+function mgrFindMaster(type, name) {
+  const m = window._spkMaster;
+  if (!m || !m[type]) return null;
+  const key = normalizeNameKey(name || '');
+  return m[type].find(p => normalizeNameKey(p.name) === key) || null;
+}
+
+function mgrRefreshLists() {
+  const type = document.getElementById('mgrType').value;
+  const m = window._spkMaster;
+  const nameList = document.getElementById('mgrNameList');
+  const titleList = document.getElementById('mgrTitleList');
+  nameList.innerHTML = '';
+  titleList.innerHTML = '';
+  if (!m) return;
+  (m[type] || []).forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.name;
+    o.label = `${p.count} berita`;
+    nameList.appendChild(o);
+  });
+  const person = mgrFindMaster(type, document.getElementById('mgrName').value);
+  let titles;
+  if (person) titles = person.titles.map(t => t.title);
+  else {
+    // Nama baru / belum cocok: tawarkan jabatan yang paling sering dipakai untuk tipe ini
+    const freq = {};
+    (m[type] || []).forEach(p => p.titles.forEach(t => { freq[t.title] = (freq[t.title] || 0) + t.count; }));
+    titles = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 20).map(x => x[0]);
+  }
+  titles.forEach(t => {
+    const o = document.createElement('option');
+    o.value = t;
+    titleList.appendChild(o);
+  });
+}
+
+function mgrNameChanged() {
+  mgrRefreshLists();
+  const type = document.getElementById('mgrType').value;
+  const person = mgrFindMaster(type, document.getElementById('mgrName').value);
+  const titleInput = document.getElementById('mgrTitle');
+  // Nama dipilih dari master data & jabatan masih kosong: isi jabatan yang paling sering dipakai
+  if (person && !titleInput.value && person.titles.length) titleInput.value = person.titles[0].title;
+}
+
+function mgrRender() {
+  const m = window._mgr;
+  if (!m) return;
+  const list = document.getElementById('mgrSpkList');
+  if (!m.entries.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:6px 0;">Belum ada narasumber di berita ini.</div>';
+  } else {
+    list.innerHTML = m.entries.map((e, i) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid var(--border);border-radius:6px;padding:7px 10px;${m.editing === i ? 'background:#eff6ff;' : ''}">
+        <div style="font-size:13px;">
+          <span class="spk-badge ${e.type === 'internal' ? 'internal' : 'external'}">${e.type === 'internal' ? '🏢 Internal' : '👤 Eksternal'}</span>
+          <strong>${spkEsc(e.name)}</strong>${e.title ? ' <span style="color:var(--muted);">· ' + spkEsc(e.title) + '</span>' : ''}
+        </div>
+        <div style="white-space:nowrap;">
+          <button onclick="mgrEditEntry(${i})" style="padding:2px 8px;border:1px solid var(--border);background:#fff;border-radius:5px;font-size:11px;cursor:pointer;">✏</button>
+          <button onclick="mgrRemoveEntry(${i})" style="padding:2px 8px;border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:5px;font-size:11px;cursor:pointer;">✕</button>
+        </div>
+      </div>`).join('');
+  }
+  document.getElementById('mgrStanceRowInternal').style.display = m.entries.some(e => e.type === 'internal') ? 'flex' : 'none';
+  document.getElementById('mgrStanceRowEksternal').style.display = m.entries.some(e => e.type === 'eksternal') ? 'flex' : 'none';
+}
+
+function mgrAddEntry() {
+  const m = window._mgr;
+  if (!m) return;
+  const type = document.getElementById('mgrType').value;
+  const name = document.getElementById('mgrName').value.trim().replace(/[;|]/g, ' ');
+  const title = document.getElementById('mgrTitle').value.trim().replace(/[;|]/g, ' ');
+  if (!name) { showToast('⚠ Nama tidak boleh kosong'); return; }
+
+  const entry = { type, name, title };
+  if (m.editing !== null) {
+    m.entries[m.editing] = entry;
+  } else {
+    // Nama yang sama di tipe yang sama dianggap orang yang sama: perbarui jabatannya
+    const dup = m.entries.findIndex(e => e.type === type && normalizeNameKey(e.name) === normalizeNameKey(name));
+    if (dup >= 0) m.entries[dup] = entry; else m.entries.push(entry);
+  }
+  // Hilangkan duplikat yang mungkin muncul setelah mengubah nama
+  const seen = new Set();
+  m.entries = m.entries.filter(e => {
+    const k = e.type + '|' + normalizeNameKey(e.name);
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+  mgrResetForm();
+  mgrRender();
+}
+
+function mgrEditEntry(i) {
+  const m = window._mgr;
+  const e = m && m.entries[i];
+  if (!e) return;
+  m.editing = i;
+  document.getElementById('mgrType').value = e.type;
+  document.getElementById('mgrName').value = e.name;
+  document.getElementById('mgrTitle').value = e.title || '';
+  document.getElementById('mgrFormTitle').textContent = '✏ Ubah narasumber';
+  document.getElementById('mgrAddBtn').textContent = 'Simpan perubahan';
+  document.getElementById('mgrCancelEditBtn').style.display = 'inline-block';
+  mgrRefreshLists();
+  mgrRender();
+}
+
+function mgrCancelEdit() { mgrResetForm(); mgrRender(); }
+
+function mgrRemoveEntry(i) {
+  const m = window._mgr;
+  if (!m) return;
+  m.entries.splice(i, 1);
+  if (m.editing !== null) mgrResetForm();
+  mgrRender();
+}
+
+async function saveMgrSpk() {
+  const m = window._mgr;
+  if (!m) return;
+  const a = m.a;
+  const jobs = [];
+  ['internal', 'eksternal'].forEach(type => {
+    const value = mgrSerialize(m.entries, type);
+    const sel = document.getElementById(type === 'internal' ? 'mgrStanceInternal' : 'mgrStanceEksternal');
+    const stance = value ? sel.value : '';
+    if (value !== m.origValue[type] || stance !== m.origStance[type]) jobs.push({ type, value, stance });
+  });
+  if (!jobs.length) { closeMgrSpkModal(); return; }
+
+  const btn = document.getElementById('mgrSaveBtn');
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+  try {
+    for (const j of jobs) {
+      const resp = await fetch('/api/articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'set-spokesperson', url: a.url, type: j.type, value: j.value, stance: j.stance })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data.error) throw new Error(data.error || 'Gagal simpan');
+      const apply = obj => {
+        if (j.type === 'internal') { obj._spkInternal = j.value; obj._spkInternalStance = j.stance; }
+        else { obj._spkExternal = j.value; obj._spkExternalStance = j.stance; }
+      };
+      apply(a);
+      dashAllArticles.filter(x => x.url === a.url).forEach(apply);
+    }
+    window._spkMaster = null; // master data berubah, muat ulang saat dibuka berikutnya
+    const gi = m.gi;
+    closeMgrSpkModal();
+    updateCard(gi);
+    showToast('✅ Narasumber disimpan');
+  } catch (e) {
+    showToast('⚠ Gagal simpan: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Simpan';
+  }
+}
+
+async function deleteArticle(idx) {
+  const a = allArticles[idx];
+  if (!a) return;
+  const msg = a._fromDB
+    ? `Hapus berita ini dari monitoring?\n\n"${a.title}"\n\nBerita disembunyikan dari semua tab (Monitor, Dashboard, Spokesperson) dan tidak muncul lagi walau auto-crawl menemukannya kembali.`
+    : `Buang berita ini dari hasil pencarian?\n\n"${a.title}"\n\n(Belum tersimpan di database, jadi hanya hilang dari tampilan ini.)`;
+  if (!confirm(msg)) return;
+
+  if (a._fromDB) {
+    try {
+      const resp = await fetch('/api/articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'hide-article', url: a.url })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data.error) throw new Error(data.error || 'Gagal hapus');
+    } catch (e) {
+      showToast('⚠ Gagal hapus: ' + e.message);
+      return;
+    }
+    window._spkMaster = null;
+  }
+
+  allArticles = allArticles.filter(x => x !== a);
+  dashAllArticles = dashAllArticles.filter(x => x.url !== a.url);
+  applyFilters();
+
+  const totalPages = Math.max(1, Math.ceil(filteredArticles.length / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const grid = document.getElementById('newsGrid');
+  grid.innerHTML = filteredArticles.length
+    ? filteredArticles.slice(start, start + PAGE_SIZE).map((x, i) => renderCard(x, start + i)).join('')
+    : `<div class="empty-state"><div class="empty-icon">🔎</div><h3>Tidak ada hasil</h3><p>Coba kata kunci lain atau ubah filter.</p></div>`;
+  renderPagination();
+  updateStats(filteredArticles);
+  document.getElementById('resultLabel').textContent = `Menampilkan ${filteredArticles.length} artikel`;
+  const hdr = document.getElementById('hdr-total');
+  if (hdr) hdr.textContent = allArticles.length;
+  showToast('🗑 Berita dihapus dari monitoring');
 }
 
 // ---- Modal: gabungkan beberapa baris ke satu narasumber ----
@@ -3147,6 +3515,8 @@ async function loadFromDB() {
         _resume: a.resume || '',
         _spkInternal: a.spokesperson_internal || '',
         _spkExternal: a.spokesperson_eksternal || '',
+        _spkInternalStance: a.spokesperson_internal_stance || '',
+        _spkExternalStance: a.spokesperson_eksternal_stance || '',
         _analyzed: !!(a.resume),
         _fromDB: true
       })));
@@ -3589,6 +3959,8 @@ async function autoLoadFromDB() {
         _resume: a.resume || '',
         _spkInternal: a.spokesperson_internal || '',
         _spkExternal: a.spokesperson_eksternal || '',
+        _spkInternalStance: a.spokesperson_internal_stance || '',
+        _spkExternalStance: a.spokesperson_eksternal_stance || '',
         _analyzed: !!(a.resume),
         _fromDB: true
       }));
