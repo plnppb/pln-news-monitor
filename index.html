@@ -735,7 +735,7 @@
   <div id="panel-spokesperson-wrap" style="display:none;">
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#1e40af;line-height:1.6;">
       🎙 Dikelompokkan berdasarkan <strong>nama orang</strong> (jabatan cuma info tambahan, karena bisa beda-beda tiap artikel). "Sikap pernyataannya sendiri" menilai apa yang <em>diucapkan orang itu sendiri</em> di kutipannya — bukan tone keseluruhan artikel tempat dia muncul. Kalau muncul catatan ⚠ kuning, itu artinya ada perbedaan berarti antara sikap orang tersebut dengan tone artikelnya — dibaca dulu sebelum menyimpulkan siapa "sumber" sentimen tertentu. Kalau banyak yang masih "belum dianalisis", jalankan <code>reanalyzeAll()</code> lagi.
-      <br>Nama yang sebenarnya orang yang sama tapi tertulis beda (typo, nama panggilan, dll) bisa digabung manual lewat tombol <strong>🔗 Gabung</strong> di tiap kartu.
+      <br>Nama/jabatan yang keliru bisa diperbaiki lewat <strong>✏ Edit</strong>; nama yang sebenarnya orang yang sama tapi tertulis beda bisa digabung lewat <strong>🔗 Gabung</strong>. Klik <strong>📰 Dikutip di N berita</strong> di tiap kartu untuk lihat daftar beritanya: <strong>Tone berita</strong> = nada keseluruhan artikel, <strong>Tone kutipan</strong> = sikap pernyataan orang itu sendiri (misal berita negatif tapi pembelaan PLN → kutipan positif).
     </div>
     <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
       <button onclick="openManageAliasModal()" style="padding:6px 12px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;">⚙ Kelola Nama yang Sudah Digabung</button>
@@ -748,6 +748,26 @@
       <div id="spkExternalList" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
   </div><!-- end panel-spokesperson-wrap -->
+
+  <!-- MODAL: edit nama/jabatan spokesperson -->
+  <div id="spkEditModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:10px;padding:20px;max-width:440px;width:90%;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:6px;">✏ Edit Narasumber</div>
+      <div id="spkEditScopeLabel" style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5;"></div>
+      <label style="font-size:12px;font-weight:600;">Nama</label>
+      <input id="spkEditName" type="text" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin:4px 0 12px;box-sizing:border-box;">
+      <label style="font-size:12px;font-weight:600;">Jabatan</label>
+      <input id="spkEditTitle" type="text" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin:4px 0 4px;box-sizing:border-box;">
+      <div id="spkEditTitleHint" style="font-size:11px;color:var(--muted);margin-bottom:14px;"></div>
+      <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;">
+        <button id="spkEditRemoveBtn" onclick="removeSpkEntry()" style="padding:7px 12px;border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:6px;font-size:12px;cursor:pointer;display:none;">🗑 Hapus dari berita ini</button>
+        <div style="display:flex;gap:8px;margin-left:auto;">
+          <button onclick="closeSpkEditModal()" style="padding:7px 14px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Batal</button>
+          <button id="spkEditSaveBtn" onclick="saveSpkEdit()" style="padding:7px 14px;border:none;background:var(--accent2);color:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Simpan</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- MODAL: gabungkan dua nama spokesperson -->
   <div id="mergeAliasModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
@@ -1742,6 +1762,7 @@ async function loadSpokespersonRecap() {
   const aliases = await fetchSpokespersonAliases();
   const aliasMap = {}; // normalizeNameKey(alias) -> canonical display name
   aliases.forEach(al => { aliasMap[normalizeNameKey(al.alias_name)] = al.canonical_name; });
+  window._spkAliasMap = aliasMap;
 
   function aggregate(nameField, stanceField) {
     const map = {};
@@ -1759,10 +1780,11 @@ async function loadSpokespersonRecap() {
         const key = normalizeNameKey(resolvedName);
         if (!key) return;
         if (!map[key]) {
-          map[key] = { displayName: resolvedName, count: 0, titles: {}, own: { positif: 0, negatif: 0, netral: 0, kosong: 0 }, mismatch: 0 };
+          map[key] = { displayName: resolvedName, count: 0, titles: {}, own: { positif: 0, negatif: 0, netral: 0, kosong: 0 }, mismatch: 0, articles: [] };
         }
         const d = map[key];
         d.count++;
+        d.articles.push({ art: a, nameField, title, ownStance, articleTone });
         if (title) {
           const tKey = normalizeTitleKey(title);
           if (!d.titles[tKey]) d.titles[tKey] = { display: title, count: 0 };
@@ -1806,6 +1828,7 @@ async function loadSpokespersonRecap() {
             <div style="font-weight:700;font-size:14px;">${d.displayName}</div>
             <div style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
               <div style="font-size:12px;color:var(--muted);">Muncul di ${d.count} artikel</div>
+              <button onclick="openSpkEditModal('${type}', ${i}, null)" style="padding:3px 8px;border:1px solid var(--border);background:#fff;border-radius:5px;font-size:11px;cursor:pointer;">✏ Edit</button>
               <button onclick="openMergeModal('${type}', ${i})" style="padding:3px 8px;border:1px solid var(--border);background:#fff;border-radius:5px;font-size:11px;cursor:pointer;">🔗 Gabung</button>
             </div>
           </div>
@@ -1815,6 +1838,7 @@ async function loadSpokespersonRecap() {
             ${d.own.kosong ? ` <span style="color:var(--muted)">(${d.own.kosong} belum dianalisis)</span>` : ''}
           </div>
           ${mismatchNote}
+          ${renderSpkArticleList(d, type, i)}
         </div>
       `;
     }).join('');
@@ -1825,6 +1849,161 @@ async function loadSpokespersonRecap() {
 
   document.getElementById('spokespersonLoading').style.display = 'none';
   document.getElementById('spokespersonContent').style.display = 'block';
+}
+
+
+// ---- Daftar berita per narasumber + edit nama/jabatan ----
+function spkEsc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function spkToneBadge(label, tone) {
+  const t = (tone || '').trim();
+  if (!t) return `<span style="font-size:11px;color:var(--muted);">${label}: —</span>`;
+  return `<span style="font-size:11px;">${label}: <span class="tone-badge ${spkEsc(t)}">${spkEsc(t)}</span></span>`;
+}
+
+function renderSpkArticleList(d, type, personIdx) {
+  const rows = d.articles
+    .map((x, ai) => ({ x, ai }))
+    .sort((a, b) => new Date(b.x.art.published_at || 0) - new Date(a.x.art.published_at || 0))
+    .map(({ x, ai }) => {
+      const a = x.art;
+      const beda = x.ownStance && x.articleTone && x.ownStance !== x.articleTone;
+      const date = a.published_at ? new Date(a.published_at).toLocaleDateString('id-ID') : '';
+      return `
+        <div style="border-top:1px solid var(--border);padding:8px 0;font-size:12px;${beda ? 'background:#fffbeb;' : ''}">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
+            <a href="${spkEsc(a.url)}" target="_blank" rel="noopener" style="font-weight:600;">${spkEsc(a.title)}</a>
+            <button onclick="openSpkEditModal('${type}', ${personIdx}, ${ai})" style="padding:2px 7px;border:1px solid var(--border);background:#fff;border-radius:5px;font-size:11px;cursor:pointer;white-space:nowrap;">✏</button>
+          </div>
+          <div style="color:var(--muted);margin-top:2px;">${spkEsc(a.source || '')}${date ? ' · ' + date : ''}${x.title ? ' · sbg. <em>' + spkEsc(x.title) + '</em>' : ''}</div>
+          <div style="display:flex;gap:14px;margin-top:4px;flex-wrap:wrap;">
+            ${spkToneBadge('Tone berita', x.articleTone)}
+            ${spkToneBadge('Tone kutipan', x.ownStance)}
+            ${beda ? '<span style="font-size:11px;color:#92400e;">⚠ berbeda</span>' : ''}
+          </div>
+        </div>`;
+    }).join('');
+  return `
+    <details style="margin-top:10px;">
+      <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--accent2);">📰 Dikutip di ${d.articles.length} berita</summary>
+      <div style="margin-top:6px;">${rows}</div>
+    </details>`;
+}
+
+window._spkEditCtx = null; // {type, personIdx, artIdx|null}
+
+function openSpkEditModal(type, personIdx, artIdx) {
+  const person = (window._spkListByType[type] || [])[personIdx];
+  if (!person) return;
+  window._spkEditCtx = { type, personIdx, artIdx };
+  const single = artIdx !== null;
+  const entry = single ? person.articles[artIdx] : null;
+
+  document.getElementById('spkEditName').value = person.displayName;
+  const titleInput = document.getElementById('spkEditTitle');
+  if (single) {
+    titleInput.value = entry.title || '';
+    titleInput.placeholder = '';
+    document.getElementById('spkEditScopeLabel').textContent = `Hanya mengubah di berita: "${entry.art.title}". Berita lain tidak terpengaruh.`;
+    document.getElementById('spkEditTitleHint').textContent = 'Jabatan di berita ini saja.';
+  } else {
+    titleInput.value = '';
+    titleInput.placeholder = '(kosongkan = jabatan tiap berita tidak diubah)';
+    document.getElementById('spkEditScopeLabel').textContent = `Mengubah di SEMUA ${person.articles.length} berita tempat "${person.displayName}" dikutip.`;
+    document.getElementById('spkEditTitleHint').textContent = 'Isi hanya kalau jabatan di semua berita ini mau diseragamkan.';
+  }
+  document.getElementById('spkEditRemoveBtn').style.display = single ? 'block' : 'none';
+  document.getElementById('spkEditModalOverlay').style.display = 'flex';
+}
+
+function closeSpkEditModal() {
+  document.getElementById('spkEditModalOverlay').style.display = 'none';
+  window._spkEditCtx = null;
+}
+
+// Rakit ulang isi field satu artikel: entri milik orang ini diganti/dihapus,
+// entri orang lain dibiarkan. mode: 'edit' | 'remove'
+function rebuildSpkField(art, nameField, personKey, mode, newName, newTitle, keepTitleIfBlank) {
+  const aliasMap = window._spkAliasMap || {};
+  const entries = parseSpokespersonField(art[nameField]);
+  const out = [];
+  const seen = new Set();
+  entries.forEach(e => {
+    const resolved = aliasMap[normalizeNameKey(e.name)] || e.name;
+    let cur = e;
+    if (normalizeNameKey(resolved) === personKey) {
+      if (mode === 'remove') return;
+      cur = { name: newName, title: (newTitle === '' && keepTitleIfBlank) ? e.title : newTitle };
+    }
+    const k = normalizeNameKey(cur.name);
+    if (seen.has(k)) return; // hindari nama ganda dalam satu berita
+    seen.add(k);
+    out.push(cur.title ? `${cur.name}|${cur.title}` : cur.name);
+  });
+  return out.join(';');
+}
+
+async function applySpkChange(mode) {
+  const ctx = window._spkEditCtx;
+  if (!ctx) return;
+  const person = window._spkListByType[ctx.type][ctx.personIdx];
+  const personKey = normalizeNameKey(person.displayName);
+  const single = ctx.artIdx !== null;
+  const newName = document.getElementById('spkEditName').value.trim().replace(/[;|]/g, ' ');
+  const newTitle = document.getElementById('spkEditTitle').value.trim().replace(/[;|]/g, ' ');
+  if (mode === 'edit' && !newName) { alert('Nama tidak boleh kosong.'); return; }
+
+  const targets = single ? [person.articles[ctx.artIdx]] : person.articles;
+  const jobs = targets.map(t => ({
+    url: t.art.url,
+    value: rebuildSpkField(t.art, t.nameField, personKey, mode, newName, newTitle, !single)
+  }));
+
+  const btn = document.getElementById('spkEditSaveBtn');
+  btn.disabled = true;
+  let failed = 0;
+  try {
+    for (let i = 0; i < jobs.length; i += 10) {
+      btn.textContent = `Menyimpan ${Math.min(i + 10, jobs.length)}/${jobs.length}...`;
+      const results = await Promise.all(jobs.slice(i, i + 10).map(j =>
+        fetch('/api/articles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'set-spokesperson', url: j.url, type: ctx.type, value: j.value })
+        }).then(r => r.ok).catch(() => false)
+      ));
+      failed += results.filter(ok => !ok).length;
+    }
+
+    // Edit nama untuk SEMUA berita: alias yang menunjuk ke nama lama sudah
+    // tidak diperlukan (semua entri sudah ditulis ulang), hapus biar bersih.
+    if (mode === 'edit' && !single && !failed) {
+      const stale = (window._spkAliasesCache || []).filter(al => normalizeNameKey(al.canonical_name) === personKey);
+      for (const al of stale) {
+        await fetch('/api/feeds?resource=spokesperson-aliases', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ alias_name: al.alias_name })
+        }).catch(() => {});
+      }
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Simpan';
+  }
+
+  if (failed) alert(`${failed} berita gagal disimpan. Coba lagi — yang sudah berhasil tetap tersimpan.`);
+  closeSpkEditModal();
+  loadSpokespersonRecap();
+}
+
+function saveSpkEdit() { return applySpkChange('edit'); }
+
+function removeSpkEntry() {
+  if (!confirm('Hapus narasumber ini dari berita tersebut saja? (Narasumber lain di berita yang sama tidak terpengaruh.)')) return;
+  return applySpkChange('remove');
 }
 
 // ---- Modal: gabungkan dua nama ----
