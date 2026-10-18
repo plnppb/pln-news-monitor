@@ -252,14 +252,17 @@ async function handleList(req, res) {
   if (created_from) url += `&created_at=gte.${created_from}`;
   if (created_to) url += `&created_at=lte.${created_to}`;
   try {
-    const response = await fetch(url, {
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Range-Unit': 'items',
-        'Prefer': 'count=exact'
-      }
-    });
+    const headers = {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Range-Unit': 'items',
+      'Prefer': 'count=exact'
+    };
+    // Artikel yang "dihapus dari monitoring" cuma disembunyikan (kolom hidden),
+    // jadi tidak muncul lagi walau auto-crawl menemukannya kembali.
+    // Kalau kolom hidden belum dibuat di DB, jatuh balik ke query tanpa filter.
+    let response = await fetch(url + '&hidden=eq.false', { headers });
+    if (!response.ok) response = await fetch(url, { headers });
     const data = await response.json();
     const count = response.headers.get('content-range')?.split('/')[1] || data.length;
     return res.status(200).json({ articles: data, total: parseInt(count) || data.length });
@@ -508,18 +511,21 @@ async function handleClearSpokesperson(req, res) {
 
 // ===== POST mode=set-spokesperson: edit nama/jabatan spokesperson satu artikel (nilai field sudah dirakit client) =====
 async function handleSetSpokesperson(req, res) {
-  const { url, type, value } = req.body || {};
+  const { url, type, value, stance } = req.body || {};
   if (!url || !['internal', 'eksternal'].includes(type) || typeof value !== 'string') {
     return res.status(400).json({ error: 'url, type (internal/eksternal), dan value (string) wajib diisi' });
   }
+  if (stance !== undefined && !['', 'positif', 'negatif', 'netral'].includes(stance)) {
+    return res.status(400).json({ error: 'stance harus positif/negatif/netral atau kosong' });
+  }
+  const stanceKey = type === 'internal' ? 'spokesperson_internal_stance' : 'spokesperson_eksternal_stance';
   const patch = type === 'internal'
     ? { spokesperson_internal: value }
     : { spokesperson_eksternal: value };
   // Kalau field jadi kosong, stance-nya ikut dikosongkan biar nggak yatim.
-  if (!value.trim()) {
-    if (type === 'internal') patch.spokesperson_internal_stance = '';
-    else patch.spokesperson_eksternal_stance = '';
-  }
+  // Kalau tidak kosong dan stance dikirim (tone komentar yang dipilih user), simpan.
+  if (!value.trim()) patch[stanceKey] = '';
+  else if (stance !== undefined) patch[stanceKey] = stance;
   try {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?url=eq.${encodeURIComponent(url)}`, {
       method: 'PATCH',
@@ -533,6 +539,34 @@ async function handleSetSpokesperson(req, res) {
     });
     const data = await response.json();
     if (!response.ok) return res.status(response.status).json({ error: JSON.stringify(data) });
+    if (!data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+// ===== POST mode=hide-article: hapus berita dari monitoring (soft delete, kolom hidden) =====
+async function handleHideArticle(req, res) {
+  const { url } = req.body || {};
+  if (!url) return res.status(400).json({ error: 'url wajib diisi' });
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?url=eq.${encodeURIComponent(url)}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({ hidden: true })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const msg = JSON.stringify(data);
+      const hint = /hidden/i.test(msg) ? ' — kolom "hidden" belum ada di tabel articles, jalankan SQL add-hidden-column.sql dulu di Supabase.' : '';
+      return res.status(response.status).json({ error: msg + hint });
+    }
     if (!data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
     return res.status(200).json({ success: true });
   } catch (error) {
@@ -564,6 +598,7 @@ module.exports = async function handler(req, res) {
     if (mode === 'update-tone') return handleUpdateTone(req, res);
     if (mode === 'clear-spokesperson') return handleClearSpokesperson(req, res);
     if (mode === 'set-spokesperson') return handleSetSpokesperson(req, res);
+    if (mode === 'hide-article') return handleHideArticle(req, res);
     return res.status(400).json({ error: 'mode tidak dikenal' });
   }
 
