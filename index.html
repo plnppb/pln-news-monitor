@@ -735,7 +735,7 @@
   <div id="panel-spokesperson-wrap" style="display:none;">
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#1e40af;line-height:1.6;">
       🎙 Satu baris = satu narasumber. <strong>Tone Pemberitaan</strong> = nada keseluruhan berita tempat dia dikutip. <strong>Tone Komentar</strong> = sikap pernyataan orang itu sendiri (misal berita negatif tentang PLN, tapi komentar pejabat PLN-nya membela → komentar positif).
-      <br>Klik <strong>📰 N berita</strong> untuk melihat daftar beritanya. <strong>✏ Edit</strong> mengubah nama/jabatan. <strong>🔗 Gabung</strong> menyatukan baris lain ke baris ini (nama di baris ini yang dipakai) — jabatan dari baris yang digabung ikut terkumpul.
+      <br>Klik <strong>📰 N berita</strong> untuk melihat daftar beritanya. <strong>✏ Edit</strong> mengubah nama/jabatan (dan tone komentar semua beritanya sekaligus). Tone komentar tiap berita juga bisa diubah langsung di daftar beritanya. Berita yang sudah diedit manual bertanda 🔒 dan tidak ditimpa analisis ulang AI. <strong>🔗 Gabung</strong> menyatukan baris lain ke baris ini (nama di baris ini yang dipakai) — jabatan dari baris yang digabung ikut terkumpul.
     </div>
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px;">
       <input id="spkFilterInput" type="text" placeholder="🔍 Cari nama / jabatan..." oninput="window._spkRerender && window._spkRerender()" style="flex:1;max-width:280px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;">
@@ -780,13 +780,13 @@
 
       <div id="mgrStanceWrap" style="margin-top:14px;font-size:12px;display:flex;flex-direction:column;gap:8px;">
         <div id="mgrStanceRowInternal" style="display:none;align-items:center;gap:8px;">
-          <span style="min-width:190px;">Tone komentar narasumber internal:</span>
+          <span style="min-width:190px;">Tone komentar narasumber internal <span style="color:var(--muted);">(default: sama dengan tone berita)</span>:</span>
           <select id="mgrStanceInternal" style="padding:5px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
             <option value="">(belum diisi)</option><option value="positif">Positif</option><option value="negatif">Negatif</option><option value="netral">Netral</option>
           </select>
         </div>
         <div id="mgrStanceRowEksternal" style="display:none;align-items:center;gap:8px;">
-          <span style="min-width:190px;">Tone komentar narasumber eksternal:</span>
+          <span style="min-width:190px;">Tone komentar narasumber eksternal <span style="color:var(--muted);">(default: sama dengan tone berita)</span>:</span>
           <select id="mgrStanceEksternal" style="padding:5px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
             <option value="">(belum diisi)</option><option value="positif">Positif</option><option value="negatif">Negatif</option><option value="netral">Netral</option>
           </select>
@@ -809,7 +809,16 @@
       <input id="spkEditName" type="text" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin:4px 0 12px;box-sizing:border-box;">
       <label style="font-size:12px;font-weight:600;">Jabatan</label>
       <input id="spkEditTitle" type="text" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin:4px 0 4px;box-sizing:border-box;">
-      <div id="spkEditTitleHint" style="font-size:11px;color:var(--muted);margin-bottom:14px;"></div>
+      <div id="spkEditTitleHint" style="font-size:11px;color:var(--muted);margin-bottom:12px;"></div>
+      <label style="font-size:12px;font-weight:600;">Tone komentar</label>
+      <select id="spkEditStance" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin:4px 0 4px;box-sizing:border-box;">
+        <option value="">(tidak diubah)</option>
+        <option value="positif">Positif</option>
+        <option value="negatif">Negatif</option>
+        <option value="netral">Netral</option>
+        <option value="ikuti">Samakan dengan tone berita</option>
+      </select>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Berlaku per kolom (internal / eksternal) di tiap berita — kalau ada dua narasumber internal di satu berita, keduanya memakai tone komentar yang sama.</div>
       <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;">
         <button id="spkEditRemoveBtn" onclick="removeSpkEntry()" style="padding:7px 12px;border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:6px;font-size:12px;cursor:pointer;display:none;">🗑 Hapus dari berita ini</button>
         <div style="display:flex;gap:8px;margin-left:auto;">
@@ -1564,6 +1573,7 @@ function renderCard(a, i) {
           : ''}
       </div>
       <div class="card-actions">
+        ${a._fromDB ? `<button class="icon-btn ${a._locked ? 'active' : ''}" onclick="toggleLock(${gi})" title="${a._locked ? 'Terkunci: sudah diedit manual, tidak ditimpa analisis ulang AI. Klik untuk membuka kunci.' : 'Belum dikunci: bisa ditimpa analisis ulang AI. Klik untuk mengunci.'}">${a._locked ? '🔒' : '🔓'}</button>` : ''}
         <button class="icon-btn" onclick="openMgrSpkModal(${gi})" title="Kelola narasumber: tambah / edit / hapus">👥</button>
         <button class="icon-btn" onclick="pinArticle(${gi})" title="Tambahkan ke Tindak Lanjut">📌</button>
         <a href="${url}" target="_blank" rel="noopener" style="text-decoration:none">
@@ -1615,7 +1625,8 @@ async function changeArticleTone(idx, newTone) {
     });
     const data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || 'Gagal update tone');
-    showToast(`✅ Tone diubah jadi "${newTone}"`);
+    a._locked = true; // edit manual -> terkunci dari analisis ulang AI
+    showToast(`✅ Tone diubah jadi "${newTone}" (🔒 dikunci dari analisis ulang AI)`);
     updateCard(idx);
     updateStats(filteredArticles);
   } catch (e) {
@@ -1930,11 +1941,20 @@ async function loadSpokespersonRecap() {
       : '<div style="color:var(--muted);font-size:12px;padding:10px;">Tidak ada yang cocok dengan pencarian.</div>';
   }
 
-  const internalList = aggregate('spokesperson_internal', 'spokesperson_internal_stance');
-  const externalList = aggregate('spokesperson_eksternal', 'spokesperson_eksternal_stance');
+  let internalList = aggregate('spokesperson_internal', 'spokesperson_internal_stance');
+  let externalList = aggregate('spokesperson_eksternal', 'spokesperson_eksternal_stance');
   window._spkRerender = () => {
+    // Ingat baris berita yang sedang terbuka supaya tidak menutup sendiri setelah render ulang
+    const open = Array.from(document.querySelectorAll('tr[id^="spkd-"]')).filter(tr => tr.style.display === 'table-row').map(tr => tr.id);
     renderList(internalList, 'spkInternalList', 'internal');
     renderList(externalList, 'spkExternalList', 'eksternal');
+    open.forEach(id => { const tr = document.getElementById(id); if (tr) tr.style.display = 'table-row'; });
+  };
+  // Hitung ulang agregat dari data artikel yang sudah ada di memori (tanpa muat ulang dari server)
+  window._spkRecompute = () => {
+    internalList = aggregate('spokesperson_internal', 'spokesperson_internal_stance');
+    externalList = aggregate('spokesperson_eksternal', 'spokesperson_eksternal_stance');
+    window._spkRerender();
   };
   window._spkRerender();
 
@@ -1959,6 +1979,37 @@ function toggleSpkDetail(id) {
   if (tr) tr.style.display = tr.style.display === 'none' ? 'table-row' : 'none';
 }
 
+function spkStanceSelect(type, personIdx, ai, current) {
+  const opt = (v, label) => `<option value="${v}" ${current === v ? 'selected' : ''}>${label}</option>`;
+  return `<span style="font-size:11px;">Tone komentar:
+    <select onchange="setSpkStance('${type}', ${personIdx}, ${ai}, this.value)" title="Berlaku untuk semua narasumber ${type === 'internal' ? 'internal' : 'eksternal'} di berita ini" style="font-size:11px;padding:1px 3px;border:1px solid var(--border);border-radius:4px;">
+      ${current ? '' : '<option value="" selected>— belum diisi</option>'}
+      ${opt('positif', 'Positif')}${opt('negatif', 'Negatif')}${opt('netral', 'Netral')}
+    </select></span>`;
+}
+
+async function setSpkStance(type, personIdx, ai, value) {
+  const person = (window._spkListByType[type] || [])[personIdx];
+  const x = person && person.articles[ai];
+  if (!x || !value) return;
+  try {
+    const resp = await fetch('/api/articles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'set-stance', url: x.art.url, type, stance: value })
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) throw new Error(data.error || 'Gagal simpan');
+    const stanceField = type === 'internal' ? 'spokesperson_internal_stance' : 'spokesperson_eksternal_stance';
+    x.art[stanceField] = value;
+    x.art.manual_locked = true;
+    if (window._spkRecompute) window._spkRecompute();
+  } catch (e) {
+    alert('Gagal menyimpan tone komentar: ' + e.message);
+    if (window._spkRerender) window._spkRerender();
+  }
+}
+
 function renderSpkArticleList(d, type, personIdx) {
   return d.articles
     .map((x, ai) => ({ x, ai }))
@@ -1976,7 +2027,8 @@ function renderSpkArticleList(d, type, personIdx) {
           <div style="color:var(--muted);margin-top:2px;">${spkEsc(a.source || '')}${date ? ' · ' + date : ''}${x.title ? ' · sbg. <em>' + spkEsc(x.title) + '</em>' : ''}</div>
           <div style="display:flex;gap:14px;margin-top:4px;flex-wrap:wrap;">
             ${spkToneBadge('Tone berita', x.articleTone)}
-            ${spkToneBadge('Tone komentar', x.ownStance)}
+            ${spkStanceSelect(type, personIdx, ai, x.ownStance)}
+            ${a.manual_locked ? '<span style="font-size:11px;" title="Sudah diedit manual, tidak ditimpa analisis ulang AI">🔒</span>' : ''}
             ${beda ? '<span style="font-size:11px;color:#92400e;">⚠ berbeda</span>' : ''}
           </div>
         </div>`;
@@ -2005,6 +2057,7 @@ function openSpkEditModal(type, personIdx, artIdx) {
     document.getElementById('spkEditScopeLabel').textContent = `Mengubah di SEMUA ${person.articles.length} berita tempat "${person.displayName}" dikutip.`;
     document.getElementById('spkEditTitleHint').textContent = 'Isi hanya kalau jabatan di semua berita ini mau diseragamkan.';
   }
+  document.getElementById('spkEditStance').value = '';
   document.getElementById('spkEditRemoveBtn').style.display = single ? 'block' : 'none';
   document.getElementById('spkEditModalOverlay').style.display = 'flex';
 }
@@ -2049,10 +2102,18 @@ async function applySpkChange(mode) {
   if (mode === 'edit' && !newName) { alert('Nama tidak boleh kosong.'); return; }
 
   const targets = single ? [person.articles[ctx.artIdx]] : person.articles;
-  const jobs = targets.map(t => ({
-    url: t.art.url,
-    value: rebuildSpkField(t.art, t.nameField, personKey, mode, newName, newTitle, !single)
-  }));
+  const stanceChoice = mode === 'edit' ? document.getElementById('spkEditStance').value : '';
+  const validTones = ['positif', 'negatif', 'netral'];
+  const jobs = targets.map(t => {
+    let stance;
+    if (stanceChoice === 'ikuti') stance = validTones.includes(t.articleTone) ? t.articleTone : undefined;
+    else if (validTones.includes(stanceChoice)) stance = stanceChoice;
+    return {
+      url: t.art.url,
+      value: rebuildSpkField(t.art, t.nameField, personKey, mode, newName, newTitle, !single),
+      stance
+    };
+  });
 
   const btn = document.getElementById('spkEditSaveBtn');
   btn.disabled = true;
@@ -2064,7 +2125,7 @@ async function applySpkChange(mode) {
         fetch('/api/articles', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'set-spokesperson', url: j.url, type: ctx.type, value: j.value })
+          body: JSON.stringify({ mode: 'set-spokesperson', url: j.url, type: ctx.type, value: j.value, stance: j.stance })
         }).then(r => r.ok).catch(() => false)
       ));
       failed += results.filter(ok => !ok).length;
@@ -2274,8 +2335,14 @@ function mgrRender() {
         </div>
       </div>`).join('');
   }
-  document.getElementById('mgrStanceRowInternal').style.display = m.entries.some(e => e.type === 'internal') ? 'flex' : 'none';
-  document.getElementById('mgrStanceRowEksternal').style.display = m.entries.some(e => e.type === 'eksternal') ? 'flex' : 'none';
+  const defaultTone = (m.a._analyzed && ['positif', 'negatif', 'netral'].includes(m.a._tone)) ? m.a._tone : '';
+  [['internal', 'mgrStanceRowInternal', 'mgrStanceInternal'], ['eksternal', 'mgrStanceRowEksternal', 'mgrStanceEksternal']].forEach(([type, rowId, selId]) => {
+    const has = m.entries.some(e => e.type === type);
+    document.getElementById(rowId).style.display = has ? 'flex' : 'none';
+    const sel = document.getElementById(selId);
+    // Tone komentar belum diisi: default-nya sama dengan tone pemberitaan (tetap bisa diubah)
+    if (has && sel.value === '' && defaultTone) sel.value = defaultTone;
+  });
 }
 
 function mgrAddEntry() {
@@ -2359,17 +2426,40 @@ async function saveMgrSpk() {
         else { obj._spkExternal = j.value; obj._spkExternalStance = j.stance; }
       };
       apply(a);
-      dashAllArticles.filter(x => x.url === a.url).forEach(apply);
+      a._locked = true;
+      dashAllArticles.filter(x => x.url === a.url).forEach(x => { apply(x); x._locked = true; });
     }
     window._spkMaster = null; // master data berubah, muat ulang saat dibuka berikutnya
     const gi = m.gi;
     closeMgrSpkModal();
     updateCard(gi);
-    showToast('✅ Narasumber disimpan');
+    showToast('✅ Narasumber disimpan (🔒 dikunci dari analisis ulang AI)');
   } catch (e) {
     showToast('⚠ Gagal simpan: ' + e.message);
   } finally {
     btn.disabled = false; btn.textContent = 'Simpan';
+  }
+}
+
+async function toggleLock(idx) {
+  const a = allArticles[idx];
+  if (!a || !a._fromDB) return;
+  const lock = !a._locked;
+  if (!lock && !confirm('Buka kunci berita ini?\n\nSaat "analisis ulang semua" dijalankan, narasumber dan tone berita ini bisa ditimpa hasil analisis AI.')) return;
+  try {
+    const resp = await fetch('/api/articles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'set-lock', url: a.url, locked: lock })
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) throw new Error(data.error || 'Gagal');
+    a._locked = lock;
+    dashAllArticles.filter(x => x.url === a.url).forEach(x => { x._locked = lock; });
+    updateCard(idx);
+    showToast(lock ? '🔒 Dikunci: tidak ikut dianalisis ulang AI' : '🔓 Kunci dibuka: bisa ikut dianalisis ulang AI');
+  } catch (e) {
+    showToast('⚠ Gagal: ' + e.message);
   }
 }
 
@@ -3517,6 +3607,7 @@ async function loadFromDB() {
         _spkExternal: a.spokesperson_eksternal || '',
         _spkInternalStance: a.spokesperson_internal_stance || '',
         _spkExternalStance: a.spokesperson_eksternal_stance || '',
+        _locked: !!a.manual_locked,
         _analyzed: !!(a.resume),
         _fromDB: true
       })));
@@ -3961,6 +4052,7 @@ async function autoLoadFromDB() {
         _spkExternal: a.spokesperson_eksternal || '',
         _spkInternalStance: a.spokesperson_internal_stance || '',
         _spkExternalStance: a.spokesperson_eksternal_stance || '',
+        _locked: !!a.manual_locked,
         _analyzed: !!(a.resume),
         _fromDB: true
       }));
