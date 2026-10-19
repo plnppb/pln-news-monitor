@@ -247,6 +247,15 @@
   .card-title a:hover{color:var(--accent2);text-decoration:underline;}
   .card-resume{font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px;background:var(--surface2);border-radius:6px;padding:8px 10px;border-left:3px solid var(--border2);}
   .card-footer{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+  .card-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;align-items:center;}
+  .tag-chip{font-size:11px;border-radius:12px;padding:2px 9px;font-weight:500;border:1px solid transparent;cursor:default;}
+  .tag-chip.cat{background:#ede9fe;color:#5b21b6;}
+  .tag-chip.cat2{background:#f3f4f6;color:#4b5563;}
+  .tag-chip.loc{background:#dcfce7;color:#166534;}
+  .tag-chip.scope{background:#f1f5f9;color:#475569;}
+  .tag-chip.empty{background:transparent;color:var(--muted);border:1px dashed var(--border);cursor:pointer;}
+  .tag-chip.editable{cursor:pointer;}
+  .tag-chip.editable:hover{filter:brightness(0.95);}
   .spk-badge{font-size:11px;border-radius:4px;padding:3px 8px;font-weight:500;}
   .spk-badge.internal{background:#dbeafe;color:#1d4ed8;}
   .spk-badge.external{background:#fef3c7;color:#92400e;}
@@ -749,6 +758,31 @@
       <div id="spkExternalList" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
   </div><!-- end panel-spokesperson-wrap -->
+
+  <!-- MODAL: edit kategori isu & lokasi satu berita (tab Monitor) -->
+  <div id="tagModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:10px;padding:20px;max-width:560px;width:94%;max-height:90vh;overflow-y:auto;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:4px;">🏷 Kategori Isu & Lokasi</div>
+      <div id="tagModalTitle" style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5;"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+        <label style="flex:1;min-width:200px;font-size:12px;font-weight:600;">Kategori utama
+          <select id="tagCat" style="width:100%;margin-top:4px;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-weight:400;"></select></label>
+        <label style="flex:1;min-width:200px;font-size:12px;font-weight:600;">Kategori sekunder <span style="font-weight:400;color:var(--muted);">(opsional)</span>
+          <select id="tagCat2" style="width:100%;margin-top:4px;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-weight:400;"></select></label>
+      </div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Lokasi kejadian <span style="font-weight:400;color:var(--muted);">(boleh lebih dari satu; provinsi otomatis dari kab/kota)</span></div>
+      <input id="tagLocSearch" oninput="renderTagLocList()" placeholder="Cari kabupaten/kota..." style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:6px;">
+      <div id="tagLocList" style="border:1px solid var(--border);border-radius:8px;max-height:230px;overflow-y:auto;padding:6px 10px;font-size:12px;"></div>
+      <div id="tagLocSelected" style="font-size:11px;color:var(--muted);margin-top:6px;min-height:14px;"></div>
+      <label id="tagScopeWrap" style="display:block;font-size:12px;font-weight:600;margin-top:10px;">Kalau tidak ada lokasi spesifik, cakupan berita:
+        <select id="tagScope" style="margin-top:4px;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-weight:400;"></select></label>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px;">Menyimpan akan mengunci berita ini (🔒) sehingga tidak ditimpa analisis ulang AI.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+        <button onclick="closeTagModal()" style="padding:7px 14px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Batal</button>
+        <button id="tagSaveBtn" onclick="saveTagModal()" style="padding:7px 14px;border:none;background:var(--accent2);color:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Simpan</button>
+      </div>
+    </div>
+  </div>
 
   <!-- MODAL: kelola narasumber satu berita (tab Monitor) -->
   <div id="mgrSpkModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
@@ -1502,6 +1536,10 @@ async function startAnalyzeAll() {
       a._spkInternal = data.spokesperson_internal || '';
       a._spkExternal = data.spokesperson_eksternal || '';
       a._resume = data.resume || '';
+      a._category = data.category || '';
+      a._categorySecondary = data.category_secondary || '';
+      a._locations = data.locations || '';
+      a._geoScope = data.geo_scope || '';
       a._analyzed = true;
     } catch(e) {
       if (e.name === 'AbortError') break;
@@ -1557,6 +1595,8 @@ function renderCard(a, i) {
     `<span class="spk-badge ${cls}">${icon} <strong>${spkEsc(e.name)}</strong>${e.title ? ' · ' + spkEsc(e.title) : ''}</span>`).join('');
   const spkHtml = spkChip(a._spkInternal, 'internal', '🏢') + spkChip(a._spkExternal, 'external', '👤');
 
+  const tagsHtml = renderTagChips(a, gi);
+
   return `<div class="article-card ${tc}" id="card-${gi}">
     <div class="card-top">
       <div class="card-meta">
@@ -1575,6 +1615,7 @@ function renderCard(a, i) {
       <div class="card-actions">
         ${a._fromDB ? `<button class="icon-btn ${a._locked ? 'active' : ''}" onclick="toggleLock(${gi})" title="${a._locked ? 'Terkunci: sudah diedit manual, tidak ditimpa analisis ulang AI. Klik untuk membuka kunci.' : 'Belum dikunci: bisa ditimpa analisis ulang AI. Klik untuk mengunci.'}">${a._locked ? '🔒' : '🔓'}</button>` : ''}
         <button class="icon-btn" onclick="openMgrSpkModal(${gi})" title="Kelola narasumber: tambah / edit / hapus">👥</button>
+        <button class="icon-btn" onclick="openTagModal(${gi})" title="Edit kategori isu & lokasi">🏷</button>
         <button class="icon-btn" onclick="pinArticle(${gi})" title="Tambahkan ke Tindak Lanjut">📌</button>
         <a href="${url}" target="_blank" rel="noopener" style="text-decoration:none">
           <button class="icon-btn" title="Buka artikel">↗</button>
@@ -1587,6 +1628,7 @@ function renderCard(a, i) {
     </div>
     <div class="card-title"><a href="${url}" target="_blank" rel="noopener">${a.title||'Tanpa judul'}</a></div>
     ${resumeHtml}
+    ${tagsHtml}
     ${spkHtml ? `<div class="card-footer">${spkHtml}</div>` : ''}
   </div>`;
 }
@@ -2436,6 +2478,118 @@ async function saveMgrSpk() {
     showToast('✅ Narasumber disimpan (🔒 dikunci dari analisis ulang AI)');
   } catch (e) {
     showToast('⚠ Gagal simpan: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Simpan';
+  }
+}
+
+// ===== Kategori isu & lokasi (taksonomi disalin dari lib/taxonomy.js) =====
+const TAXO = {"categories":[{"key":"gangguan","label":"Gangguan & Pemadaman"},{"key":"layanan","label":"Layanan Pelanggan"},{"key":"tarif","label":"Tarif, Tagihan & Subsidi"},{"key":"listrik-desa","label":"Kelistrikan Desa & Akses"},{"key":"ebt","label":"EBT & Transisi Energi"},{"key":"proyek","label":"Proyek & Investasi"},{"key":"keselamatan","label":"Keselamatan & Insiden"},{"key":"csr","label":"CSR, TJSL & Kemitraan"},{"key":"korporat","label":"Korporasi & SDM"},{"key":"lainnya","label":"Lainnya"}],"scopes":[{"key":"papua_umum","label":"Papua (umum/regional)"},{"key":"nasional","label":"Nasional"},{"key":"luar_wilayah","label":"Luar wilayah UIW PPB"}],"locations":[{"name":"Kota Jayapura","province":"Papua","level":"kabkota"},{"name":"Kab. Jayapura","province":"Papua","level":"kabkota"},{"name":"Kab. Keerom","province":"Papua","level":"kabkota"},{"name":"Kab. Sarmi","province":"Papua","level":"kabkota"},{"name":"Kab. Mamberamo Raya","province":"Papua","level":"kabkota"},{"name":"Kab. Biak Numfor","province":"Papua","level":"kabkota"},{"name":"Kab. Supiori","province":"Papua","level":"kabkota"},{"name":"Kab. Kepulauan Yapen","province":"Papua","level":"kabkota"},{"name":"Kab. Waropen","province":"Papua","level":"kabkota"},{"name":"Kab. Merauke","province":"Papua Selatan","level":"kabkota"},{"name":"Kab. Boven Digoel","province":"Papua Selatan","level":"kabkota"},{"name":"Kab. Mappi","province":"Papua Selatan","level":"kabkota"},{"name":"Kab. Asmat","province":"Papua Selatan","level":"kabkota"},{"name":"Kab. Mimika","province":"Papua Tengah","level":"kabkota"},{"name":"Kab. Nabire","province":"Papua Tengah","level":"kabkota"},{"name":"Kab. Paniai","province":"Papua Tengah","level":"kabkota"},{"name":"Kab. Dogiyai","province":"Papua Tengah","level":"kabkota"},{"name":"Kab. Deiyai","province":"Papua Tengah","level":"kabkota"},{"name":"Kab. Intan Jaya","province":"Papua Tengah","level":"kabkota"},{"name":"Kab. Puncak","province":"Papua Tengah","level":"kabkota"},{"name":"Kab. Puncak Jaya","province":"Papua Tengah","level":"kabkota"},{"name":"Kab. Jayawijaya","province":"Papua Pegunungan","level":"kabkota"},{"name":"Kab. Lanny Jaya","province":"Papua Pegunungan","level":"kabkota"},{"name":"Kab. Mamberamo Tengah","province":"Papua Pegunungan","level":"kabkota"},{"name":"Kab. Nduga","province":"Papua Pegunungan","level":"kabkota"},{"name":"Kab. Pegunungan Bintang","province":"Papua Pegunungan","level":"kabkota"},{"name":"Kab. Tolikara","province":"Papua Pegunungan","level":"kabkota"},{"name":"Kab. Yalimo","province":"Papua Pegunungan","level":"kabkota"},{"name":"Kab. Yahukimo","province":"Papua Pegunungan","level":"kabkota"},{"name":"Kab. Manokwari","province":"Papua Barat","level":"kabkota"},{"name":"Kab. Manokwari Selatan","province":"Papua Barat","level":"kabkota"},{"name":"Kab. Pegunungan Arfak","province":"Papua Barat","level":"kabkota"},{"name":"Kab. Teluk Bintuni","province":"Papua Barat","level":"kabkota"},{"name":"Kab. Teluk Wondama","province":"Papua Barat","level":"kabkota"},{"name":"Kab. Fakfak","province":"Papua Barat","level":"kabkota"},{"name":"Kab. Kaimana","province":"Papua Barat","level":"kabkota"},{"name":"Kota Sorong","province":"Papua Barat Daya","level":"kabkota"},{"name":"Kab. Sorong","province":"Papua Barat Daya","level":"kabkota"},{"name":"Kab. Sorong Selatan","province":"Papua Barat Daya","level":"kabkota"},{"name":"Kab. Raja Ampat","province":"Papua Barat Daya","level":"kabkota"},{"name":"Kab. Maybrat","province":"Papua Barat Daya","level":"kabkota"},{"name":"Kab. Tambrauw","province":"Papua Barat Daya","level":"kabkota"},{"name":"Provinsi Papua","province":"Papua","level":"provinsi"},{"name":"Provinsi Papua Selatan","province":"Papua Selatan","level":"provinsi"},{"name":"Provinsi Papua Tengah","province":"Papua Tengah","level":"provinsi"},{"name":"Provinsi Papua Pegunungan","province":"Papua Pegunungan","level":"provinsi"},{"name":"Provinsi Papua Barat","province":"Papua Barat","level":"provinsi"},{"name":"Provinsi Papua Barat Daya","province":"Papua Barat Daya","level":"provinsi"}],"provinces":["Papua","Papua Selatan","Papua Tengah","Papua Pegunungan","Papua Barat","Papua Barat Daya"]};
+const TAXO_CAT = Object.fromEntries(TAXO.categories.map(c => [c.key, c.label]));
+const TAXO_LOC = Object.fromEntries(TAXO.locations.map(l => [l.name, l]));
+const TAXO_SCOPE = Object.fromEntries(TAXO.scopes.map(c => [c.key, c.label]));
+
+function renderTagChips(a, gi) {
+  const editable = !!a._fromDB;
+  const click = editable ? ` onclick="openTagModal(${gi})"` : '';
+  const edCls = editable ? ' editable' : '';
+  const chips = [];
+  if (a._category) chips.push(`<span class="tag-chip cat${edCls}"${click} title="Kategori isu${editable ? ' (klik untuk edit)' : ''}">${spkEsc(TAXO_CAT[a._category] || a._category)}</span>`);
+  if (a._categorySecondary) chips.push(`<span class="tag-chip cat2${edCls}"${click} title="Kategori sekunder">${spkEsc(TAXO_CAT[a._categorySecondary] || a._categorySecondary)}</span>`);
+  const locs = (a._locations || '').split(';').map(x => x.trim()).filter(Boolean);
+  locs.forEach(l => {
+    const info = TAXO_LOC[l];
+    chips.push(`<span class="tag-chip loc${edCls}"${click} title="${spkEsc(info ? 'Provinsi ' + info.province.replace(/^Provinsi /, '') : '')}">📍 ${spkEsc(l)}</span>`);
+  });
+  if (!locs.length && a._geoScope) chips.push(`<span class="tag-chip scope${edCls}"${click} title="Cakupan berita">🌐 ${spkEsc(TAXO_SCOPE[a._geoScope] || a._geoScope)}</span>`);
+  if (!chips.length) {
+    if (!editable || !a._analyzed) return '';
+    chips.push(`<span class="tag-chip empty"${click} title="Belum ada kategori/lokasi — klik untuk mengisi">+ kategori / lokasi</span>`);
+  }
+  return `<div class="card-tags">${chips.join('')}</div>`;
+}
+
+function openTagModal(gi) {
+  const a = allArticles[gi];
+  if (!a) return;
+  if (!a._fromDB) { showToast('💾 Simpan berita ke database dulu, baru kategori & lokasinya bisa diedit'); return; }
+  const locs = (a._locations || '').split(';').map(x => x.trim()).filter(Boolean);
+  window._tag = { gi, a, locs: new Set(locs) };
+  document.getElementById('tagModalTitle').textContent = a.title || '';
+  const opt = (k, l, sel) => `<option value="${k}" ${sel ? 'selected' : ''}>${spkEsc(l)}</option>`;
+  document.getElementById('tagCat').innerHTML = TAXO.categories.map(c => opt(c.key, c.label, c.key === (a._category || 'lainnya'))).join('');
+  document.getElementById('tagCat2').innerHTML = opt('', '(tidak ada)', !a._categorySecondary) +
+    TAXO.categories.filter(c => c.key !== 'lainnya').map(c => opt(c.key, c.label, c.key === a._categorySecondary)).join('');
+  document.getElementById('tagScope').innerHTML = opt('', '(tidak jelas)', !a._geoScope) + TAXO.scopes.map(c => opt(c.key, c.label, c.key === a._geoScope)).join('');
+  document.getElementById('tagLocSearch').value = '';
+  renderTagLocList();
+  document.getElementById('tagModalOverlay').style.display = 'flex';
+}
+
+function closeTagModal() {
+  document.getElementById('tagModalOverlay').style.display = 'none';
+  window._tag = null;
+}
+
+function renderTagLocList() {
+  const t = window._tag; if (!t) return;
+  const q = (document.getElementById('tagLocSearch').value || '').toLowerCase().trim();
+  let html = '';
+  TAXO.provinces.forEach(p => {
+    const items = TAXO.locations.filter(l => l.province === p && (!q || l.name.toLowerCase().includes(q) || p.toLowerCase().includes(q)));
+    if (!items.length) return;
+    html += `<div style="font-weight:700;margin:6px 0 2px;color:var(--muted);">Provinsi ${spkEsc(p)}</div>`;
+    items.forEach(l => {
+      html += `<label style="display:flex;align-items:center;gap:6px;padding:2px 0;cursor:pointer;"><input type="checkbox" ${t.locs.has(l.name) ? 'checked' : ''} onchange="toggleTagLoc(this.dataset.n, this.checked)" data-n="${spkEsc(l.name)}"> ${spkEsc(l.name)}</label>`;
+    });
+  });
+  document.getElementById('tagLocList').innerHTML = html || '<div style="color:var(--muted);padding:6px 0;">Tidak ada yang cocok</div>';
+  updateTagSelectedInfo();
+}
+
+function toggleTagLoc(name, on) {
+  const t = window._tag; if (!t) return;
+  if (on) t.locs.add(name); else t.locs.delete(name);
+  updateTagSelectedInfo();
+}
+
+function updateTagSelectedInfo() {
+  const t = window._tag; if (!t) return;
+  const list = [...t.locs];
+  const provs = [...new Set(list.map(n => TAXO_LOC[n] && TAXO_LOC[n].province).filter(Boolean))];
+  document.getElementById('tagLocSelected').textContent = list.length
+    ? `Terpilih ${list.length}: ${list.join(', ')} → Provinsi ${provs.join(', ')}`
+    : 'Belum ada lokasi dipilih.';
+  document.getElementById('tagScopeWrap').style.display = list.length ? 'none' : 'block';
+}
+
+async function saveTagModal() {
+  const t = window._tag; if (!t) return;
+  const a = t.a;
+  const category = document.getElementById('tagCat').value;
+  let category2 = document.getElementById('tagCat2').value;
+  if (category2 === category) category2 = '';
+  const locs = TAXO.locations.map(l => l.name).filter(n => t.locs.has(n));
+  const scope = locs.length ? '' : document.getElementById('tagScope').value;
+  const btn = document.getElementById('tagSaveBtn');
+  btn.disabled = true; btn.textContent = 'Menyimpan...';
+  try {
+    const post = async body => {
+      const resp = await fetch('/api/articles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data.error) throw new Error((data.hint ? data.hint + ' ' : '') + (data.error || 'Gagal'));
+      return data;
+    };
+    await post({ mode: 'set-category', url: a.url, category, category_secondary: category2 });
+    await post({ mode: 'set-locations', url: a.url, locations: locs, geo_scope: scope });
+    const apply = x => { x._category = category; x._categorySecondary = category2; x._locations = locs.join(';'); x._geoScope = scope; x._locked = true; };
+    apply(a);
+    dashAllArticles.filter(x => x.url === a.url).forEach(apply);
+    updateCard(t.gi);
+    closeTagModal();
+    showToast('🏷 Kategori & lokasi disimpan (berita dikunci 🔒)');
+  } catch (e) {
+    showToast('⚠ Gagal: ' + e.message);
   } finally {
     btn.disabled = false; btn.textContent = 'Simpan';
   }
@@ -3608,6 +3762,10 @@ async function loadFromDB() {
         _spkInternalStance: a.spokesperson_internal_stance || '',
         _spkExternalStance: a.spokesperson_eksternal_stance || '',
         _locked: !!a.manual_locked,
+        _category: a.category || '',
+        _categorySecondary: a.category_secondary || '',
+        _locations: a.locations || '',
+        _geoScope: a.geo_scope || '',
         _analyzed: !!(a.resume),
         _fromDB: true
       })));
@@ -4053,6 +4211,10 @@ async function autoLoadFromDB() {
         _spkInternalStance: a.spokesperson_internal_stance || '',
         _spkExternalStance: a.spokesperson_eksternal_stance || '',
         _locked: !!a.manual_locked,
+        _category: a.category || '',
+        _categorySecondary: a.category_secondary || '',
+        _locations: a.locations || '',
+        _geoScope: a.geo_scope || '',
         _analyzed: !!(a.resume),
         _fromDB: true
       }));
