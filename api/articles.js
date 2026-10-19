@@ -1,5 +1,7 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const TAX = require('../lib/taxonomy');
+const TEXT_LIMIT = 800;
 const GEMINI_KEYS = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '')
   .split(',').map(k => k.trim()).filter(Boolean);
 
@@ -64,8 +66,12 @@ ATURAN WAJIB PENULISAN NAMA SPOKESPERSON:
   "spokesperson_internal_stance": "positif" | "negatif" | "netral" | "" (sikap pernyataan spokesperson internal itu sendiri, bukan tone artikel),
   "spokesperson_eksternal": "Nama|Jabatan (kosongkan jika tidak ada nama spesifik, pisah pakai ; jika lebih dari satu orang)",
   "spokesperson_eksternal_stance": "positif" | "negatif" | "netral" | "" (sikap pernyataan spokesperson eksternal itu sendiri, bukan tone artikel),
+  "kategori": "kunci kategori utama (lihat daftar di atas)",
+  "kategori_sekunder": "kunci kategori sekunder atau kosong",
+  "lokasi": "Nama wilayah dari daftar, pisah ; atau kosong",
+  "cakupan": "papua_umum | nasional | luar_wilayah | kosong (hanya jika lokasi kosong)",
   "resume": "Ringkasan 2-3 kalimat dalam Bahasa Indonesia yang menjelaskan isi berita secara objektif"
-}`;
+}`.replace('## FORMAT RESPONS', TAX.buildPromptSection() + '\n\n## FORMAT RESPONS');
 
 // Cek apakah nama beneran ada di teks sumber — jaring pengaman kode, bukan
 // andalin AI patuh instruksi doang. Dicek sebagai SATU FRASA UTUH (nama
@@ -100,7 +106,7 @@ async function analyzeArticle(title, description) {
   // Gemini maupun buat validasi nama — biar nggak ada nama yang "ketemu"
   // cuma gara-gara nongol di bagian artikel yang Gemini sendiri nggak pernah
   // baca.
-  const truncatedDescription = (description || '').replace(/<[^>]+>/g, '').substring(0, 400);
+  const truncatedDescription = (description || '').replace(/<[^>]+>/g, '').substring(0, TEXT_LIMIT);
   const prompt = `${TONE_PROMPT}
 
 ## ARTIKEL YANG DIANALISIS:
@@ -119,7 +125,7 @@ Berikan analisis dalam format JSON:`;
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 500 }
+            generationConfig: { temperature: 0.1, maxOutputTokens: 800 }
           })
         }
       );
@@ -148,6 +154,7 @@ Berikan analisis dalam format JSON:`;
       if (result.spokesperson_internal && !result.spokesperson_internal_stance) result.spokesperson_internal_stance = result.tone;
       if (result.spokesperson_eksternal && !result.spokesperson_eksternal_stance) result.spokesperson_eksternal_stance = result.tone;
 
+      Object.assign(result, TAX.validateClassification(result, title + ' ' + truncatedDescription));
       return result;
     } catch (e) {
       lastError = e.message;
@@ -219,10 +226,14 @@ async function handleSave(req, res) {
       spokesperson_internal: analysis.error ? '' : (analysis.spokesperson_internal || ''),
       spokesperson_internal_stance: analysis.error ? '' : (analysis.spokesperson_internal_stance || ''),
       spokesperson_eksternal: analysis.error ? '' : (analysis.spokesperson_eksternal || ''),
-      spokesperson_eksternal_stance: analysis.error ? '' : (analysis.spokesperson_eksternal_stance || '')
+      spokesperson_eksternal_stance: analysis.error ? '' : (analysis.spokesperson_eksternal_stance || ''),
+      category: analysis.error ? '' : (analysis.category || ''),
+      category_secondary: analysis.error ? '' : (analysis.category_secondary || ''),
+      locations: analysis.error ? '' : (analysis.locations || ''),
+      geo_scope: analysis.error ? '' : (analysis.geo_scope || '')
     };
 
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?on_conflict=url`, {
+    const doInsert = body => fetch(`${SUPABASE_URL}/rest/v1/articles?on_conflict=url`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -230,8 +241,17 @@ async function handleSave(req, res) {
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         'Prefer': 'resolution=ignore-duplicates,return=representation'
       },
-      body: JSON.stringify([row])
+      body: JSON.stringify([body])
     });
+    let response = await doInsert(row);
+    if (!response.ok) {
+      const errText = await response.clone().text();
+      // Kolom kategori/lokasi belum dibuat di DB (SQL belum dijalankan): simpan tanpa field itu
+      if (/category|locations|geo_scope/i.test(errText)) {
+        const { category, category_secondary, locations, geo_scope, ...rest } = row;
+        response = await doInsert(rest);
+      }
+    }
 
     if (!response.ok) {
       const errText = await response.text();
@@ -582,6 +602,44 @@ async function handleSetLock(req, res) {
   }
 }
 
+// ===== POST mode=set-category: koreksi manual kategori isu (mengunci artikel) =====
+async function handleSetCategory(req, res) {
+  const { url, category, category_secondary } = req.body || {};
+  if (!url || !TAX.CATEGORY_KEYS.includes(category)) {
+    return res.status(400).json({ error: 'url dan category (kunci kategori valid) wajib diisi' });
+  }
+  let sec = category_secondary || '';
+  if (!TAX.CATEGORY_KEYS.includes(sec) || sec === category || sec === 'lainnya') sec = '';
+  try {
+    const r = await patchArticleByUrl(url, { category, category_secondary: sec }, true);
+    if (!r.ok) return res.status(r.status).json({ error: JSON.stringify(r.data), hint: 'Kolom category belum ada? Jalankan add-category-location-columns.sql di Supabase.' });
+    if (!r.data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
+    return res.status(200).json({ success: true, category, category_secondary: sec });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+// ===== POST mode=set-locations: koreksi manual lokasi (kab/kota/provinsi dari master) =====
+async function handleSetLocations(req, res) {
+  const { url, locations, geo_scope } = req.body || {};
+  if (!url) return res.status(400).json({ error: 'url wajib diisi' });
+  const list = (Array.isArray(locations) ? locations : String(locations || '').split(';')).map(x => String(x).trim()).filter(Boolean);
+  const bad = list.filter(n => !TAX.LOCATION_NAMES.includes(n));
+  if (bad.length) return res.status(400).json({ error: 'Lokasi tidak ada di master wilayah: ' + bad.join(', ') });
+  const uniq = [...new Set(list)];
+  let scope = geo_scope || '';
+  if (!TAX.SCOPE_KEYS.includes(scope) || uniq.length) scope = '';
+  try {
+    const r = await patchArticleByUrl(url, { locations: uniq.join(';'), geo_scope: scope }, true);
+    if (!r.ok) return res.status(r.status).json({ error: JSON.stringify(r.data), hint: 'Kolom locations belum ada? Jalankan add-category-location-columns.sql di Supabase.' });
+    if (!r.data.length) return res.status(404).json({ error: 'Artikel tidak ditemukan' });
+    return res.status(200).json({ success: true, locations: uniq.join(';'), geo_scope: scope });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
 // ===== POST mode=hide-article: hapus berita dari monitoring (soft delete, kolom hidden) =====
 async function handleHideArticle(req, res) {
   const { url } = req.body || {};
@@ -637,6 +695,8 @@ module.exports = async function handler(req, res) {
     if (mode === 'set-stance') return handleSetStance(req, res);
     if (mode === 'set-lock') return handleSetLock(req, res);
     if (mode === 'hide-article') return handleHideArticle(req, res);
+    if (mode === 'set-category') return handleSetCategory(req, res);
+    if (mode === 'set-locations') return handleSetLocations(req, res);
     return res.status(400).json({ error: 'mode tidak dikenal' });
   }
 

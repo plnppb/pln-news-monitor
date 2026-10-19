@@ -3,6 +3,8 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 // Bisa lebih dari satu key, dipisah koma, dari akun Google berbeda-beda
 // (kuota Gemini diikat ke project Google, bukan ke key — jadi key dari
 // akun/project berbeda beneran punya kuota terpisah).
+const TAX = require('../lib/taxonomy');
+const TEXT_LIMIT = 800; // batas teks ke AI (naik dari 400 supaya lokasi di paragraf awal terbaca)
 const GEMINI_KEYS = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '')
   .split(',').map(k => k.trim()).filter(Boolean);
 
@@ -36,8 +38,10 @@ ATURAN WAJIB PENULISAN NAMA SPOKESPERSON:
    Contoh SALAH (jangan begini): "Alfons Manibui dan Cheroline Chrisye Makalew|Anggota Komisi XII DPR RI"
 5. Tulis jabatan SESUAI KONTEKS ARTIKEL INI — kalau orang itu dikutip bukan dalam kapasitas jabatan struktural PLN-nya (misal sebagai ketua panitia acara), tulis jabatan itu, bukan jabatan struktural default dia.
 
+${TAX.buildPromptSection()}
+
 Balas HANYA JSON ini tanpa teks lain:
-{"tone":"netral","spokesperson_internal":"","spokesperson_internal_stance":"","spokesperson_eksternal":"","spokesperson_eksternal_stance":"","resume":"ringkasan 2-3 kalimat"}`;
+{"tone":"netral","kategori":"gangguan","kategori_sekunder":"","lokasi":"","cakupan":"","spokesperson_internal":"","spokesperson_internal_stance":"","spokesperson_eksternal":"","spokesperson_eksternal_stance":"","resume":"ringkasan 2-3 kalimat"}`;
 
 // Cek apakah nama beneran ada di teks sumber — jaring pengaman kode, bukan
 // andalin AI patuh instruksi doang, soalnya AI kadang "nyampur" teks yang
@@ -84,7 +88,7 @@ async function analyzeArticle(title, description) {
   // 400 karakter pertama — jadi nama asli yang nongol di bagian artikel yang
   // Gemini sendiri NGGAK PERNAH BACA bisa ikut "tervalidasi" padahal
   // kecocokannya kebetulan/tidak terkait sama sekali dengan apa yang dibaca AI.
-  const truncatedDescription = (description || '').replace(/<[^>]+>/g, '').substring(0, 400);
+  const truncatedDescription = (description || '').replace(/<[^>]+>/g, '').substring(0, TEXT_LIMIT);
   const prompt = `${TONE_PROMPT}\n\nJudul: ${title}\nDeskripsi: ${truncatedDescription}`;
 
   let lastError = null;
@@ -97,7 +101,7 @@ async function analyzeArticle(title, description) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 500 }
+            generationConfig: { temperature: 0.1, maxOutputTokens: 800 }
           })
         }
       );
@@ -129,6 +133,7 @@ async function analyzeArticle(title, description) {
       if (result.spokesperson_internal && !result.spokesperson_internal_stance) result.spokesperson_internal_stance = result.tone;
       if (result.spokesperson_eksternal && !result.spokesperson_eksternal_stance) result.spokesperson_eksternal_stance = result.tone;
 
+      Object.assign(result, TAX.validateClassification(result, title + ' ' + truncatedDescription));
       return result;
     } catch (e) {
       lastError = e.message;
@@ -183,7 +188,7 @@ module.exports = async function handler(req, res) {
 
       for (const article of articles) {
         processed++;
-        const truncatedDescription = (article.description || '').replace(/<[^>]+>/g, '').substring(0, 400);
+        const truncatedDescription = (article.description || '').replace(/<[^>]+>/g, '').substring(0, TEXT_LIMIT);
         const sourceTextNormalized = normalizeForMatch(article.title + ' ' + truncatedDescription);
 
         const beforeInternal = article.spokesperson_internal || '';
@@ -233,6 +238,54 @@ module.exports = async function handler(req, res) {
     }
   }
 
+  // MODE KLASIFIKASI (?mode=classify): isi HANYA kategori isu + lokasi untuk artikel
+  // yang belum punya kategori — termasuk artikel yang sudah dikunci (🔒), karena
+  // tone/narasumber/hasil edit manual TIDAK disentuh sama sekali (hanya 4 kolom
+  // klasifikasi yang ditulis, dan artikel tidak ikut dikunci). Artikel yang
+  // kategorinya sudah terisi (AI maupun manual) dilewati. Panggil berulang
+  // sampai 'Selesai'; ?batch= default 2 (batas 10 detik Vercel).
+  if (req.query.mode === 'classify') {
+    try {
+      const url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description&or=(category.is.null,category.eq.)&limit=${batchSize}&offset=${offset}&order=id.asc`;
+      const response = await fetch(url, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } });
+      const articles = await response.json();
+      if (!response.ok) {
+        return res.status(500).json({ error: JSON.stringify(articles), hint: 'Kolom category belum ada? Jalankan add-category-location-columns.sql di Supabase dulu.' });
+      }
+      if (!Array.isArray(articles) || !articles.length) {
+        return res.status(200).json({ success: true, message: 'Semua artikel sudah punya kategori', processed: 0, failed: 0, remaining: 0 });
+      }
+      let processed = 0, failed = 0;
+      const errors = [];
+      const catCount = {};
+      for (const article of articles) {
+        const result = await analyzeArticle(article.title, article.description);
+        if (result.error) { failed++; if (errors.length < 3) errors.push({ id: article.id, error: result.error }); continue; }
+        const patchResp = await fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${article.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({
+            category: result.category || 'lainnya',
+            category_secondary: result.category_secondary || '',
+            locations: result.locations || '',
+            geo_scope: result.geo_scope || ''
+          })
+        });
+        if (!patchResp.ok) { failed++; if (errors.length < 3) errors.push({ id: article.id, error: await patchResp.text() }); continue; }
+        processed++;
+        catCount[result.category] = (catCount[result.category] || 0) + 1;
+      }
+      // Artikel yang berhasil keluar dari filter; yang gagal tetap di sana, jadi offset cukup geser sebanyak yang gagal.
+      const nextOffset = offset + failed;
+      return res.status(200).json({
+        success: true, processed, failed, errors, catCount, nextOffset,
+        note: articles.length < batchSize && !failed ? 'Selesai' : `Masih ada, panggil lagi dengan offset=${nextOffset}`
+      });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
   // MODE DEBUG: test 1 artikel dan tampilkan hasil lengkap
   if (req.query.debug === 'true') {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/articles?select=id,title,description&limit=1&offset=${offset}&order=id.asc`, {
@@ -271,22 +324,36 @@ module.exports = async function handler(req, res) {
         continue;
       }
 
-      const patchResp = await fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${article.id}`, {
+      const fullBody = {
+        tone: result.tone,
+        resume: result.resume || '',
+        spokesperson_internal: result.spokesperson_internal || '',
+        spokesperson_internal_stance: result.spokesperson_internal_stance || '',
+        spokesperson_eksternal: result.spokesperson_eksternal || '',
+        spokesperson_eksternal_stance: result.spokesperson_eksternal_stance || '',
+        category: result.category || '',
+        category_secondary: result.category_secondary || '',
+        locations: result.locations || '',
+        geo_scope: result.geo_scope || ''
+      };
+      const doPatch = body => fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${article.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'apikey': SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
         },
-        body: JSON.stringify({
-          tone: result.tone,
-          resume: result.resume || '',
-          spokesperson_internal: result.spokesperson_internal || '',
-          spokesperson_internal_stance: result.spokesperson_internal_stance || '',
-          spokesperson_eksternal: result.spokesperson_eksternal || '',
-          spokesperson_eksternal_stance: result.spokesperson_eksternal_stance || ''
-        })
+        body: JSON.stringify(body)
       });
+      let patchResp = await doPatch(fullBody);
+      if (!patchResp.ok) {
+        const errText = await patchResp.clone().text();
+        // Kolom kategori/lokasi belum dibuat di DB: simpan sisanya saja, jangan gagal total
+        if (/category|locations|geo_scope/i.test(errText)) {
+          const { category, category_secondary, locations, geo_scope, ...rest } = fullBody;
+          patchResp = await doPatch(rest);
+        }
+      }
 
       if (!patchResp.ok) {
         failed++;

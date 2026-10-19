@@ -8,6 +8,8 @@
 // nameAppearsInSource/validateSpokespersonField) TIDAK PERNAH berlaku untuk
 // hasil pencarian manual — jalur ini tetap bisa mengarang nama narasumber
 // sebebas-bebasnya. Sekarang disamakan dengan dua file lain itu.
+const TAX = require('../lib/taxonomy');
+const TEXT_LIMIT = 800; // batas teks yang dikirim ke AI (naik dari 400 supaya lokasi di paragraf awal terbaca)
 const GEMINI_KEYS = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '')
   .split(',').map(k => k.trim()).filter(Boolean);
 
@@ -65,8 +67,10 @@ ATURAN WAJIB PENULISAN NAMA SPOKESPERSON:
    Contoh SALAH (jangan begini): "Alfons Manibui dan Cheroline Chrisye Makalew|Anggota Komisi XII DPR RI"
 5. Tulis jabatan SESUAI KONTEKS ARTIKEL INI — kalau orang itu dikutip bukan dalam kapasitas jabatan struktural PLN-nya (misal sebagai ketua panitia acara), tulis jabatan itu, bukan jabatan struktural default dia.
 
+${TAX.buildPromptSection()}
+
 Balas HANYA JSON ini tanpa teks lain:
-{"tone":"netral","spokesperson_internal":"","spokesperson_internal_stance":"","spokesperson_eksternal":"","spokesperson_eksternal_stance":"","resume":"ringkasan 2-3 kalimat"}`;
+{"tone":"netral","kategori":"gangguan","kategori_sekunder":"","lokasi":"","cakupan":"","spokesperson_internal":"","spokesperson_internal_stance":"","spokesperson_eksternal":"","spokesperson_eksternal_stance":"","resume":"ringkasan 2-3 kalimat"}`;
 
 // Cek apakah nama beneran ada di teks sumber — jaring pengaman kode, bukan
 // andalin AI patuh instruksi doang. Dicek sebagai SATU FRASA UTUH (nama
@@ -92,7 +96,7 @@ function validateSpokespersonField(raw, sourceTextNormalized) {
   return valid.join(';');
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -111,7 +115,7 @@ export default async function handler(req, res) {
   // Gemini maupun buat validasi nama nanti — biar nggak ada nama yang
   // "ketemu" cuma gara-gara nongol di bagian artikel yang Gemini sendiri
   // nggak pernah baca.
-  const truncatedDescription = (description || '').replace(/<[^>]+>/g, '').substring(0, 400);
+  const truncatedDescription = (description || '').replace(/<[^>]+>/g, '').substring(0, TEXT_LIMIT);
   const prompt = `${TONE_PROMPT}\n\nJudul: ${title}\nDeskripsi: ${truncatedDescription}`;
 
   let lastError = null;
@@ -124,7 +128,7 @@ export default async function handler(req, res) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 500 }
+            generationConfig: { temperature: 0.1, maxOutputTokens: 800 }
           })
         }
       );
@@ -153,6 +157,8 @@ export default async function handler(req, res) {
       result.spokesperson_eksternal = validateSpokespersonField(result.spokesperson_eksternal, sourceTextNormalized);
       if (!result.spokesperson_eksternal) result.spokesperson_eksternal_stance = '';
 
+      Object.assign(result, TAX.validateClassification(result, title + ' ' + truncatedDescription));
+      delete result.kategori; delete result.kategori_sekunder; delete result.lokasi; delete result.cakupan;
       return res.status(200).json(result);
     } catch (e) {
       lastError = e.message;
@@ -160,4 +166,4 @@ export default async function handler(req, res) {
     }
   }
   return res.status(200).json({ error: `Semua ${GEMINI_KEYS.length} API key gagal/kehabisan kuota. Error terakhir: ${lastError}` });
-}
+};
