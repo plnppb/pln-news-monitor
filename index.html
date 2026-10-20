@@ -582,7 +582,10 @@
           <option value="tone">Tone</option>
         </select>
       </div>
-      <button class="export-btn" onclick="exportExcel()">📥 Export Excel</button>
+      <div style="display:flex;gap:8px;">
+        <button class="export-btn" onclick="openAddLinkModal()" title="Tambah berita dari link yang tidak terjaring RSS">➕ Tambah Link Berita</button>
+        <button class="export-btn" onclick="exportExcel()">📥 Export Excel</button>
+      </div>
     </div>
 
     <div id="newsGrid" class="news-grid">
@@ -758,6 +761,35 @@
       <div id="spkExternalList" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
   </div><!-- end panel-spokesperson-wrap -->
+
+  <!-- MODAL: tambah berita manual lewat link (tab Monitor) -->
+  <div id="addLinkOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:10px;padding:20px;max-width:600px;width:94%;max-height:90vh;overflow-y:auto;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:4px;">➕ Tambah Berita dari Link</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5;">Untuk berita yang tidak terjaring RSS. Sistem membaca halamannya, lalu AI menganalisis tone, narasumber, kategori isu, dan lokasi. Hasilnya bisa diedit di kartu berita.</div>
+      <div style="display:flex;gap:6px;">
+        <input id="addLinkUrl" placeholder="https://..." onkeydown="if(event.key==='Enter')fetchAddLink()" style="flex:1;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+        <button id="addLinkFetchBtn" onclick="fetchAddLink()" style="padding:7px 14px;border:none;background:var(--accent);color:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Ambil</button>
+      </div>
+      <div id="addLinkMsg" style="font-size:12px;margin-top:8px;min-height:16px;line-height:1.5;"></div>
+      <div id="addLinkForm" style="display:none;margin-top:8px;">
+        <label style="display:block;font-size:12px;font-weight:600;margin-bottom:8px;">Judul
+          <input id="addLinkTitle" style="width:100%;box-sizing:border-box;margin-top:4px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-weight:400;"></label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+          <label style="flex:1;min-width:180px;font-size:12px;font-weight:600;">Media / sumber
+            <input id="addLinkSource" style="width:100%;box-sizing:border-box;margin-top:4px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-weight:400;"></label>
+          <label style="flex:1;min-width:180px;font-size:12px;font-weight:600;">Tanggal tayang
+            <input id="addLinkDate" type="date" style="width:100%;box-sizing:border-box;margin-top:4px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-weight:400;"></label>
+        </div>
+        <label style="display:block;font-size:12px;font-weight:600;">Isi / ringkasan berita <span style="font-weight:400;color:var(--muted);">(AI membaca ±800 karakter pertama; tempel paragraf awal kalau hasilnya kosong)</span>
+          <textarea id="addLinkDesc" rows="6" style="width:100%;box-sizing:border-box;margin-top:4px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:400;font-family:inherit;"></textarea></label>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+        <button onclick="closeAddLinkModal()" style="padding:7px 14px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Tutup</button>
+        <button id="addLinkSaveBtn" onclick="saveAddLink()" style="display:none;padding:7px 14px;border:none;background:var(--accent2);color:#fff;border-radius:6px;font-size:12px;cursor:pointer;">Simpan & Analisis</button>
+      </div>
+    </div>
+  </div>
 
   <!-- MODAL: edit kategori isu & lokasi satu berita (tab Monitor) -->
   <div id="tagModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
@@ -1772,6 +1804,124 @@ async function saveArticleToDB(idx) {
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = '💾'; }
     showToast('⚠ Gagal simpan: ' + e.message);
+  }
+}
+
+
+// ==================== TAMBAH BERITA MANUAL (LINK) ====================
+function openAddLinkModal() {
+  document.getElementById('addLinkUrl').value = '';
+  document.getElementById('addLinkMsg').textContent = '';
+  document.getElementById('addLinkForm').style.display = 'none';
+  document.getElementById('addLinkSaveBtn').style.display = 'none';
+  document.getElementById('addLinkOverlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('addLinkUrl').focus(), 50);
+}
+function closeAddLinkModal() { document.getElementById('addLinkOverlay').style.display = 'none'; }
+
+function setAddLinkMsg(html, color) {
+  const el = document.getElementById('addLinkMsg');
+  el.style.color = color || 'var(--muted)';
+  el.innerHTML = html;
+}
+
+async function fetchAddLink() {
+  const url = document.getElementById('addLinkUrl').value.trim();
+  if (!url) { setAddLinkMsg('Tempel link berita dulu.', 'var(--red,#c0392b)'); return; }
+  const btn = document.getElementById('addLinkFetchBtn');
+  btn.disabled = true; btn.textContent = '⏳';
+  setAddLinkMsg('Membaca halaman berita...');
+  document.getElementById('addLinkForm').style.display = 'none';
+  document.getElementById('addLinkSaveBtn').style.display = 'none';
+  try {
+    const r = await fetch('/api/articles', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'fetch-meta', secret: CRON_SECRET, url })
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || 'Gagal membaca link');
+    window._addLink = { url: d.url };
+    if (d.alreadyExists) {
+      setAddLinkMsg('ℹ️ Link ini sudah ada di database' + (d.title ? ': <i>' + spkEsc(d.title) + '</i>' : '') +
+        (d.hidden ? '. Berita ini pernah dihapus dari monitoring; klik Simpan untuk menampilkannya lagi.' : '. Cari di daftar berita untuk mengeditnya.'));
+      if (d.hidden) {
+        document.getElementById('addLinkTitle').value = d.title || '';
+        document.getElementById('addLinkSource').value = '';
+        document.getElementById('addLinkDate').value = '';
+        document.getElementById('addLinkDesc').value = '';
+        window._addLink.restore = true;
+        document.getElementById('addLinkSaveBtn').style.display = '';
+      }
+      return;
+    }
+    document.getElementById('addLinkTitle').value = d.title || '';
+    document.getElementById('addLinkSource').value = d.source || '';
+    const dt = d.published_at ? new Date(d.published_at) : new Date();
+    const local = new Date(dt.getTime() + 9 * 3600000); // WIT
+    document.getElementById('addLinkDate').value = local.toISOString().slice(0, 10);
+    document.getElementById('addLinkDesc').value = d.description || '';
+    document.getElementById('addLinkForm').style.display = 'block';
+    document.getElementById('addLinkSaveBtn').style.display = '';
+    const warn = [];
+    if (d.reason) warn.push(d.reason);
+    else {
+      if (!d.published_at) warn.push('Tanggal tayang tidak terbaca, diisi hari ini. Periksa kembali.');
+      if (!d.description) warn.push('Isi berita tidak terbaca, tempel paragraf awal secara manual.');
+    }
+    setAddLinkMsg(warn.length ? '⚠ ' + warn.join(' ') : '✅ Halaman terbaca. Periksa data di bawah, lalu simpan.', warn.length ? '#b9770e' : 'var(--green,#1e8449)');
+  } catch (e) {
+    setAddLinkMsg('⚠ ' + spkEsc(e.message), 'var(--red,#c0392b)');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Ambil';
+  }
+}
+
+async function saveAddLink() {
+  const st = window._addLink; if (!st) return;
+  const btn = document.getElementById('addLinkSaveBtn');
+  const title = document.getElementById('addLinkTitle').value.trim();
+  if (!st.restore && !title) { setAddLinkMsg('Judul wajib diisi.', 'var(--red,#c0392b)'); return; }
+  const dateVal = document.getElementById('addLinkDate').value;
+  const published_at = dateVal ? new Date(dateVal + 'T12:00:00+09:00').toISOString() : new Date().toISOString();
+  btn.disabled = true; btn.textContent = '⏳ Menganalisis...';
+  setAddLinkMsg('AI sedang menganalisis berita, sekitar 5-10 detik...');
+  try {
+    const r = await fetch('/api/articles', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'save', secret: CRON_SECRET, url: st.url, title: title || 'Berita',
+        source: document.getElementById('addLinkSource').value.trim() || 'Manual',
+        published_at, description: document.getElementById('addLinkDesc').value.trim()
+      })
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || 'Gagal menyimpan');
+    if (d.alreadyExists && !d.restored) { setAddLinkMsg('ℹ️ Sudah ada di database.'); return; }
+    if (d.restored) {
+      showToast('✅ Berita ditampilkan kembali. Muat ulang halaman untuk melihatnya.');
+      closeAddLinkModal(); return;
+    }
+    const a = d.article || {};
+    const art = {
+      title: a.title || title, url: a.url || st.url, publishedAt: a.published_at || published_at, createdAt: a.created_at,
+      source: { name: a.source || 'Manual' }, description: a.description || '', keyword: 'manual-add',
+      _tone: a.tone || 'netral', _resume: a.resume || '',
+      _spkInternal: a.spokesperson_internal || '', _spkExternal: a.spokesperson_eksternal || '',
+      _spkInternalStance: a.spokesperson_internal_stance || '', _spkExternalStance: a.spokesperson_eksternal_stance || '',
+      _locked: false, _category: a.category || '', _categorySecondary: a.category_secondary || '',
+      _locations: a.locations || '', _geoScope: a.geo_scope || '', _analyzed: !!a.resume, _fromDB: true
+    };
+    allArticles.unshift(art);
+    applyFilters();
+    sortArticles('date');
+    closeAddLinkModal();
+    showToast(d.analysisFailed
+      ? '⚠ Berita tersimpan, tapi analisis AI gagal. Isi tone, narasumber, dan kategori lewat tombol edit di kartu.'
+      : '✅ Berita ditambahkan dan sudah dianalisis. Cek hasilnya di kartu paling atas.');
+  } catch (e) {
+    setAddLinkMsg('⚠ ' + spkEsc(e.message), 'var(--red,#c0392b)');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Simpan & Analisis';
   }
 }
 
