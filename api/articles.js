@@ -389,10 +389,15 @@ async function handleSave(req, res) {
 
 // ===== GET: baca daftar artikel (perilaku asli, tidak berubah) =====
 async function handleList(req, res) {
-  const { keyword, source, from, to, created_from, created_to, limit = 500, offset = 0 } = req.query;
+  const { keyword, source, from, to, created_from, created_to, q, limit = 500, offset = 0 } = req.query;
   let url = `${SUPABASE_URL}/rest/v1/articles?select=*&order=published_at.desc&limit=${limit}&offset=${offset}`;
   if (keyword) url += `&keyword=eq.${encodeURIComponent(keyword)}`;
   if (source) url += `&source=ilike.${encodeURIComponent('%' + source + '%')}`;
+  if (q) {
+    // Pencarian bebas di judul, ringkasan, media; tanda kurung/koma dibuang agar tidak merusak filter PostgREST
+    const term = String(q).replace(/[(),*%\\]/g, ' ').trim().slice(0, 80);
+    if (term) url += `&or=(${encodeURIComponent('title.ilike.*' + term + '*')},${encodeURIComponent('description.ilike.*' + term + '*')},${encodeURIComponent('source.ilike.*' + term + '*')},${encodeURIComponent('resume.ilike.*' + term + '*')})`;
+  }
   if (from) url += `&published_at=gte.${from}`;
   if (to) url += `&published_at=lte.${to}`;
   if (created_from) url += `&created_at=gte.${created_from}`;
