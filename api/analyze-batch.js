@@ -163,6 +163,10 @@ module.exports = async function handler(req, res) {
   const batchSize = parseInt(req.query.batch) || 2;
   const reanalyze = req.query.reanalyze === 'true';
   const offset = parseInt(req.query.offset) || 0;
+  // ?days=30 : hanya proses artikel yang TANGGAL TAYANGNYA (published_at) dalam N hari terakhir.
+  // Tanpa parameter ini = semua artikel (perilaku lama).
+  const days = parseInt(req.query.days) || 0;
+  const dateFilter = days > 0 ? `&published_at=gte.${new Date(Date.now() - days * 86400000).toISOString()}` : '';
 
   // MODE REVALIDASI (?mode=revalidate): bersihkan nama spokesperson yang
   // SUDAH TERSIMPAN dari dulu, tanpa panggil Gemini sama sekali — murni
@@ -175,7 +179,7 @@ module.exports = async function handler(req, res) {
   // yang sebelumnya sama sekali nggak divalidasi.
   if (req.query.mode === 'revalidate') {
     try {
-      const url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description,spokesperson_internal,spokesperson_eksternal&or=(spokesperson_internal.neq.,spokesperson_eksternal.neq.)&limit=${batchSize}&offset=${offset}&order=id.asc`;
+      const url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description,spokesperson_internal,spokesperson_eksternal&or=(spokesperson_internal.neq.,spokesperson_eksternal.neq.)${dateFilter}&limit=${batchSize}&offset=${offset}&order=id.asc`;
       const response = await fetchArticlesSkippingLocked(url);
       const articles = await response.json();
 
@@ -230,7 +234,7 @@ module.exports = async function handler(req, res) {
 
       const nextOffset = offset + batchSize;
       return res.status(200).json({
-        success: true, processed, cleaned, examples, nextOffset,
+        success: true, filterDays: days, processed, cleaned, examples, nextOffset,
         note: articles.length < batchSize ? 'Selesai' : `Masih ada, panggil lagi dengan offset=${nextOffset}`
       });
     } catch (error) {
@@ -246,14 +250,14 @@ module.exports = async function handler(req, res) {
   // sampai 'Selesai'; ?batch= default 2 (batas 10 detik Vercel).
   if (req.query.mode === 'classify') {
     try {
-      const url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description&or=(category.is.null,category.eq.)&limit=${batchSize}&offset=${offset}&order=id.asc`;
+      const url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description&or=(category.is.null,category.eq.)${dateFilter}&limit=${batchSize}&offset=${offset}&order=id.asc`;
       const response = await fetch(url, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } });
       const articles = await response.json();
       if (!response.ok) {
         return res.status(500).json({ error: JSON.stringify(articles), hint: 'Kolom category belum ada? Jalankan add-category-location-columns.sql di Supabase dulu.' });
       }
       if (!Array.isArray(articles) || !articles.length) {
-        return res.status(200).json({ success: true, message: 'Semua artikel sudah punya kategori', processed: 0, failed: 0, remaining: 0 });
+        return res.status(200).json({ success: true, filterDays: days, message: 'Semua artikel sudah punya kategori', processed: 0, failed: 0, remaining: 0 });
       }
       let processed = 0, failed = 0;
       const errors = [];
@@ -278,7 +282,7 @@ module.exports = async function handler(req, res) {
       // Artikel yang berhasil keluar dari filter; yang gagal tetap di sana, jadi offset cukup geser sebanyak yang gagal.
       const nextOffset = offset + failed;
       return res.status(200).json({
-        success: true, processed, failed, errors, catCount, nextOffset,
+        success: true, filterDays: days, processed, failed, errors, catCount, nextOffset,
         note: articles.length < batchSize && !failed ? 'Selesai' : `Masih ada, panggil lagi dengan offset=${nextOffset}`
       });
     } catch (error) {
@@ -300,16 +304,16 @@ module.exports = async function handler(req, res) {
   try {
     let url;
     if (reanalyze) {
-      url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description&limit=${batchSize}&offset=${offset}&order=id.asc`;
+      url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description${dateFilter}&limit=${batchSize}&offset=${offset}&order=id.asc`;
     } else {
-      url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description&or=(tone.is.null,tone.eq.)&limit=${batchSize}&offset=${offset}&order=id.asc`;
+      url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description&or=(tone.is.null,tone.eq.)${dateFilter}&limit=${batchSize}&offset=${offset}&order=id.asc`;
     }
 
     const response = await fetchArticlesSkippingLocked(url);
     const articles = await response.json();
 
     if (!Array.isArray(articles) || !articles.length) {
-      return res.status(200).json({ success: true, message: 'Semua artikel sudah dianalisis', processed: 0 });
+      return res.status(200).json({ success: true, filterDays: days, message: 'Semua artikel sudah dianalisis', processed: 0 });
     }
 
     let processed = 0, failed = 0;
@@ -372,7 +376,7 @@ module.exports = async function handler(req, res) {
 
     const nextOffset = offset + batchSize;
     return res.status(200).json({
-      success: true, processed, failed, toneCount, errors,
+      success: true, filterDays: days, processed, failed, toneCount, errors,
       nextOffset,
       note: articles.length < batchSize ? 'Selesai' : `Masih ada, panggil lagi dengan offset=${nextOffset}`
     });
