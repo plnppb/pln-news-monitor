@@ -40,6 +40,11 @@ const TONE_PROMPT = `Kamu adalah analis media senior untuk PT PLN (Persero) UIW 
 - Profil/wawancara pejabat PLN tanpa isu spesifik
 - **Siaran pers promosi rutin dari PLN sendiri** (perpanjangan promo yang sudah berjalan, edukasi/sosialisasi rutin, laporan capaian rutin) — INI TETAP NETRAL meskipun teksnya memakai kata "berhasil"/"capai"/"sukses"/"apresiasi". Kata-kata itu adalah gaya bahasa PR standar, BUKAN indikator otomatis bahwa ini pencapaian luar biasa. Nilai dari SUBSTANSI dampaknya, bukan dari pilihan katanya. Kalau ragu antara POSITIF dan NETRAL untuk siaran pers rutin PLN, pilih NETRAL.
 
+## KASUS KHUSUS KEBAKARAN / KORSLETING / INSIDEN LISTRIK:
+- Kebakaran rumah/bangunan yang "diduga korsleting listrik" di instalasi milik warga atau bangunan (bukan jaringan PLN), dan PLN TIDAK disebut atau TIDAK disalahkan = NETRAL. Imbauan aparat/pihak lain agar warga memeriksa instalasi listrik juga NETRAL.
+- NEGATIF hanya jika aset/jaringan PLN (tiang, kabel SUTM/SUTR, trafo, gardu, meteran PLN) disebut sebagai penyebab/terlibat, atau PLN dikritik/diminta bertanggung jawab, atau ada korban akibat sengatan dari jaringan PLN.
+- Kata "listrik" atau "korsleting" saja BUKAN dasar menilai NEGATIF. Tanya: apakah citra PLN dirugikan oleh isi berita ini?
+
 ## KASUS KHUSUS KATA "PEMADAMAN":
 - "Warga keluhkan pemadaman" / "pemadaman bergilir bikin resah" → NEGATIF
 - "PLN berhasil kurangi durasi pemadaman X persen" / "pemadaman turun" → POSITIF

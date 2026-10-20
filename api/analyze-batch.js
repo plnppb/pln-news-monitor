@@ -18,6 +18,7 @@ NETRAL: komitmen tanpa bukti, kegiatan rutin, permintaan biasa, pemeliharaan ter
 PENTING SOAL BIAS: banyak artikel berasal dari siaran pers PLN sendiri yang rutin pakai kata "berhasil"/"capai"/"sukses" untuk kegiatan biasa. JANGAN otomatis menilai POSITIF hanya karena ada kata-kata itu — nilai dari SUBSTANSI dampaknya, bukan dari pilihan katanya. Kalau ragu antara POSITIF dan NETRAL untuk siaran pers rutin PLN, pilih NETRAL.
 
 KASUS KHUSUS:
+- Kebakaran/korsleting di instalasi milik warga atau bangunan (bukan jaringan PLN), PLN tidak disebut atau tidak disalahkan = NETRAL. NEGATIF hanya jika aset/jaringan PLN (tiang, kabel, trafo, gardu) terlibat, PLN disalahkan, atau ada korban sengatan dari jaringan PLN. Kata "korsleting"/"listrik" saja bukan dasar NEGATIF.
 - "keluhkan pemadaman" atau "pemadaman bergilir" = NEGATIF
 - "kurangi durasi pemadaman X persen" = POSITIF  
 - "jadwalkan pemadaman pemeliharaan" = NETRAL
