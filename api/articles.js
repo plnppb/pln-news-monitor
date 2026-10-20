@@ -190,6 +190,122 @@ async function handleCheck(req, res) {
   }
 }
 
+
+// ===== POST mode=fetch-meta: baca halaman berita dari URL, ambil judul/tanggal/sumber/isi =====
+// Dipisah dari mode=save supaya masing-masing aman di bawah batas 10 detik Vercel Hobby.
+function decodeEntities(t) {
+  return String(t || '')
+    .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (m, n) => { try { return String.fromCodePoint(+n); } catch (e) { return ' '; } })
+    .replace(/&#x([0-9a-f]+);/gi, (m, n) => { try { return String.fromCodePoint(parseInt(n, 16)); } catch (e) { return ' '; } });
+}
+function stripTags(h) {
+  return decodeEntities(String(h || '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+}
+function metaContent(html, key) {
+  const re1 = new RegExp('<meta[^>]+(?:property|name)=["\']' + key + '["\'][^>]*content=["\']([^"\']*)["\']', 'i');
+  const re2 = new RegExp('<meta[^>]+content=["\']([^"\']*)["\'][^>]*(?:property|name)=["\']' + key + '["\']', 'i');
+  const m = html.match(re1) || html.match(re2);
+  return m ? decodeEntities(m[1]).trim() : '';
+}
+function isBlockedHost(host) {
+  const h = host.toLowerCase();
+  if (h === 'localhost' || h.endsWith('.local') || h.endsWith('.internal')) return true;
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(h)) {
+    const [a, b] = h.split('.').map(Number);
+    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  }
+  return h.includes(':') || h === '[::1]';
+}
+function sourceFromHost(host) {
+  return host.replace(/^www\./i, '').replace(/^m\./i, '');
+}
+function extractArticleMeta(html, pageUrl, host) {
+  const title = stripTags(metaContent(html, 'og:title') || metaContent(html, 'twitter:title') ||
+    ((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '')).replace(/\s+[|\-–—]\s+[^|\-–—]{2,40}$/, '').trim();
+  let published = metaContent(html, 'article:published_time') || metaContent(html, 'og:article:published_time') ||
+    metaContent(html, 'datePublished') || metaContent(html, 'pubdate') || metaContent(html, 'date');
+  if (!published) {
+    const m = html.match(/"datePublished"\s*:\s*"([^"]+)"/);
+    if (m) published = m[1];
+  }
+  let publishedISO = '';
+  if (published) {
+    const d = new Date(published);
+    if (!isNaN(d)) publishedISO = d.toISOString();
+  }
+  const siteName = stripTags(metaContent(html, 'og:site_name'));
+  const metaDesc = stripTags(metaContent(html, 'og:description') || metaContent(html, 'description'));
+  // Isi artikel: kumpulkan paragraf <p> yang cukup panjang, lebih informatif daripada meta description
+  const cleaned = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<(nav|header|footer|aside|form)[\s\S]*?<\/\1>/gi, ' ');
+  const paras = [];
+  const pre = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+  let m, total = 0;
+  while ((m = pre.exec(cleaned)) && total < 2500) {
+    const t = stripTags(m[1]);
+    if (t.length >= 60) { paras.push(t); total += t.length; }
+  }
+  const body = paras.join(' ');
+  const description = (body.length > metaDesc.length ? body : (metaDesc || body)).slice(0, 2000);
+  return {
+    title, description, published_at: publishedISO,
+    source: siteName || sourceFromHost(host)
+  };
+}
+
+async function handleFetchMeta(req, res) {
+  const secret = req.headers['x-cron-secret'] || req.body?.secret;
+  if (secret !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  let raw = String(req.body?.url || '').trim();
+  if (!raw) return res.status(400).json({ error: 'url wajib diisi' });
+  if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+  let u;
+  try { u = new URL(raw); } catch (e) { return res.status(400).json({ error: 'Format link tidak valid' }); }
+  if (!/^https?:$/.test(u.protocol) || isBlockedHost(u.hostname)) return res.status(400).json({ error: 'Link tidak diizinkan' });
+  const finalUrl = u.toString();
+
+  try {
+    // Cek duplikat lebih dulu (termasuk yang pernah dihapus/disembunyikan)
+    const ex = await fetch(
+      `${SUPABASE_URL}/rest/v1/articles?select=id,title,hidden&url=eq.${encodeURIComponent(finalUrl)}`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    ).then(r => r.json()).catch(() => []);
+    if (Array.isArray(ex) && ex.length) {
+      return res.status(200).json({ url: finalUrl, alreadyExists: true, hidden: !!ex[0].hidden, title: ex[0].title || '' });
+    }
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    let html = '', status = 0;
+    try {
+      const r = await fetch(finalUrl, {
+        signal: ctrl.signal, redirect: 'follow',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; PLNNewsMonitor/1.0)',
+          'Accept': 'text/html,application/xhtml+xml',
+          'Accept-Language': 'id-ID,id;q=0.9,en;q=0.5'
+        }
+      });
+      status = r.status;
+      const buf = await r.arrayBuffer();
+      html = new TextDecoder('utf-8').decode(buf.byteLength > 1500000 ? buf.slice(0, 1500000) : buf);
+    } finally { clearTimeout(timer); }
+
+    if (!html || status >= 400) {
+      return res.status(200).json({ url: finalUrl, fetched: false, source: sourceFromHost(u.hostname),
+        reason: `Situs tidak bisa dibaca otomatis (HTTP ${status || 'timeout'}). Isi judul & ringkasan secara manual.` });
+    }
+    const meta = extractArticleMeta(html, finalUrl, u.hostname);
+    return res.status(200).json({ url: finalUrl, fetched: true, ...meta,
+      reason: !meta.title ? 'Judul tidak terbaca otomatis, isi manual.' : '' });
+  } catch (e) {
+    return res.status(200).json({ url: finalUrl, fetched: false, source: sourceFromHost(u.hostname),
+      reason: 'Gagal membuka link (' + (e.name === 'AbortError' ? 'timeout' : e.message) + '). Isi judul & ringkasan secara manual.' });
+  }
+}
+
 // ===== POST mode=save: simpan satu artikel manual dari hasil pencarian kustom =====
 async function handleSave(req, res) {
   const secret = req.headers['x-cron-secret'] || req.body?.secret;
@@ -204,11 +320,16 @@ async function handleSave(req, res) {
 
   try {
     const existing = await fetch(
-      `${SUPABASE_URL}/rest/v1/articles?select=id&url=eq.${encodeURIComponent(url)}`,
+      `${SUPABASE_URL}/rest/v1/articles?select=id,hidden&url=eq.${encodeURIComponent(url)}`,
       { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
     ).then(r => r.json());
 
     if (Array.isArray(existing) && existing.length > 0) {
+      // Pernah dihapus dari monitoring? Kalau user menambahkan lagi secara sengaja, tampilkan kembali.
+      if (existing[0].hidden) {
+        await patchArticleByUrl(url, { hidden: false }, false);
+        return res.status(200).json({ success: true, alreadyExists: true, restored: true });
+      }
       return res.status(200).json({ success: true, alreadyExists: true });
     }
 
@@ -258,7 +379,9 @@ async function handleSave(req, res) {
       return res.status(response.status).json({ error: errText });
     }
 
-    return res.status(200).json({ success: true, saved: true, analysisFailed: !!analysis.error });
+    let savedRow = null;
+    try { const j = await response.json(); savedRow = Array.isArray(j) ? j[0] : null; } catch (e) {}
+    return res.status(200).json({ success: true, saved: true, analysisFailed: !!analysis.error, article: savedRow || row });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -684,6 +807,7 @@ module.exports = async function handler(req, res) {
     const mode = req.body?.mode;
     if (mode === 'check') return handleCheck(req, res);
     if (mode === 'save') return handleSave(req, res);
+    if (mode === 'fetch-meta') return handleFetchMeta(req, res);
     if (mode === 'pin') return handlePin(req, res);
     if (mode === 'unpin') return handleUnpin(req, res);
     if (mode === 'update-status') return handleUpdateStatus(req, res);
