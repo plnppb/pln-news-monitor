@@ -99,6 +99,18 @@
   /* RSS MANAGER */
   .rss-section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
   .rss-count{font-size:11px;color:var(--muted);}
+  /* Panel Reputasi */
+  #panel-reputasi-wrap{padding:4px 2px 40px;}
+  .rp-clk{cursor:pointer;font:inherit;color:inherit;text-align:left;}
+  .rp-clk:hover{background:#E6EFFB !important;}
+  .rp-clk2{cursor:pointer;font:inherit;}
+  .rp-clk2:hover{filter:brightness(0.92);}
+  .rp-clk:focus-visible,.rp-clk2:focus-visible{outline:2px solid #1F5FBF;outline-offset:2px;}
+  .rp-pill{cursor:pointer;padding:6px 12px;border-radius:999px;font-size:12.5px;font-weight:600;font-family:inherit;}
+  .rp-chip{padding:2px 8px;border-radius:999px;font-size:11.5px;}
+  .rp-seg{padding:8px 14px;font-size:13px;border:0;background:#fff;color:#4A5B72;cursor:pointer;font-family:inherit;}
+  .rp-seg.on{background:#14243B;color:#fff;font-weight:600;}
+  .rp-num{width:52px;padding:2px 4px;border:1px solid #CBD5E3;border-radius:5px;font-size:12.5px;font-family:inherit;}
   .btn-manage{background:var(--accent-light);color:var(--accent);border:1px solid rgba(0,61,143,0.2);border-radius:5px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;}
   .btn-manage:hover{background:var(--accent);color:#fff;}
 
@@ -547,6 +559,7 @@
     <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border1);padding-bottom:0;">
       <button id="tab-monitor" onclick="switchTab('monitor')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📡 Monitor</button>
       <button id="tab-dashboard" onclick="switchTab('dashboard')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📊 Dashboard</button>
+      <button id="tab-reputasi" onclick="switchTab('reputasi')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🛡 Reputasi</button>
       <button id="tab-radar" onclick="switchTab('radar')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📡 Radar Papua</button>
       <button id="tab-followups" onclick="switchTab('followups')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🗂 Tindak Lanjut</button>
       <button id="tab-spokesperson" onclick="switchTab('spokesperson')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🎙 Spokesperson</button>
@@ -718,6 +731,11 @@
   </div><!-- end panel-dashboard-wrap -->
 
   <!-- PANEL RADAR PAPUA -->
+  <!-- TAB: REPUTASI -->
+  <div id="panel-reputasi-wrap" style="display:none;">
+    <div id="rpRoot"></div>
+  </div>
+
   <div id="panel-radar-wrap" style="display:none;">
     <div style="background:#fefce8;border:1px solid #fde047;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#854d0e;">
       📡 Radar berita umum Papua (kebakaran, bencana, keamanan, dll) — di luar konteks PLN, tanpa analisis tone. Diperbarui otomatis tiap 6 jam.
@@ -1842,8 +1860,11 @@ async function fetchAddLink() {
     if (!r.ok || d.error) throw new Error(d.error || 'Gagal membaca link');
     window._addLink = { url: d.url };
     if (d.alreadyExists) {
-      setAddLinkMsg('ℹ️ Link ini sudah ada di database' + (d.title ? ': <i>' + spkEsc(d.title) + '</i>' : '') +
-        (d.hidden ? '. Berita ini pernah dihapus dari monitoring; klik Simpan untuk menampilkannya lagi.' : '. Cari di daftar berita untuk mengeditnya.'));
+      const pubD = d.published_at ? new Date(d.published_at) : null;
+      const oldNote = pubD && (Date.now() - pubD.getTime()) > 30 * 86400000
+        ? ' Tanggal tayangnya ' + repFmtDate(pubD) + ', lebih dari 30 hari lalu, jadi tidak tampil di tab Monitor dan Dashboard yang hanya memuat 30 hari terakhir. Berita ini tetap tersimpan.' : '';
+      setAddLinkMsg('ℹ️ Link ini sudah ada di database' + (d.title ? ': <i>' + spkEsc(d.title) + '</i>' : '') + '.' +
+        (d.hidden ? ' Berita ini pernah dihapus dari monitoring; klik Simpan untuk menampilkannya lagi.' : (oldNote || ' Cari di daftar berita untuk mengeditnya.')));
       if (d.hidden) {
         document.getElementById('addLinkTitle').value = d.title || '';
         document.getElementById('addLinkSource').value = '';
@@ -1863,6 +1884,7 @@ async function fetchAddLink() {
     document.getElementById('addLinkForm').style.display = 'block';
     document.getElementById('addLinkSaveBtn').style.display = '';
     const warn = [];
+    if (d.published_at && (Date.now() - new Date(d.published_at).getTime()) > 30 * 86400000) warn.push('Tanggal tayang lebih dari 30 hari lalu: berita akan tersimpan, tetapi tidak tampil di tab Monitor/Dashboard yang memuat 30 hari terakhir.');
     if (d.reason) warn.push(d.reason);
     else {
       if (!d.published_at) warn.push('Tanggal tayang tidak terbaca, diisi hari ini. Periksa kembali.');
@@ -1924,6 +1946,665 @@ async function saveAddLink() {
     btn.disabled = false; btn.textContent = 'Simpan & Analisis';
   }
 }
+
+
+// ==================== PANEL REPUTASI ====================
+// Semua angka dihitung dari database (kategori, lokasi, tone, narasumber) tanpa tambahan kuota Gemini.
+// Setiap angka yang tampil bisa diklik; daftar yang terbuka memakai kriteria yang sama persis.
+const REP = {
+  days: 30, thrNeg: 3, thrN: 10,
+  raw: null, loadedDays: 0, loading: false,
+  reg: [], drill: null, tab: 'semua', all: [], prev: [], cur: [], layoutTimer: null
+};
+
+const REP_STAKE = [
+  ['Mahasiswa', /mahasiswa|\bbem\b/],
+  ['DPRD / DPR', /dprd|\bdpr\b|\bdpr-ri\b|anggota dewan|legislatif|rapat dengar pendapat|\brdp\b/],
+  ['Ormas / LSM', /\blsm\b|\bormas\b|lembaga swadaya|organisasi kemasyarakatan|\baliansi\b|ombudsman/],
+  ['Warga / pelanggan', /warga|pelanggan|masyarakat|konsumen/],
+  ['Tokoh adat dan gereja', /tokoh adat|kepala suku|dewan adat|masyarakat adat|\blma\b|gereja|pendeta|uskup|tokoh agama|tokoh masyarakat|majelis rakyat papua|\bmrp\b|ondoafi|kepala adat/],
+  ['Aparat penegak hukum', /polisi|polres|polda|polsek|kejaksaan|kejari|kejati|\bjaksa\b|penyidik|\bkpk\b|pengadilan|hakim/],
+  ['Pemerintah daerah', /pemprov|pemkab|pemkot|pemda|pemerintah daerah|gubernur|bupati|wali kota|walikota|sekda|pemerintah provinsi|pemerintah kabupaten/],
+  ['Pemerintah pusat', /kementerian|menteri|presiden|dirjen|ditjen|pemerintah pusat/]
+];
+const REP_LEGAL = [
+  { k: 'A', title: 'Gugatan dan kompensasi', kw: 'gugatan, kompensasi, somasi', re: /gugat|kompensasi|somasi|class action/ },
+  { k: 'B', title: 'Dugaan korupsi dan pidana', kw: 'korupsi, tersangka, penyidikan', re: /korupsi|tersangka|penyidikan|penyelidikan|kejaksaan|kejari|kejati|\bkpk\b|terdakwa|dakwaan/ },
+  { k: 'C', title: 'Sengketa lahan dan ganti rugi', kw: 'sengketa, ganti rugi, hak ulayat', re: /sengketa|ganti rugi|pembebasan lahan|hak ulayat|tanah adat|pemalangan/ },
+  { k: 'D', title: 'Pemanggilan oleh DPRD', kw: 'RDP, rapat dengar pendapat, DPRD panggil', re: /rapat dengar pendapat|\brdp\b|dprd (memanggil|panggil|minta|soroti|sidak)|memanggil pln|panggil pln|hearing/ },
+  { k: 'E', title: 'Laporan ke aparat penegak hukum', kw: 'dilaporkan, lapor polisi, ombudsman', re: /dilaporkan|melapor|laporan polisi|lapor(kan)? ke polisi|pengaduan ke (polisi|polres|ombudsman)|ombudsman/ }
+];
+const REP_LEADER_RE = /general manager|\bgm\b|manajer|manager|direktur|kepala|\bplt\b|\bpjs\b|senior/i;
+const REP_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const REP_SCOPE = { papua_umum: 'Papua (umum)', nasional: 'Nasional', luar_wilayah: 'Luar wilayah UIW PPB' };
+const REP_PROV_ORDER = ['Papua', 'Papua Tengah', 'Papua Barat Daya', 'Papua Selatan', 'Papua Barat', 'Papua Pegunungan'];
+
+function repFmtDate(d) {
+  const w = new Date(d.getTime() + 9 * 3600000); // WIT
+  return w.getUTCDate() + ' ' + REP_MON[w.getUTCMonth()] + ' ' + w.getUTCFullYear();
+}
+function repFmtShort(d) {
+  const w = new Date(d.getTime() + 9 * 3600000);
+  return w.getUTCDate() + ' ' + REP_MON[w.getUTCMonth()];
+}
+function repTally(list) {
+  const t = { all: list.length, neg: 0, neu: 0, pos: 0 };
+  list.forEach(a => { if (a.tone === 'negatif') t.neg++; else if (a.tone === 'positif') t.pos++; else t.neu++; });
+  return t;
+}
+function repPct(n, max) { return (max > 0 ? Math.round((n / max) * 1000) / 10 : 0) + '%'; }
+function repNum(n, d) { return (Math.round(n * Math.pow(10, d || 0)) / Math.pow(10, d || 0)).toString().replace('.', ','); }
+
+// Siapkan atribut turunan tiap artikel (sekali per muat data)
+function repPrepare(rows) {
+  const now = Date.now();
+  return rows.map(r => {
+    const locs = (r.locations || '').split(';').map(x => x.trim()).filter(Boolean);
+    const kab = locs.filter(l => TAXO_LOC[l] && TAXO_LOC[l].level === 'kabkota');
+    const provs = [];
+    locs.forEach(l => { const p = TAXO_LOC[l] && TAXO_LOC[l].province; if (p && provs.indexOf(p) < 0) provs.push(p); });
+    const text = ((r.title || '') + ' ' + (r.resume || '') + ' ' + (r.description || '')).toLowerCase();
+    const stake = REP_STAKE.filter(s => s[1].test(text)).map(s => s[0]);
+    const legal = REP_LEGAL.filter(l => l.re.test(text)).map(l => l.k);
+    const internal = (r.spokesperson_internal || '').split(';').map(x => x.trim()).filter(Boolean).map(e => {
+      const p = e.split('|'); return { name: (p[0] || '').trim(), title: (p[1] || '').trim() };
+    });
+    const leaders = internal.filter(p => p.name && REP_LEADER_RE.test(p.title));
+    const pub = new Date(r.published_at);
+    return {
+      id: r.id, title: r.title || '', url: r.url || '', media: r.source || '', pub,
+      ageDays: (now - pub.getTime()) / 86400000,
+      tone: r.tone === 'negatif' ? 'negatif' : r.tone === 'positif' ? 'positif' : 'netral',
+      cat: r.category || '', cat2: r.category_secondary || '', locs, kab, provs,
+      scope: r.geo_scope || '', stake, legal, leaders, resume: r.resume || ''
+    };
+  });
+}
+
+async function repFetch(days) {
+  const from = new Date(Date.now() - days * 2 * 86400000).toISOString().split('T')[0];
+  const pageSize = 500;
+  let out = [], offset = 0;
+  while (true) {
+    const r = await fetch('/api/articles?limit=' + pageSize + '&offset=' + offset + '&from=' + from);
+    if (!r.ok) throw new Error('Gagal memuat artikel (HTTP ' + r.status + ')');
+    const d = await r.json();
+    if (!d.articles || !d.articles.length) break;
+    out = out.concat(d.articles);
+    document.getElementById('rpStatus').textContent = 'Memuat... ' + out.length + ' artikel';
+    if (d.articles.length < pageSize) break;
+    offset += pageSize;
+  }
+  return out;
+}
+
+async function loadReputasi(force) {
+  if (REP.loading) return;
+  const root = document.getElementById('rpRoot');
+  if (REP.raw && !force && REP.loadedDays >= REP.days) { renderReputasi(); return; }
+  REP.loading = true;
+  root.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)" id="rpStatus">Memuat data...</div>';
+  try {
+    REP.raw = repPrepare(await repFetch(REP.days));
+    REP.loadedDays = REP.days;
+    REP.loading = false;
+    renderReputasi();
+  } catch (e) {
+    REP.loading = false;
+    root.innerHTML = '<div style="padding:40px;text-align:center;color:#9F1D1D">⚠ ' + spkEsc(e.message) + '</div>';
+  }
+}
+
+function repSetDays(d) {
+  REP.days = d;
+  REP.thrN = d <= 30 ? 10 : d <= 60 ? 20 : 30;
+  loadReputasi(false);
+}
+function repSetThr() {
+  const n = parseInt(document.getElementById('rpThrN').value), g = parseInt(document.getElementById('rpThrNeg').value);
+  if (n > 0) REP.thrN = n;
+  if (g > 0) REP.thrNeg = g;
+  renderReputasi();
+}
+
+// Daftarkan satu daftar berita yang akan dibuka saat angka diklik; mengembalikan atribut onclick
+function repOpenAttr(title, crit, list, tab) {
+  REP.reg.push({ title, crit: crit.concat([REP.periode]), list, tab: tab || 'semua' });
+  return 'onclick="repOpen(' + (REP.reg.length - 1) + ')"';
+}
+function repOpen(i) {
+  const e = REP.reg[i]; if (!e) return;
+  REP.drill = e; REP.tab = e.tab;
+  repRenderDrawer();
+}
+function repClose() { REP.drill = null; repRenderDrawer(); }
+function repSetTab(t) { REP.tab = t; repRenderDrawer(); }
+
+function repRenderDrawer() {
+  const el = document.getElementById('rpDrawer');
+  const dr = REP.drill;
+  if (!dr) { el.innerHTML = ''; return; }
+  const t = repTally(dr.list);
+  const TONES = [
+    { k: 'negatif', label: 'Negatif', n: t.neg, color: '#9F1D1D', bg: '#FBE4E4', fg: '#8F1A1A' },
+    { k: 'netral', label: 'Netral', n: t.neu, color: '#4A5B72', bg: '#E8EDF3', fg: '#2C3E57' },
+    { k: 'positif', label: 'Positif', n: t.pos, color: '#166534', bg: '#DCF3E3', fg: '#14532D' }
+  ];
+  const tabs = [{ k: 'semua', label: 'Semua', n: t.all }].concat(TONES).map(d => {
+    const on = REP.tab === d.k;
+    return `<button type="button" class="rp-pill" onclick="repSetTab('${d.k}')" style="border:1px solid ${on ? '#14243B' : '#CBD5E3'};background:${on ? '#14243B' : '#fff'};color:${on ? '#fff' : '#14243B'}">${d.label} (${d.n})</button>`;
+  }).join('');
+  let rows = '';
+  TONES.forEach(tn => {
+    if (REP.tab !== 'semua' && REP.tab !== tn.k) return;
+    const items = dr.list.filter(a => a.tone === tn.k).sort((a, b) => b.pub - a.pub);
+    if (!items.length) return;
+    rows += `<div style="margin-top:14px;padding:6px 0;border-bottom:2px solid ${tn.color};font-size:13px;font-weight:700;color:${tn.color}">${tn.label} (${items.length})</div>`;
+    items.forEach(a => {
+      const extra = [];
+      if (a.stake.length) extra.push('Pihak disebut: ' + a.stake.join(', '));
+      extra.push(a.leaders.length ? 'Pimpinan dikutip: ' + a.leaders.map(p => p.name).join(', ') : 'Pimpinan tidak dikutip');
+      if (a.cat2) extra.push('Kategori sekunder: ' + repCatLabel(a.cat2));
+      if (a.legal.length) extra.push('Terdeteksi isu hukum: ' + a.legal.map(k => REP_LEGAL.find(l => l.k === k).title).join(', '));
+      const where = a.locs.length ? a.locs.join(', ') : (REP_SCOPE[a.scope] || 'Tanpa lokasi');
+      rows += `<div style="padding:12px 0;border-bottom:1px solid #EEF2F7;display:flex;flex-direction:column;gap:5px">
+        <a href="${spkEsc(a.url)}" target="_blank" rel="noopener" style="font-size:14.5px;font-weight:600;line-height:1.4;text-decoration:none;color:#1F5FBF">${spkEsc(a.title)}</a>
+        <div style="font-size:12.5px;color:#4A5B72">${spkEsc(a.media)} · ${repFmtDate(a.pub)}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+          <span class="rp-chip" style="background:${tn.bg};color:${tn.fg};font-weight:600">${tn.label}</span>
+          <span class="rp-chip" style="background:#ede9fe;color:#5b21b6">${spkEsc(repCatLabel(a.cat))}</span>
+          <span class="rp-chip" style="background:#dcfce7;color:#166534">${spkEsc(where)}</span>
+        </div>
+        ${a.resume ? `<div style="font-size:12px;color:#2C3E57;line-height:1.5">${spkEsc(a.resume)}</div>` : ''}
+        <div style="font-size:12px;color:#4A5B72;line-height:1.5">${spkEsc(extra.join(' · '))}</div>
+      </div>`;
+    });
+  });
+  if (!rows) rows = '<div style="padding:18px 0;font-size:13.5px;color:#4A5B72">Tidak ada berita pada pilihan ini.</div>';
+  el.innerHTML = `<div style="position:fixed;inset:0;z-index:2000;display:flex;justify-content:flex-end">
+    <div onclick="repClose()" style="flex:1 1 auto;background:rgba(20,36,59,0.42);cursor:pointer"></div>
+    <div style="flex:0 0 min(620px,100%);box-sizing:border-box;background:#fff;height:100%;display:flex;flex-direction:column;box-shadow:-8px 0 24px rgba(20,36,59,0.18)">
+      <div style="padding:18px 22px 12px;border-bottom:1px solid #DDE3EC;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+          <div style="font-size:18px;font-weight:700;line-height:1.3">${spkEsc(dr.title)}</div>
+          <button type="button" class="rp-clk" onclick="repClose()" style="flex:0 0 auto;border:1px solid #CBD5E3;background:#fff;border-radius:8px;padding:6px 12px;font-size:13px">Tutup</button>
+        </div>
+        <div style="font-size:14px;font-weight:600">${t.all} berita: ${t.neg} negatif · ${t.neu} netral · ${t.pos} positif</div>
+        <div style="display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:#4A5B72">${dr.crit.map(c => '<div>' + spkEsc(c) + '</div>').join('')}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${tabs}</div>
+      </div>
+      <div style="flex:1 1 auto;overflow-y:auto;padding:6px 22px 24px">${rows}</div>
+    </div></div>`;
+}
+
+function repCatLabel(k) {
+  if (!k) return 'Belum diklasifikasi';
+  const c = TAXO.categories.find(x => x.key === k);
+  return c ? c.label : k;
+}
+
+function renderReputasi() {
+  const root = document.getElementById('rpRoot');
+  REP.reg = [];
+  const now = new Date();
+  const D = REP.days;
+  const cur = REP.raw.filter(a => a.ageDays >= 0 && a.ageDays < D);
+  const prev = REP.raw.filter(a => a.ageDays >= D && a.ageDays < 2 * D);
+  REP.cur = cur; REP.prev = prev;
+  const start = new Date(now.getTime() - D * 86400000);
+  REP.periode = 'Periode: ' + repFmtDate(start) + ' – ' + repFmtDate(now) + ' (' + D + ' hari terakhir, tanggal tayang)';
+  const all = repTally(cur);
+  const O = (title, crit, list, tab) => repOpenAttr(title, crit, list, tab);
+
+  if (!cur.length) {
+    root.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Belum ada berita pada periode ini.</div><div id="rpDrawer"></div>';
+    return;
+  }
+
+  // ----- Kategori -----
+  const catKeys = TAXO.categories.map(c => c.key);
+  const noCat = cur.filter(a => !a.cat || catKeys.indexOf(a.cat) < 0);
+  const catRows = TAXO.categories.map(c => ({ key: c.key, label: c.label, list: cur.filter(a => a.cat === c.key) }));
+  if (noCat.length) catRows.push({ key: '', label: 'Belum diklasifikasi', list: noCat });
+  const maxCat = Math.max.apply(null, catRows.map(r => r.list.length), 1);
+  const catHtml = catRows.map(r => {
+    const t = repTally(r.list);
+    const crit = ['Kategori utama: ' + r.label, 'Satu berita dihitung di kategori utamanya saja'];
+    return `<div style="display:flex;align-items:center;gap:6px">
+      <button type="button" class="rp-clk" ${O('Kategori: ' + r.label, crit, r.list, 'semua')} title="Lihat daftar berita" style="flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:12px;border:0;background:transparent;padding:4px 6px;border-radius:6px">
+        <span style="flex:0 0 170px;font-size:13px;line-height:1.25">${spkEsc(r.label)}</span>
+        <span style="display:block;flex:1 1 auto;min-width:0;height:20px;background:#EEF2F7;border-radius:4px;position:relative">
+          <span style="display:block;position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:#8FB2E6;width:${repPct(t.all, maxCat)}"></span>
+          <span style="display:block;position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:#9F1D1D;width:${repPct(t.neg, maxCat)}"></span>
+        </span>
+        <span style="flex:0 0 34px;text-align:right;font-size:13.5px;font-weight:600">${t.all}</span>
+      </button>
+      <button type="button" class="rp-clk" ${O('Kategori: ' + r.label, crit, r.list, 'negatif')} title="Lihat berita negatif saja" style="flex:0 0 74px;border:0;background:transparent;padding:4px 6px;border-radius:6px;font-size:13px;font-weight:600;color:#9F1D1D;text-align:right">${t.neg} neg</button>
+    </div>`;
+  }).join('');
+
+  // ----- Minggu (terbaru di kanan) -----
+  const nW = Math.ceil(D / 7);
+  const weeks = [];
+  for (let i = nW - 1; i >= 0; i--) {
+    const list = cur.filter(a => Math.floor(a.ageDays / 7) === i);
+    let ws = new Date(now.getTime() - (i + 1) * 7 * 86400000 + 86400000);
+    if (ws < start) ws = start;
+    const we = new Date(now.getTime() - i * 7 * 86400000);
+    weeks.push({ list, t: repTally(list), label: repFmtShort(ws), range: repFmtShort(ws) + ' – ' + repFmtShort(we) });
+  }
+  const maxW = Math.max.apply(null, weeks.map(w => w.t.all), 1);
+  const dense = nW > 8;
+  const weekBars = weeks.map(w => {
+    const crit = ['Rentang 7 hari: ' + w.range];
+    return `<div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:4px">
+      <button type="button" class="rp-clk" ${O('Berita ' + w.range, crit, w.list, 'negatif')} title="Berita negatif minggu ini" style="border:0;background:transparent;padding:0 2px;border-radius:4px;font-size:12px;font-weight:600;color:#9F1D1D">${w.t.neg}</button>
+      <button type="button" class="rp-clk2" ${O('Berita ' + w.range, crit, w.list, 'semua')} title="Semua berita minggu ini" style="display:block;position:relative;width:100%;border:0;padding:0;background:#8FB2E6;border-radius:3px 3px 0 0;height:${repPct(w.t.all, maxW * 1.2)}">
+        <span style="display:block;position:absolute;left:0;right:0;bottom:0;background:#9F1D1D;height:${repPct(w.t.neg, w.t.all)}"></span>
+      </button></div>`;
+  }).join('');
+  const weekLabels = weeks.map((w, i) => `<div style="flex:1 1 0;min-width:0;text-align:center;font-size:${dense ? 10.5 : 11.5}px;color:#4A5B72;line-height:1.3;white-space:nowrap;overflow:visible">${dense && (nW - 1 - i) % 2 === 1 ? '&nbsp;' : w.label}<br><span style="font-weight:600;color:#14243B">${w.t.all}</span></div>`).join('');
+  const peak = weeks.reduce((m, w, i) => (w.t.neg > weeks[m].t.neg ? i : m), 0);
+  const lastW = weeks[weeks.length - 1];
+  const weekNote = weeks[peak].t.neg > 0
+    ? `Puncak berita negatif ada di pekan ${weeks[peak].range} (${weeks[peak].t.neg} berita). Pekan terakhir: ${lastW.t.neg} negatif dari ${lastW.t.all} berita.`
+    : 'Tidak ada berita negatif pada periode ini.';
+
+  // ----- Lokasi -----
+  const kabNames = TAXO.locations.filter(l => l.level === 'kabkota');
+  const locAgg = kabNames.map(l => {
+    const list = cur.filter(a => a.kab.indexOf(l.name) >= 0);
+    return { name: l.name, prov: l.province, list, t: repTally(list) };
+  });
+  const top10 = locAgg.filter(x => x.t.all > 0).sort((a, b) => b.t.all - a.t.all).slice(0, 10);
+  const hmCats = TAXO.categories.filter(c => c.key !== 'lainnya');
+  const lerp = (a, b, t) => Math.round(a + (b - a) * t);
+  const hmMax = Math.max(4, ...top10.map(r => Math.max(...hmCats.map(c => r.list.filter(a => a.cat === c.key).length))));
+  let hm = `<div></div>` + hmCats.map(c => `<div style="font-size:12px;font-weight:600;text-align:center;padding:4px 2px;line-height:1.25">${spkEsc(c.label.replace(' & ', ' & ').replace('Kelistrikan Desa & Akses', 'Listrik desa').replace('Tarif, Tagihan & Subsidi', 'Tarif').replace('EBT & Transisi Energi', 'EBT').replace('Proyek & Investasi', 'Proyek').replace('Gangguan & Pemadaman', 'Gangguan').replace('Layanan Pelanggan', 'Layanan').replace('Keselamatan & Insiden', 'Keselamatan').replace('CSR, TJSL & Kemitraan', 'CSR').replace('Korporasi & SDM', 'Korporasi'))}</div>`).join('');
+  top10.forEach(row => {
+    hm += `<div style="display:flex;flex-direction:column;justify-content:center;padding:6px 8px;font-size:13px;font-weight:500">${spkEsc(row.name)}<span style="font-size:11.5px;font-weight:400;color:#4A5B72">${spkEsc(row.prov)}</span></div>`;
+    hmCats.forEach(c => {
+      const list = row.list.filter(a => a.cat === c.key);
+      const t = repTally(list);
+      const tt = Math.min(1, t.all / hmMax);
+      const bg = t.all === 0 ? '#F6F8FB' : `rgb(${lerp(234, 31, tt)},${lerp(241, 95, tt)},${lerp(251, 191, tt)})`;
+      const fg = tt > 0.45 ? '#FFFFFF' : '#14243B';
+      const negColor = tt > 0.45 ? '#FFD3D3' : '#9F1D1D';
+      hm += `<button type="button" class="rp-clk2" ${O(c.label + ' di ' + row.name, ['Kategori utama: ' + c.label, 'Lokasi: ' + row.name + ' (berita yang menyebut lokasi ini)'], list, 'semua')} title="${spkEsc(row.name + ' · ' + c.label + ': ' + t.all + ' berita, ' + t.neg + ' negatif')}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:42px;padding:0;border:0;border-radius:5px;background:${bg};color:${fg}">
+        <span style="font-size:15px;font-weight:600;line-height:1.1">${t.all === 0 ? '–' : t.all}</span>
+        <span style="font-size:10.5px;font-weight:700;line-height:1.1;color:${negColor}">${t.neg >= 2 ? t.neg + ' neg' : ''}</span></button>`;
+    });
+  });
+  const noLoc = cur.filter(a => a.kab.length === 0);
+  const provOnly = noLoc.filter(a => a.locs.length > 0).length;
+  const nl = k => noLoc.filter(a => a.locs.length === 0 && a.scope === k).length;
+  const noScope = noLoc.filter(a => a.locs.length === 0 && !a.scope).length;
+  const hmNote = `Berita tanpa kabupaten/kota spesifik: ${noLoc.length} (hanya menyebut provinsi ${provOnly}, Papua umum ${nl('papua_umum')}, nasional ${nl('nasional')}, luar wilayah ${nl('luar_wilayah')}, belum jelas atau belum diklasifikasi ${noScope}). Berita yang menyebut lebih dari satu kabupaten/kota dihitung di tiap lokasi. Kategori "Lainnya" tidak ditampilkan di matriks ini.`;
+
+  // ----- Provinsi -----
+  const stCol = { Kritis: ['#FBE4E4', '#8F1A1A', '#9F1D1D'], Tinggi: ['#FDE8D7', '#9A3412', '#C2410C'], Sedang: ['#FBF0CC', '#7A5300', '#B7791F'], Rendah: ['#E3EEE8', '#2F5D46', '#4D8B6B'] };
+  const W_NEG = { gangguan: 1.5, keselamatan: 2 };
+  const perWeekScale = (D / 7) / 8; // pola awal dirancang untuk 8 minggu
+  const scoreOf = (list) => {
+    const t = repTally(list);
+    let w = 0; list.forEach(a => { if (a.tone === 'negatif') w += (W_NEG[a.cat] || 1); });
+    const dampak = Math.min(5, Math.max(1, 1 + Math.round(w / (4 * perWeekScale))));
+    const visib = Math.min(5, Math.max(1, Math.ceil(t.all / (20 * perWeekScale))));
+    const score = dampak * visib, p = Math.round(score / 25 * 100);
+    return { t, dampak, visib, score, p, st: p >= 80 ? 'Kritis' : p >= 48 ? 'Tinggi' : p >= 24 ? 'Sedang' : 'Rendah' };
+  };
+  const provs = REP_PROV_ORDER.map(name => {
+    const list = cur.filter(a => a.provs.indexOf(name) >= 0);
+    const prevList = prev.filter(a => a.provs.indexOf(name) >= 0);
+    return Object.assign({ name, list, prevScore: scoreOf(prevList), prevN: prevList.length }, scoreOf(list));
+  });
+  const provHtml = provs.map(p => {
+    const crit = ['Provinsi: ' + p.name + ' (berita yang menyebut kabupaten/kota atau provinsi ini)', `Skor risiko: ${p.dampak} × ${p.visib} = ${p.score} dari 25 (${p.p}%, ${p.st})`];
+    return `<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #EEF2F7;font-size:13.5px">
+      <button type="button" class="rp-clk" ${O('Provinsi ' + p.name, crit, p.list, 'semua')} style="flex:0 0 140px;border:0;background:transparent;padding:5px 6px;border-radius:6px;font-weight:500">${p.name}</button>
+      <button type="button" class="rp-clk" ${O('Provinsi ' + p.name, crit, p.list, 'semua')} style="flex:0 0 56px;border:0;background:transparent;padding:5px 6px;border-radius:6px;text-align:right">${p.t.all}</button>
+      <button type="button" class="rp-clk" ${O('Provinsi ' + p.name, crit, p.list, 'negatif')} style="flex:0 0 56px;border:0;background:transparent;padding:5px 6px;border-radius:6px;text-align:right;font-weight:600;color:#9F1D1D">${p.t.neg}</button>
+      <div style="flex:0 0 84px;text-align:right;color:#4A5B72">${p.dampak} × ${p.visib} = ${p.score}</div>
+      <div style="flex:1 1 0;min-width:0;display:flex;align-items:center;gap:8px">
+        <div style="flex:1 1 auto;height:10px;background:#EEF2F7;border-radius:5px"><div style="height:10px;border-radius:5px;background:${stCol[p.st][2]};width:${p.p}%"></div></div>
+        <div style="flex:0 0 40px;font-weight:600">${p.p}%</div>
+      </div>
+      <div style="flex:0 0 74px;text-align:center"><span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:${stCol[p.st][0]};color:${stCol[p.st][1]}">${p.st}</span></div>
+    </div>`;
+  }).join('');
+
+  // ----- Stakeholder -----
+  const stake = REP_STAKE.map(s => {
+    const list = cur.filter(a => a.stake.indexOf(s[0]) >= 0);
+    const t = repTally(list);
+    const idx = all.neg > 0 && t.all > 0 ? (t.neg / all.neg) / (t.all / all.all) : 0;
+    return { name: s[0], list, t, idx };
+  }).sort((a, b) => b.idx - a.idx);
+  const stakeHtml = stake.map(s => {
+    const bar = s.idx >= 2 ? '#9F1D1D' : s.idx >= 1 ? '#D9822B' : '#8FB2E6';
+    return `<button type="button" class="rp-clk" ${O('Berita yang menyebut: ' + s.name, ['Pihak disebut (terdeteksi dari kata kunci di judul dan ringkasan): ' + s.name, 'Index ' + repNum(s.idx, 1) + ' = ' + s.t.neg + ' dari ' + all.neg + ' berita negatif ÷ ' + s.t.all + ' dari ' + all.all + ' seluruh berita'], s.list, 'semua')} style="display:flex;align-items:center;gap:10px;border:0;background:transparent;padding:6px;border-radius:6px;width:100%">
+      <span style="flex:0 0 130px;font-size:13px;line-height:1.25">${s.name}</span>
+      <span style="display:block;flex:1 1 auto;min-width:0;height:18px;background:#EEF2F7;border-radius:4px;position:relative">
+        <span style="display:block;position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:${bar};width:${repPct(Math.min(s.idx, 5), 5)}"></span>
+        <span style="display:block;position:absolute;left:20%;top:-3px;bottom:-3px;width:2px;background:#14243B"></span>
+      </span>
+      <span style="flex:0 0 36px;text-align:right;font-size:13.5px;font-weight:600">${repNum(s.idx, 1)}</span>
+      <span style="flex:0 0 64px;text-align:right;font-size:12px;color:#4A5B72">${s.t.neg} / ${s.t.all}</span></button>`;
+  }).join('');
+
+  // ----- Pimpinan dikutip -----
+  const qList = cur.filter(a => a.leaders.length);
+  const qNeg = qList.filter(a => a.tone === 'negatif').length;
+  const quoted = REP_PROV_ORDER.map(name => {
+    const list = cur.filter(a => a.provs.indexOf(name) >= 0);
+    const nq = list.filter(a => a.leaders.length).length;
+    return { name, list, nq, frac: list.length ? nq / list.length : 0 };
+  }).sort((a, b) => b.frac - a.frac);
+  const quotedHtml = quoted.map(q => `<button type="button" class="rp-clk" ${O('Pimpinan dikutip: ' + q.name, ['Provinsi: ' + q.name, 'Pimpinan dikutip = ada narasumber internal PLN berjabatan GM, manajer, direktur, kepala, Plt/Pjs, atau senior'], q.list, 'semua')} style="display:flex;align-items:center;gap:10px;border:0;background:transparent;padding:6px;border-radius:6px;width:100%">
+      <span style="flex:0 0 130px;font-size:13px">${q.name}</span>
+      <span style="display:block;flex:1 1 auto;min-width:0;height:16px;background:#EEF2F7;border-radius:4px"><span style="display:block;height:16px;border-radius:4px;background:#1F5FBF;width:${Math.round(q.frac * 100)}%"></span></span>
+      <span style="flex:0 0 40px;text-align:right;font-size:13.5px;font-weight:600">${Math.round(q.frac * 100)}%</span>
+      <span style="flex:0 0 78px;text-align:right;font-size:12px;color:#4A5B72">${q.nq} dari ${q.list.length}</span></button>`).join('');
+  const qAvg = all.all ? Math.round(qList.length / all.all * 100) : 0;
+  const quotedNote = all.neg > 0
+    ? `Saat berita negatif, pimpinan dikutip di ${Math.round(qNeg / all.neg * 100)}% berita (${qNeg} dari ${all.neg}), dibandingkan rata-rata ${qAvg}% untuk seluruh berita.`
+    : `Rata-rata pimpinan dikutip di ${qAvg}% berita. Tidak ada berita negatif pada periode ini.`;
+
+  // ----- Isu hukum -----
+  const legal = REP_LEGAL.map(l => {
+    const list = cur.filter(a => a.legal.indexOf(l.k) >= 0);
+    const t = repTally(list);
+    const cnt = {}; list.forEach(a => (a.kab.length ? a.kab : a.provs).forEach(x => { cnt[x] = (cnt[x] || 0) + 1; }));
+    const top = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]).slice(0, 2).join(', ');
+    const hold = t.all >= 3 && t.neg >= 2;
+    return { l, list, t, top, hold };
+  });
+  const legalHtml = legal.map(x => `<button type="button" class="rp-clk" ${O(x.l.title, ['Isu hukum: ' + x.l.title, 'Terdeteksi dari kata kunci di judul dan ringkasan: ' + x.l.kw, 'Aturan "siapkan holding statement": 3 berita atau lebih dan 2 negatif atau lebih'], x.list, 'semua')} style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid #E3E8F0;border-radius:8px;background:#fff;width:100%;${x.t.all ? '' : 'opacity:0.55'}">
+      <span style="display:block;flex:1 1 240px;min-width:0">
+        <span style="display:block;font-size:14px;font-weight:600">${x.l.title}</span>
+        <span style="display:block;font-size:12.5px;color:#4A5B72;margin-top:2px">${x.top ? spkEsc(x.top) + ' · ' : ''}kata kunci: ${spkEsc(x.l.kw)}</span>
+      </span>
+      <span style="font-size:13px;text-align:right"><span style="font-weight:600">${x.t.all} berita</span> <span style="color:#9F1D1D">· ${x.t.neg} negatif</span></span>
+      <span style="padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;background:${x.hold ? '#FDE8D7' : '#E7EEF8'};color:${x.hold ? '#9A3412' : '#1F4E8F'}">${x.hold ? 'Siapkan holding statement' : (x.t.all ? 'Pantau' : 'Tidak ada')}</span></button>`).join('');
+  const legalAll = cur.filter(a => a.legal.length);
+  const legalActive = legal.filter(x => x.t.all > 0).length;
+
+  // ----- KPI -----
+  const hot = provs.filter(p => p.st === 'Tinggi' || p.st === 'Kritis');
+  const hotList = cur.filter(a => a.tone === 'negatif' && hot.some(p => a.provs.indexOf(p.name) >= 0));
+  const kpis = [
+    { label: 'Total berita', value: all.all, color: '#14243B', sub: `Positif ${all.pos} · Netral ${all.neu} · Negatif ${all.neg}. Klik untuk melihat semuanya.`, open: O('Semua berita', ['Seluruh berita pada periode ini'], cur, 'semua') },
+    { label: 'Berita negatif', value: all.neg, color: '#9F1D1D', sub: `${repNum(all.all ? all.neg / all.all * 100 : 0, 1)}% dari seluruh berita. Klik untuk daftarnya.`, open: O('Semua berita negatif', ['Seluruh berita bernada negatif'], cur, 'negatif') },
+    { label: 'Pimpinan dikutip', value: qAvg + '%', color: '#1F5FBF', sub: `${qList.length} dari ${all.all} berita. Saat negatif: ${qNeg} dari ${all.neg}.`, open: O('Berita yang mengutip pimpinan', ['Ada narasumber internal PLN berjabatan GM, manajer, direktur, kepala, Plt/Pjs, atau senior'], qList, 'semua') },
+    { label: 'Provinsi perlu perhatian', value: hot.length + ' dari 6', color: '#9A3412', sub: hot.length ? hot.map(p => p.name).join(', ') + ' (skor 48% atau lebih). Klik untuk berita negatifnya.' : 'Belum ada yang berstatus Tinggi atau Kritis.', open: O('Berita negatif di provinsi perlu perhatian', ['Provinsi berstatus Tinggi atau Kritis: ' + (hot.map(p => p.name).join(', ') || '-')], hotList, 'negatif') },
+    { label: 'Isu hukum terdeteksi', value: legalActive + ' dari ' + REP_LEGAL.length, color: '#14243B', sub: `${legal.filter(x => x.hold).length} di antaranya perlu holding statement. Klik untuk daftar beritanya.`, open: O('Berita isu hukum dan tata kelola', ['Berita yang cocok dengan kata kunci hukum'], legalAll, 'semua') }
+  ];
+  const kpiHtml = kpis.map(k => `<button type="button" class="rp-clk" ${k.open} style="flex:1 1 200px;min-width:0;background:#fff;border:1px solid #DDE3EC;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:6px;align-items:flex-start">
+    <span style="font-size:13px;font-weight:500;color:#4A5B72">${k.label}</span>
+    <span style="font-size:32px;font-weight:700;line-height:1.1;color:${k.color}">${k.value}</span>
+    <span style="font-size:12.5px;color:#4A5B72;line-height:1.45">${spkEsc(k.sub)}</span></button>`).join('');
+
+  // ----- Peringatan dini -----
+  const alerts = [];
+  const SEV = { Tinggi: ['#FDE8D7', '#9A3412'], Sedang: ['#FBF0CC', '#7A5300'] };
+  const last = (list) => list.length ? repFmtDate(new Date(Math.max.apply(null, list.map(a => a.pub.getTime())))) : '';
+  locAgg.forEach(x => {
+    const l7 = x.list.filter(a => a.tone === 'negatif' && a.ageDays < 7);
+    if (l7.length >= 3) alerts.push({ when: last(l7), title: 'Lonjakan berita negatif', sev: 'Tinggi', text: `${x.name}: ${l7.length} berita negatif dalam 7 hari terakhir.`, open: O('Peringatan: lonjakan negatif di ' + x.name, ['Lokasi: ' + x.name, 'Aturan: 3 berita negatif atau lebih dalam 7 hari'], l7, 'negatif'), rank: 0 - l7.length });
+  });
+  legal.forEach(x => {
+    const l21 = x.list.filter(a => a.ageDays < 21);
+    if (l21.length >= 3) alerts.push({ when: last(l21), title: 'Kata kunci hukum: ' + x.l.title, sev: x.t.neg >= 2 ? 'Tinggi' : 'Sedang', text: `${l21.length} berita dalam 21 hari terakhir${x.top ? ' (terbanyak: ' + x.top + ')' : ''}.`, open: O('Peringatan: ' + x.l.title, ['Kata kunci: ' + x.l.kw, 'Aturan: 3 berita atau lebih dalam 21 hari'], l21, 'semua'), rank: 5 });
+  });
+  provs.forEach(p => {
+    const n14 = p.list.filter(a => a.tone === 'negatif' && a.ageDays < 14);
+    const noQ = n14.filter(a => !a.leaders.length);
+    if (n14.length >= 3 && noQ.length === n14.length) alerts.push({ when: last(n14), title: 'Pimpinan tidak tampil', sev: 'Sedang', text: `${p.name}: ${n14.length} berita negatif dalam 14 hari terakhir, tidak satu pun mengutip pimpinan.`, open: O('Peringatan: pimpinan tidak dikutip di ' + p.name, ['Provinsi: ' + p.name, 'Aturan: 3 berita negatif atau lebih dalam 14 hari tanpa kutipan pimpinan'], n14, 'negatif'), rank: 10 });
+    if (p.prevN >= 5 && p.p - p.prevScore.p >= 24 && (p.st !== 'Rendah')) alerts.push({ when: repFmtDate(now), title: 'Skor wilayah naik', sev: 'Sedang', text: `${p.name}: skor risiko ${p.prevScore.p}% naik menjadi ${p.p}% dibanding ${D} hari sebelumnya.`, open: O('Peringatan: skor risiko ' + p.name, ['Provinsi: ' + p.name, 'Aturan: skor naik 24 poin persen atau lebih dibanding periode sebelumnya'], p.list, 'negatif'), rank: 15 });
+  });
+  alerts.sort((a, b) => (a.sev === b.sev ? 0 : a.sev === 'Tinggi' ? -1 : 1) || a.rank - b.rank);
+  const alertHtml = alerts.length ? alerts.map(a => `<button type="button" class="rp-clk" ${a.open} style="display:flex;gap:14px;padding:13px 6px;border:0;border-top:1px solid #EEF2F7;background:transparent;width:100%;border-radius:0">
+      <span style="flex:0 0 96px;font-size:12.5px;color:#4A5B72;line-height:1.4">${a.when}</span>
+      <span style="display:block;flex:1 1 auto;min-width:0">
+        <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-size:14px;font-weight:600">${spkEsc(a.title)}</span><span style="padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:600;background:${SEV[a.sev][0]};color:${SEV[a.sev][1]}">${a.sev}</span></span>
+        <span style="display:block;font-size:13px;color:#2C3E57;margin-top:3px;line-height:1.5">${spkEsc(a.text)}</span>
+      </span></button>`).join('') : '<div style="padding:14px 6px;font-size:13.5px;color:#4A5B72;border-top:1px solid #EEF2F7">Tidak ada peringatan pada periode ini. Tidak ada aturan yang terpicu.</div>';
+
+  // ----- Matriks prioritas (tata letak dihitung ulang sesuai lebar layar di repLayoutMatrix) -----
+  const statusOf = t => (t.neg >= REP.thrNeg && t.all >= REP.thrN ? 'Perlu perhatian' : t.neg >= 1 ? 'Perlu dipantau' : 'Kondusif');
+  REP.mx = { locAgg: locAgg.filter(x => x.t.all > 0), statusOf };
+  const priority = locAgg.filter(x => statusOf(x.t) === 'Perlu perhatian').sort((a, b) => b.t.neg - a.t.neg || b.t.all - a.t.all);
+  const priorityHtml = priority.length ? priority.map(x => `<button type="button" class="rp-clk" ${O(x.name, ['Lokasi: ' + x.name + ' (' + x.prov + ')', 'Status: Perlu perhatian'], x.list, 'negatif')} style="display:flex;justify-content:space-between;gap:8px;border:0;background:transparent;padding:6px 8px;border-radius:6px;font-size:14px;width:100%">
+      <span style="font-weight:500;text-align:left">${x.name}</span><span style="font-weight:600;color:#9F1D1D;white-space:nowrap">${x.t.neg} negatif · ${x.t.all} berita</span></button>`).join('')
+    : '<div style="font-size:12.5px;color:#4A5B72">Tidak ada kabupaten/kota yang memenuhi aturan pada periode ini.</div>';
+
+  const periodBtns = [30, 60, 90].map(d => `<button type="button" class="rp-seg ${REP.days === d ? 'on' : ''}" onclick="repSetDays(${d})">${d} hari</button>`).join('');
+  const unclassified = noCat.length;
+  const card = 'background:#fff;border:1px solid #DDE3EC;border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:14px;min-width:0';
+  const h2 = 'font-size:16px;font-weight:600', sub = 'font-size:12.5px;color:#4A5B72;margin-top:2px';
+
+  root.innerHTML = `
+  <div style="display:flex;flex-direction:column;gap:20px;color:#14243B;font-family:'Inter',system-ui,sans-serif">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between">
+      <div style="display:flex;flex-direction:column;gap:6px;min-width:280px">
+        <div style="font-size:12px;font-weight:600;letter-spacing:0.08em;color:#1F5FBF">PANEL REPUTASI</div>
+        <div style="font-size:24px;line-height:1.2;font-weight:700">Lanskap pemberitaan UIW Papua dan Papua Barat</div>
+        <div style="font-size:13.5px;color:#4A5B72">${spkEsc(REP.periode.replace('Periode: ', 'Periode '))} · 6 provinsi · 42 kabupaten/kota</div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <div style="display:flex;border:1px solid #CBD5E3;border-radius:8px;overflow:hidden;background:#fff">${periodBtns}</div>
+        <button type="button" class="rp-clk" onclick="loadReputasi(true)" style="border:1px solid #CBD5E3;background:#fff;border-radius:8px;padding:8px 12px;font-size:13px" title="Muat ulang dari database">🔄 Muat ulang</button>
+      </div>
+    </div>
+    <div style="padding:10px 14px;background:#EAF1FB;border:1px solid #C9DAF2;border-radius:8px;font-size:13px;color:#1B3A66;line-height:1.5">Setiap angka dan batang di halaman ini bisa diklik. Daftar berita yang terbuka dihitung dari data yang sama, jadi jumlahnya selalu cocok dengan angka yang diklik.${unclassified ? ` <b>${unclassified} berita pada periode ini belum diklasifikasi</b> (kategori dan lokasi kosong), sehingga belum masuk ke matriks lokasi. Jalankan classifyAll untuk melengkapinya.` : ''}</div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:14px">${kpiHtml}</div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:16px">
+      <div style="${card};flex:1.5 1 520px">
+        <div><div style="${h2}">Sebaran kategori isu</div><div style="${sub}">Klik batang atau angka total untuk semua berita kategori itu; klik angka merah untuk yang negatif saja. Satu berita dihitung di kategori utamanya.</div></div>
+        <div style="display:flex;gap:16px;font-size:12px;color:#4A5B72;align-items:center"><div style="display:flex;gap:6px;align-items:center"><div style="width:12px;height:12px;background:#8FB2E6;border-radius:2px"></div>Seluruh berita</div><div style="display:flex;gap:6px;align-items:center"><div style="width:12px;height:12px;background:#9F1D1D;border-radius:2px"></div>Negatif</div></div>
+        <div style="display:flex;flex-direction:column;gap:4px">${catHtml}</div>
+      </div>
+      <div style="${card};flex:1 1 400px">
+        <div><div style="${h2}">Tren mingguan</div><div style="${sub}">Klik batang untuk berita pekan itu; klik angka merah di atasnya untuk yang negatif. Pekan terakhir di kanan.</div></div>
+        <div style="display:flex;align-items:flex-end;gap:${dense ? 5 : 10}px;height:200px;border-bottom:1px solid #CBD5E3">${weekBars}</div>
+        <div style="display:flex;gap:${dense ? 5 : 10}px">${weekLabels}</div>
+        <div style="font-size:13px;line-height:1.5;padding:10px 12px;background:#F4F6F9;border-radius:8px">${spkEsc(weekNote)}</div>
+      </div>
+    </div>
+
+    <div style="${card}">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end">
+        <div><div style="${h2}">Matriks kategori isu × kabupaten/kota</div><div style="${sub}">Sampai 10 kabupaten/kota dengan berita terbanyak. Klik sel untuk daftar beritanya. Angka merah kecil = berita negatif (tampil bila 2 atau lebih; di daftar tetap terlihat semua).</div></div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#4A5B72"><span>sedikit</span><div style="width:140px;height:10px;border-radius:5px;background:linear-gradient(90deg,#EAF1FB,#1F5FBF)"></div><span>banyak</span></div>
+      </div>
+      ${top10.length ? `<div style="overflow-x:auto"><div style="min-width:820px;display:grid;grid-template-columns:190px repeat(${hmCats.length},minmax(0,1fr));gap:4px;align-items:stretch">${hm}</div></div>` : '<div style="font-size:13px;color:#4A5B72">Belum ada berita yang punya lokasi kabupaten/kota. Jalankan classifyAll terlebih dulu.</div>'}
+      <div style="font-size:12.5px;color:#4A5B72;line-height:1.5">${spkEsc(hmNote)}</div>
+    </div>
+
+    <div style="${card};gap:16px">
+      <div><div style="${h2}">Matriks prioritas kabupaten/kota</div><div style="${sub}">Setiap titik satu kabupaten/kota. Sumbu datar = jumlah berita yang menyebutnya; sumbu tegak = berapa yang negatif. Klik titik atau nama untuk daftar beritanya.</div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:24px">
+        <div style="flex:2 1 560px;min-width:0;display:flex;flex-direction:column;overflow-x:auto">
+          <div id="rpMatrix" style="min-width:560px"></div>
+          <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;font-size:12.5px">
+            <div style="display:flex;gap:6px;align-items:center"><div style="width:14px;height:14px;border-radius:50%;background:#B42318"></div>Perlu perhatian</div>
+            <div style="display:flex;gap:6px;align-items:center"><div style="width:12px;height:12px;border-radius:50%;background:#14243B"></div>Perlu dipantau</div>
+            <div style="display:flex;gap:6px;align-items:center"><div style="width:10px;height:10px;border-radius:50%;background:#9AA5B5"></div>Kondusif</div>
+          </div>
+          <div id="rpMatrixNote" style="margin-top:8px;font-size:12px;color:#4A5B72;line-height:1.5"></div>
+        </div>
+        <div style="flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:12px">
+          <div style="border:1px solid #E3E8F0;border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:12px;font-weight:700;letter-spacing:0.06em;color:#9F1D1D">PERLU PERHATIAN</div>
+            ${priorityHtml}
+          </div>
+          <div style="border:1px solid #E3E8F0;border-radius:10px;padding:14px 16px;font-size:12.5px;line-height:1.7;color:#2C3E57">
+            <div style="font-size:12px;font-weight:700;letter-spacing:0.06em;color:#4A5B72;margin-bottom:6px">ATURAN STATUS (BISA DIUBAH)</div>
+            <b>Perlu perhatian:</b> negatif ≥ <input id="rpThrNeg" type="number" min="1" value="${REP.thrNeg}" onchange="repSetThr()" class="rp-num"> dan berita ≥ <input id="rpThrN" type="number" min="1" value="${REP.thrN}" onchange="repSetThr()" class="rp-num"> (area merah muda).<br>
+            <b>Perlu dipantau:</b> ada 1 berita negatif atau lebih.<br>
+            <b>Kondusif:</b> tidak ada berita negatif.<br>
+            Ambang ini jauh lebih kecil daripada di laporan holding karena volume berita kita jauh lebih kecil.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:16px">
+      <div style="${card};flex:1.3 1 560px">
+        <div><div style="${h2}">Rekap dan skor risiko per provinsi</div><div style="${sub}">Klik nama atau angka untuk daftar beritanya. Skor risiko = dampak (1–5) × visibilitas (1–5), maksimum 25, dalam persen.</div></div>
+        <div style="overflow-x:auto"><div style="min-width:560px;display:flex;flex-direction:column">
+          <div style="display:flex;gap:8px;padding:0 0 8px;border-bottom:1px solid #CBD5E3;font-size:12px;font-weight:600;color:#4A5B72">
+            <div style="flex:0 0 140px">Provinsi</div><div style="flex:0 0 56px;text-align:right">Berita</div><div style="flex:0 0 56px;text-align:right">Negatif</div><div style="flex:0 0 84px;text-align:right">Dampak × Visib.</div><div style="flex:1 1 0;min-width:0">Skor risiko</div><div style="flex:0 0 74px;text-align:center">Status</div>
+          </div>${provHtml}</div></div>
+        <div style="font-size:12.5px;color:#4A5B72;line-height:1.5">Batas status: Kritis ≥ 80%, Tinggi 48–76%, Sedang 24–44%, Rendah &lt; 24%. Dampak dari bobot berita negatif (gangguan 1,5 dan keselamatan 2, lainnya 1); visibilitas dari jumlah berita, disesuaikan dengan panjang periode. Berita yang menyebut dua provinsi dihitung di keduanya.</div>
+      </div>
+      <div style="${card};flex:1 1 400px">
+        <div><div style="${h2}">Pihak yang sering muncul di berita negatif</div><div style="${sub}">Index = % berita negatif yang menyebut kelompok itu ÷ % seluruh berita yang menyebutnya. Di atas 1,0 berarti lebih sering muncul saat beritanya negatif. Klik baris untuk daftarnya.</div></div>
+        <div style="display:flex;flex-direction:column;gap:2px">${stakeHtml}</div>
+        <div style="font-size:12.5px;color:#4A5B72;line-height:1.5">Garis hitam = index 1,0. Kolom kanan = berita negatif / seluruh berita yang menyebut kelompok itu. Kelompok dikenali dari kata kunci di judul dan ringkasan (bukan dibaca AI), dan dengan ${all.neg} berita negatif angka ini indikatif, bukan kesimpulan pasti.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:16px">
+      <div style="${card};flex:1 1 420px">
+        <div><div style="${h2}">Pimpinan dikutip di berita</div><div style="${sub}">Persentase berita yang mengutip narasumber internal PLN berjabatan pimpinan, per provinsi. Klik baris untuk melihat berita yang mengutip dan yang tidak.</div></div>
+        <div style="display:flex;flex-direction:column;gap:2px">${quotedHtml}</div>
+        <div style="font-size:13px;line-height:1.5;padding:10px 12px;background:#FDECEC;color:#7A1818;border-radius:8px">${spkEsc(quotedNote)}</div>
+      </div>
+      <div style="${card};flex:1.2 1 520px">
+        <div><div style="${h2}">Isu hukum dan tata kelola</div><div style="${sub}">Terdeteksi dari kata kunci hukum di judul dan ringkasan. Klik isu untuk daftar beritanya.</div></div>
+        <div style="display:flex;flex-direction:column;gap:10px">${legalHtml}</div>
+      </div>
+    </div>
+
+    <div style="${card}">
+      <div><div style="${h2}">Peringatan dini</div><div style="${sub}">Dibuat otomatis dari aturan sederhana yang tertulis di tiap peringatan. Pengiriman ke Telegram belum diaktifkan.</div></div>
+      <div style="display:flex;flex-direction:column">${alertHtml}</div>
+    </div>
+
+    <div style="background:#EAF1FB;border:1px solid #C9DAF2;border-radius:10px;padding:18px 20px;display:flex;flex-direction:column;gap:6px">
+      <div style="font-size:14px;font-weight:600">Catatan metode</div>
+      <div style="font-size:13px;line-height:1.6;color:#2C3E57">Semua angka dihitung dari database berita (kategori, lokasi, tone, narasumber) tanpa tambahan kuota Gemini. Kategori dan lokasi berasal dari AI (lokasi dari ±800 karakter pertama berita) dan bisa dikoreksi manual lewat tombol 🏷 di tab Monitor. Pihak yang disebut dan isu hukum dikenali dari kata kunci, sehingga indikatif. Skor risiko memakai pola laporan holding, tapi bobot dan ambangnya kita tentukan sendiri, sehingga tidak bisa dibandingkan langsung dengan skor unit lain.</div>
+    </div>
+  </div>
+  <div id="rpDrawer"></div>`;
+
+  repLayoutMatrix();
+  repRenderDrawer();
+}
+
+// Tata letak titik dan label pada matriks prioritas. Dihitung dari lebar yang benar-benar tampil,
+// supaya titik dan label tidak saling menimpa di ukuran layar apa pun.
+function repLayoutMatrix() {
+  const host = document.getElementById('rpMatrix');
+  if (!host || !REP.mx) return;
+  const aw = host.clientWidth;
+  if (aw < 200) return; // tab tersembunyi; dihitung lagi saat tab dibuka
+  const { locAgg, statusOf } = REP.mx;
+  const YAX = 36, XAX = 44, PH = 360, PAD = 14;
+  const PW = aw - YAX;
+  const maxN = Math.max(1, ...locAgg.map(x => x.t.all));
+  const maxNeg = Math.max(0, ...locAgg.map(x => x.t.neg));
+  const xStep = maxN <= 60 ? 10 : maxN <= 120 ? 20 : 50;
+  const xMax = Math.max(40, Math.ceil(maxN / xStep) * xStep);
+  const yStep = maxNeg <= 14 ? 2 : 5;
+  const yMax = Math.max(8, Math.ceil(maxNeg / yStep) * yStep + yStep);
+  const X = v => PAD + (v / xMax) * (PW - 2 * PAD);
+  const Y = v => PAD + (v / yMax) * (PH - 2 * PAD);
+  const grp = {};
+  locAgg.forEach(x => { const k = x.t.all + ',' + x.t.neg; (grp[k] = grp[k] || { n: x.t.all, neg: x.t.neg, locs: [] }).locs.push(x); });
+  const cl = Object.keys(grp).map(k => {
+    const c = grp[k], st = statusOf({ all: c.n, neg: c.neg });
+    const list = []; c.locs.forEach(x => x.list.forEach(a => { if (list.indexOf(a) < 0) list.push(a); }));
+    const base = st === 'Perlu perhatian' ? 16 : st === 'Perlu dipantau' ? 13 : 10;
+    return { st, n: c.n, neg: c.neg, locs: c.locs, names: c.locs.map(x => x.name), list, size: base + (c.locs.length > 1 ? 9 : 0), x: X(c.n), y: Y(c.neg), dx: 0, dy: 0 };
+  });
+  for (let it = 0; it < 80; it++) {
+    let moved = false;
+    for (let i = 0; i < cl.length; i++) for (let j = i + 1; j < cl.length; j++) {
+      const A = cl[i], B = cl[j];
+      const ddx = (B.x + B.dx) - (A.x + A.dx), ddy = (B.y + B.dy) - (A.y + A.dy);
+      const dist = Math.max(Math.sqrt(ddx * ddx + ddy * ddy), 0.01), need = (A.size + B.size) / 2 + 3;
+      if (dist < need) { const push = (need - dist) / 2, ux = ddx / dist, uy = ddy / dist; A.dx -= ux * push; A.dy -= uy * push; B.dx += ux * push; B.dy += uy * push; moved = true; }
+    }
+    cl.forEach(c => {
+      const r = c.size / 2 + 1, cx = c.x + c.dx, cy = c.y + c.dy;
+      if (cx < r) { c.dx += r - cx; moved = true; } if (cx > PW - r) { c.dx -= cx - (PW - r); moved = true; }
+      if (cy < r) { c.dy += r - cy; moved = true; } if (cy > PH - r) { c.dy -= cy - (PH - r); moved = true; }
+    });
+    if (!moved) break;
+  }
+  const rectsOverlap = (p, q) => p.x1 < q.x2 + 2 && p.x2 + 2 > q.x1 && p.y1 < q.y2 + 2 && p.y2 + 2 > q.y1;
+  cl.forEach(c => { c.cx = c.x + c.dx; c.cy = PH - (c.y + c.dy); });
+  const dotBoxes = cl.map(c => ({ x1: c.cx - c.size / 2, x2: c.cx + c.size / 2, y1: c.cy - c.size / 2, y2: c.cy + c.size / 2 }));
+  // garis batas area prioritas juga dianggap penghalang, supaya tidak ada tulisan yang terpotong garis putus-putus
+  const lineX = X(REP.thrN), lineY = PH - Y(REP.thrNeg);
+  const taken = [{ x1: PW - 100, x2: PW, y1: 0, y2: 22 }, { x1: lineX - 2, x2: lineX + 2, y1: 0, y2: lineY + 2 }, { x1: lineX - 2, x2: PW, y1: lineY - 2, y2: lineY + 2 }];
+  const rank = { 'Perlu perhatian': 0, 'Perlu dipantau': 1, 'Kondusif': 2 };
+  cl.map((c, i) => ({ c, i })).sort((p, q) => rank[p.c.st] - rank[q.c.st] || q.c.neg - p.c.neg).forEach(o => {
+    const c = o.c; c.label = ''; c.side = 'r'; c.ldy = 0;
+    if (c.st === 'Kondusif') return;
+    c.label = c.names[0] + (c.names.length > 1 ? ' +' + (c.names.length - 1) : '');
+    const w = c.label.length * 6.9 + 4, h = 16, gap = c.size / 2 + 4;
+    const tries = [['r', 0], ['l', 0], ['c', -(c.size / 2 + 11)], ['c', c.size / 2 + 11], ['r', -14], ['r', 14], ['l', -14], ['l', 14]];  // label hanya boleh menempel di dekat titiknya, kalau tidak muat dicantumkan di catatan bawah grafik
+    let best = null;
+    for (let t = 0; t < tries.length && !best; t++) {
+      const side = tries[t][0], dy = tries[t][1];
+      const x1 = side === 'r' ? c.cx + gap : side === 'l' ? c.cx - gap - w : c.cx - w / 2;
+      const rect = { x1, x2: x1 + w, y1: c.cy + dy - h / 2, y2: c.cy + dy + h / 2 };
+      if (rect.x1 < 0 || rect.x2 > PW || rect.y1 < 0 || rect.y2 > PH) continue;
+      let clash = false;
+      for (let k = 0; k < taken.length && !clash; k++) if (rectsOverlap(rect, taken[k])) clash = true;
+      for (let k = 0; k < dotBoxes.length && !clash; k++) if (k !== o.i && rectsOverlap(rect, dotBoxes[k])) clash = true;
+      if (!clash) best = { side, dy, rect };
+    }
+    if (!best) { c.label = ''; c.unlabeled = true; } else { c.side = best.side; c.ldy = best.dy; taken.push(best.rect); }
+  });
+  const unlabeled = cl.filter(c => c.unlabeled).map(c => c.names.join(', ') + ' (' + c.n + ' berita, ' + c.neg + ' negatif)');
+  const xTicks = [], yTicks = [];
+  for (let v = 0; v <= xMax; v += xStep) xTicks.push(v);
+  for (let v = 0; v <= yMax; v += yStep) yTicks.push(v);
+  const O = (title, crit, list, tab) => repOpenAttr(title, crit, list, tab);
+  const dots = cl.map(c => {
+    const multi = c.names.length > 1, dark = c.st !== 'Kondusif';
+    const open = multi
+      ? O(c.names.length + ' kabupaten/kota dengan ' + c.n + ' berita, ' + c.neg + ' negatif', ['Kabupaten/kota: ' + c.names.join(', '), 'Status: ' + c.st], c.list, c.neg > 0 ? 'negatif' : 'semua')
+      : O(c.names[0], ['Lokasi: ' + c.names[0] + ' (' + c.locs[0].prov + ')', 'Status: ' + c.st], c.list, c.neg > 0 ? 'negatif' : 'semua');
+    const color = c.st === 'Perlu perhatian' ? '#B42318' : c.st === 'Perlu dipantau' ? '#14243B' : '#9AA5B5';
+    const lStyle = (c.side === 'r' ? 'left:calc(100% + 4px);' : c.side === 'l' ? 'right:calc(100% + 4px);' : 'left:50%;') + 'top:calc(50% + ' + c.ldy.toFixed(1) + 'px);transform:' + (c.side === 'c' ? 'translate(-50%,-50%)' : 'translateY(-50%)') + ';';
+    return `<button type="button" class="rp-clk2" ${open} title="${spkEsc((multi ? c.names.join(', ') : c.names[0]) + ': ' + c.n + ' berita, ' + c.neg + ' negatif (' + c.st + ')')}" style="position:absolute;display:flex;align-items:center;justify-content:center;padding:0;border:0;border-radius:50%;left:${c.cx.toFixed(1)}px;top:${c.cy.toFixed(1)}px;width:${c.size}px;height:${c.size}px;background:${color};opacity:${c.st === 'Kondusif' ? 0.85 : 1};transform:translate(-50%,-50%)">
+      <span style="font-size:10.5px;font-weight:700;line-height:1;color:${dark ? '#fff' : '#14243B'}">${multi ? c.names.length : ''}</span>
+      <span style="position:absolute;${lStyle}white-space:nowrap;font-size:11.5px;font-weight:600;line-height:1.2;color:${c.st === 'Perlu perhatian' ? '#9F1D1D' : '#14243B'}">${spkEsc(c.label)}</span></button>`;
+  }).join('');
+  const rectLeft = X(REP.thrN), rectBottom = Y(REP.thrNeg);
+  host.innerHTML = `<div style="display:flex;gap:0">
+    <div style="flex:0 0 ${YAX}px;position:relative;height:${PH}px">${yTicks.map(v => `<span style="position:absolute;right:6px;top:${(PH - Y(v)).toFixed(1)}px;transform:translateY(-50%);font-size:11.5px;color:#4A5B72">${v}</span>`).join('')}</div>
+    <div style="flex:1 1 0;min-width:0">
+      <div style="position:relative;height:${PH}px;border-left:1px solid #8A97AB;border-bottom:1px solid #8A97AB;background:#FBFCFE">
+        ${xTicks.map(v => `<div style="position:absolute;top:0;bottom:0;width:1px;background:#E3E8F0;left:${X(v).toFixed(1)}px"></div>`).join('')}
+        ${yTicks.map(v => `<div style="position:absolute;left:0;right:0;height:1px;background:#E3E8F0;top:${(PH - Y(v)).toFixed(1)}px"></div>`).join('')}
+        <div style="position:absolute;top:0;right:0;left:${rectLeft.toFixed(1)}px;bottom:${rectBottom.toFixed(1)}px;background:rgba(159,29,29,0.09);border-left:2px dashed #14243B;border-bottom:2px dashed #14243B"></div>
+        <div style="position:absolute;top:6px;right:10px;font-size:11.5px;font-weight:700;letter-spacing:0.06em;color:#9F1D1D">PRIORITAS</div>
+        ${dots}
+      </div>
+      <div style="position:relative;height:22px">${xTicks.map(v => `<span style="position:absolute;top:4px;left:${X(v).toFixed(1)}px;transform:translateX(-50%);font-size:11.5px;color:#4A5B72">${v}</span>`).join('')}</div>
+      <div style="text-align:center;font-size:12px;color:#4A5B72">Jumlah berita yang menyebut kabupaten/kota (sumbu tegak = berita negatif)</div>
+    </div></div>`;
+  document.getElementById('rpMatrixNote').textContent = 'Titik berangka = beberapa kabupaten/kota dengan jumlah sama digabung (klik untuk daftar semuanya). Titik yang berdekatan digeser sedikit agar tidak bertumpuk; angka persisnya ada di keterangan saat kursor diarahkan.' + (unlabeled.length ? ' Tidak diberi label di grafik karena padat: ' + unlabeled.join('; ') + '.' : '') + (REP.mx.locAgg.length ? '' : ' Belum ada berita berlokasi kabupaten/kota.');
+}
+
+window.addEventListener('resize', () => {
+  clearTimeout(REP.layoutTimer);
+  REP.layoutTimer = setTimeout(() => {
+    const w = document.getElementById('panel-reputasi-wrap');
+    if (w && w.style.display !== 'none' && REP.raw) {
+      // titik dibuat ulang, jadi daftar yang terdaftar di REP.reg ditambah lagi; aman karena hanya bertambah
+      repLayoutMatrix();
+    }
+  }, 200);
+});
 
 // ==================== RADAR PAPUA ====================
 // ==================== SPOKESPERSON RECAP ====================
@@ -3818,7 +4499,7 @@ function renderPagination() {
 
 // ==================== TAB SYSTEM ====================
 function switchTab(tab) {
-  const tabs = ['monitor', 'dashboard', 'radar', 'followups', 'spokesperson', 'youtube'];
+  const tabs = ['monitor', 'dashboard', 'reputasi', 'radar', 'followups', 'spokesperson', 'youtube'];
   tabs.forEach(t => {
     const btn = document.getElementById(`tab-${t}`);
     btn.style.color = tab === t ? 'var(--accent)' : 'var(--muted)';
@@ -3829,6 +4510,7 @@ function switchTab(tab) {
     dashAllArticles = []; // force fresh load setiap buka tab
     renderDashboard();
   }
+  if (tab === 'reputasi') loadReputasi(false);
   if (tab === 'radar') loadRadarPapua();
   if (tab === 'followups') loadFollowups();
   if (tab === 'spokesperson') loadSpokespersonRecap();
