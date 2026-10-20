@@ -269,11 +269,11 @@ async function handleFetchMeta(req, res) {
   try {
     // Cek duplikat lebih dulu (termasuk yang pernah dihapus/disembunyikan)
     const ex = await fetch(
-      `${SUPABASE_URL}/rest/v1/articles?select=id,title,hidden&url=eq.${encodeURIComponent(finalUrl)}`,
+      `${SUPABASE_URL}/rest/v1/articles?select=id,title,hidden,published_at,source&url=eq.${encodeURIComponent(finalUrl)}`,
       { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
     ).then(r => r.json()).catch(() => []);
     if (Array.isArray(ex) && ex.length) {
-      return res.status(200).json({ url: finalUrl, alreadyExists: true, hidden: !!ex[0].hidden, title: ex[0].title || '' });
+      return res.status(200).json({ url: finalUrl, alreadyExists: true, hidden: !!ex[0].hidden, title: ex[0].title || '', published_at: ex[0].published_at || '', source: ex[0].source || '' });
     }
 
     const ctrl = new AbortController();
