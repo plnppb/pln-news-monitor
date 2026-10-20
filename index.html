@@ -594,6 +594,11 @@
           <option value="date">Terbaru</option>
           <option value="tone">Tone</option>
         </select>
+        <div style="position:relative;display:flex;align-items:center;">
+          <input id="monSearch" type="search" placeholder="🔍 Cari judul, media, lokasi, narasumber..." oninput="onMonSearch(this.value)" style="width:290px;max-width:100%;padding:6px 10px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;">
+        </div>
+        <button id="monSearchDb" class="btn-manage" style="display:none;" onclick="searchAllDb()" title="Cari juga berita yang lebih lama dari 30 hari">🗄 Cari di seluruh database</button>
+        <button id="monSearchReset" class="btn-manage" style="display:none;" onclick="resetMonSearch()">↩ Kembali ke 30 hari terakhir</button>
       </div>
       <div style="display:flex;gap:8px;">
         <button class="export-btn" onclick="openAddLinkModal()" title="Tambah berita dari link yang tidak terjaring RSS">➕ Tambah Link Berita</button>
@@ -965,7 +970,7 @@ const PAGE_SIZE = 50;
 let filteredArticles = [];
 let bookmarks = JSON.parse(localStorage.getItem('pln_bookmarks') || '[]');
 let rssFeeds = JSON.parse(localStorage.getItem('pln_rss_feeds') || '[]');
-let currentFilter = { tone: 'semua', source: 'semua' };
+let currentFilter = { tone: 'semua', source: 'semua', q: '' };
 let showingBookmarks = false;
 let analyzeController = null;
 
@@ -1754,6 +1759,12 @@ function updateStats(articles) {
 
 function applyFilters() {
   let a = [...allArticles];
+  const qWords = (currentFilter.q || '').toLowerCase().split(/\s+/).filter(Boolean);
+  if (qWords.length) a = a.filter(x => {
+    const hay = ((x.title || '') + ' ' + (x.description || '') + ' ' + (x._resume || '') + ' ' + (x.source && x.source.name || '') + ' ' +
+      (x._locations || '') + ' ' + (x._spkInternal || '') + ' ' + (x._spkExternal || '') + ' ' + (x._category || '')).toLowerCase();
+    return qWords.every(w => hay.indexOf(w) >= 0);
+  });
   if (currentFilter.tone !== 'semua') a = a.filter(x => x._tone === currentFilter.tone);
   if (currentFilter.source !== 'semua') a = a.filter(x => x._source === currentFilter.source || (currentFilter.source === 'rss' && x._source?.startsWith('rss_')));
   filteredArticles = a;
@@ -2605,6 +2616,50 @@ window.addEventListener('resize', () => {
     }
   }, 200);
 });
+
+
+// ==================== PENCARIAN DI TAB MONITOR ====================
+let monSearchTimer = null;
+function onMonSearch(v) {
+  currentFilter.q = v.trim();
+  document.getElementById('monSearchDb').style.display = currentFilter.q.length >= 2 ? '' : 'none';
+  clearTimeout(monSearchTimer);
+  monSearchTimer = setTimeout(() => { applyFilters(); renderArticles(filteredArticles); }, 200);
+}
+function mapDbRowToArticle(a) {
+  return {
+    title: a.title, url: a.url, publishedAt: a.published_at, createdAt: a.created_at,
+    source: { name: a.source }, description: a.description, keyword: a.keyword,
+    _tone: a.tone || 'netral', _resume: a.resume || '',
+    _spkInternal: a.spokesperson_internal || '', _spkExternal: a.spokesperson_eksternal || '',
+    _spkInternalStance: a.spokesperson_internal_stance || '', _spkExternalStance: a.spokesperson_eksternal_stance || '',
+    _locked: !!a.manual_locked, _category: a.category || '', _categorySecondary: a.category_secondary || '',
+    _locations: a.locations || '', _geoScope: a.geo_scope || '', _analyzed: !!(a.resume), _fromDB: true
+  };
+}
+async function searchAllDb() {
+  const q = currentFilter.q; if (q.length < 2) return;
+  const btn = document.getElementById('monSearchDb');
+  btn.disabled = true; btn.textContent = '⏳ Mencari...';
+  try {
+    const r = await fetch('/api/articles?limit=300&q=' + encodeURIComponent(q));
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || 'Gagal mencari');
+    allArticles = (d.articles || []).map(mapDbRowToArticle);
+    applyFilters(); sortArticles('date');
+    document.getElementById('monSearchReset').style.display = '';
+    document.getElementById('resultLabel').textContent = 'Hasil dari seluruh database: ' + filteredArticles.length + (d.total > 300 ? ' (menampilkan 300 terbaru dari ' + d.total + ')' : '') + ' artikel';
+    showToast('🗄 Menampilkan hasil dari seluruh database. Semua tombol edit dan hapus tetap bisa dipakai.');
+  } catch (e) { showToast('⚠ ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = '🗄 Cari di seluruh database'; }
+}
+function resetMonSearch() {
+  currentFilter.q = '';
+  document.getElementById('monSearch').value = '';
+  document.getElementById('monSearchDb').style.display = 'none';
+  document.getElementById('monSearchReset').style.display = 'none';
+  autoLoadFromDB();
+}
 
 // ==================== RADAR PAPUA ====================
 // ==================== SPOKESPERSON RECAP ====================
@@ -4510,7 +4565,7 @@ function switchTab(tab) {
     dashAllArticles = []; // force fresh load setiap buka tab
     renderDashboard();
   }
-  if (tab === 'reputasi') loadReputasi(false);
+  if (tab === 'reputasi') loadReputasi(true); // selalu ambil data terbaru dari database, jadi hasil edit/hapus langsung terhitung
   if (tab === 'radar') loadRadarPapua();
   if (tab === 'followups') loadFollowups();
   if (tab === 'spokesperson') loadSpokespersonRecap();
