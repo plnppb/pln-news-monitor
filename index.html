@@ -1964,7 +1964,7 @@ async function saveAddLink() {
 // Semua angka dihitung dari database (kategori, lokasi, tone, narasumber) tanpa tambahan kuota Gemini.
 // Setiap angka yang tampil bisa diklik; daftar yang terbuka memakai kriteria yang sama persis.
 const REP = {
-  days: 30, thrNeg: 3, thrN: 10,
+  days: 7, thrNeg: 2, thrN: 3,
   raw: null, loadedSpan: 0, loading: false,
   reg: [], drill: null, tab: 'semua', all: [], prev: [], cur: [], layoutTimer: null
 };
@@ -2053,7 +2053,7 @@ async function repFetch(span) {
 async function loadReputasi(force) {
   if (REP.loading) return;
   const root = document.getElementById('rpRoot');
-  const span = Math.max(REP.days * 2, 30); // periode ini + periode pembanding; minimal 30 hari agar aturan peringatan (7/14/21 hari) selalu punya data
+  const span = Math.max(REP.days * 2, 21); // periode ini + periode pembanding; minimal 21 hari agar aturan peringatan (7/14/21 hari) selalu punya data
   if (REP.raw && !force && REP.loadedSpan >= span) { renderReputasi(); return; }
   REP.loading = true;
   root.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)" id="rpStatus">Memuat data...</div>';
@@ -2678,7 +2678,7 @@ function resetMonSearch() {
 // ==================== ANALISIS NARASUMBER (TAB SPOKESPERSON) ====================
 // Tampilan sengaja berbeda dari tab Reputasi: donat komposisi, batang bertumpuk per narasumber,
 // grafik garis tren kutipan, dan kisi tone berita × tone komentar. Semua dihitung dari data yang sama dengan daftar di bawahnya.
-const SPK = { days: 30 };
+const SPK = { days: 7 };
 function spkSetDays(d) { SPK.days = d; renderSpkAnalytics(); }
 function spkJump(name) {
   const inp = document.getElementById('spkFilterInput');
