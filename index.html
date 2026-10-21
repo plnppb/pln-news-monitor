@@ -778,6 +778,7 @@
     </div>
     <div id="spokespersonLoading" style="text-align:center;color:var(--muted);padding:20px;">⏳ Memuat data...</div>
     <div id="spokespersonContent" style="display:none;">
+      <div id="spkAnalytics" style="margin-bottom:22px;"></div>
       <h4 style="margin:16px 0 8px;">🏢 Narasumber Internal PLN</h4>
       <div id="spkInternalList" style="display:flex;flex-direction:column;gap:8px;"></div>
       <h4 style="margin:24px 0 8px;">👤 Narasumber Eksternal</h4>
@@ -1964,7 +1965,7 @@ async function saveAddLink() {
 // Setiap angka yang tampil bisa diklik; daftar yang terbuka memakai kriteria yang sama persis.
 const REP = {
   days: 30, thrNeg: 3, thrN: 10,
-  raw: null, loadedDays: 0, loading: false,
+  raw: null, loadedSpan: 0, loading: false,
   reg: [], drill: null, tab: 'semua', all: [], prev: [], cur: [], layoutTimer: null
 };
 
@@ -2032,8 +2033,8 @@ function repPrepare(rows) {
   });
 }
 
-async function repFetch(days) {
-  const from = new Date(Date.now() - days * 2 * 86400000).toISOString().split('T')[0];
+async function repFetch(span) {
+  const from = new Date(Date.now() - span * 86400000).toISOString().split('T')[0];
   const pageSize = 500;
   let out = [], offset = 0;
   while (true) {
@@ -2052,12 +2053,13 @@ async function repFetch(days) {
 async function loadReputasi(force) {
   if (REP.loading) return;
   const root = document.getElementById('rpRoot');
-  if (REP.raw && !force && REP.loadedDays >= REP.days) { renderReputasi(); return; }
+  const span = Math.max(REP.days * 2, 30); // periode ini + periode pembanding; minimal 30 hari agar aturan peringatan (7/14/21 hari) selalu punya data
+  if (REP.raw && !force && REP.loadedSpan >= span) { renderReputasi(); return; }
   REP.loading = true;
   root.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)" id="rpStatus">Memuat data...</div>';
   try {
-    REP.raw = repPrepare(await repFetch(REP.days));
-    REP.loadedDays = REP.days;
+    REP.raw = repPrepare(await repFetch(span));
+    REP.loadedSpan = span;
     REP.loading = false;
     renderReputasi();
   } catch (e) {
@@ -2066,9 +2068,12 @@ async function loadReputasi(force) {
   }
 }
 
+// Ambang awal per periode: [negatif minimal, jumlah berita minimal]. Bisa diubah di halaman.
+const REP_PRESET = { 7: [2, 3], 14: [3, 5], 30: [3, 10], 60: [3, 20], 90: [3, 30] };
 function repSetDays(d) {
   REP.days = d;
-  REP.thrN = d <= 30 ? 10 : d <= 60 ? 20 : 30;
+  const t = REP_PRESET[d] || [3, 10];
+  REP.thrNeg = t[0]; REP.thrN = t[1];
   loadReputasi(false);
 }
 function repSetThr() {
@@ -2195,10 +2200,18 @@ function renderReputasi() {
   }).join('');
 
   // ----- Minggu (terbaru di kanan) -----
-  const nW = Math.ceil(D / 7);
+  const daily = D <= 14;
+  const unit = daily ? 1 : 7;
+  const unitWord = daily ? 'hari' : 'pekan';
+  const nW = Math.ceil(D / unit);
   const weeks = [];
   for (let i = nW - 1; i >= 0; i--) {
-    const list = cur.filter(a => Math.floor(a.ageDays / 7) === i);
+    const list = cur.filter(a => Math.floor(a.ageDays / unit) === i);
+    if (daily) {
+      const day = repFmtShort(new Date(now.getTime() - i * 86400000));
+      weeks.push({ list, t: repTally(list), label: day, range: day });
+      continue;
+    }
     let ws = new Date(now.getTime() - (i + 1) * 7 * 86400000 + 86400000);
     if (ws < start) ws = start;
     const we = new Date(now.getTime() - i * 7 * 86400000);
@@ -2207,7 +2220,7 @@ function renderReputasi() {
   const maxW = Math.max.apply(null, weeks.map(w => w.t.all), 1);
   const dense = nW > 8;
   const weekBars = weeks.map(w => {
-    const crit = ['Rentang 7 hari: ' + w.range];
+    const crit = [daily ? 'Tanggal: ' + w.range : 'Rentang 7 hari: ' + w.range];
     return `<div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:4px">
       <button type="button" class="rp-clk" ${O('Berita ' + w.range, crit, w.list, 'negatif')} title="Berita negatif minggu ini" style="border:0;background:transparent;padding:0 2px;border-radius:4px;font-size:12px;font-weight:600;color:#9F1D1D">${w.t.neg}</button>
       <button type="button" class="rp-clk2" ${O('Berita ' + w.range, crit, w.list, 'semua')} title="Semua berita minggu ini" style="display:block;position:relative;width:100%;border:0;padding:0;background:#8FB2E6;border-radius:3px 3px 0 0;height:${repPct(w.t.all, maxW * 1.2)}">
@@ -2218,7 +2231,7 @@ function renderReputasi() {
   const peak = weeks.reduce((m, w, i) => (w.t.neg > weeks[m].t.neg ? i : m), 0);
   const lastW = weeks[weeks.length - 1];
   const weekNote = weeks[peak].t.neg > 0
-    ? `Puncak berita negatif ada di pekan ${weeks[peak].range} (${weeks[peak].t.neg} berita). Pekan terakhir: ${lastW.t.neg} negatif dari ${lastW.t.all} berita.`
+    ? `Puncak berita negatif ada di ${unitWord} ${weeks[peak].range} (${weeks[peak].t.neg} berita). ${daily ? 'Hari' : 'Pekan'} terakhir: ${lastW.t.neg} negatif dari ${lastW.t.all} berita.`
     : 'Tidak ada berita negatif pada periode ini.';
 
   // ----- Lokasi -----
@@ -2360,15 +2373,15 @@ function renderReputasi() {
   const SEV = { Tinggi: ['#FDE8D7', '#9A3412'], Sedang: ['#FBF0CC', '#7A5300'] };
   const last = (list) => list.length ? repFmtDate(new Date(Math.max.apply(null, list.map(a => a.pub.getTime())))) : '';
   locAgg.forEach(x => {
-    const l7 = x.list.filter(a => a.tone === 'negatif' && a.ageDays < 7);
+    const l7 = REP.raw.filter(a => a.kab.indexOf(x.name) >= 0 && a.tone === 'negatif' && a.ageDays >= 0 && a.ageDays < 7);
     if (l7.length >= 3) alerts.push({ when: last(l7), title: 'Lonjakan berita negatif', sev: 'Tinggi', text: `${x.name}: ${l7.length} berita negatif dalam 7 hari terakhir.`, open: O('Peringatan: lonjakan negatif di ' + x.name, ['Lokasi: ' + x.name, 'Aturan: 3 berita negatif atau lebih dalam 7 hari'], l7, 'negatif'), rank: 0 - l7.length });
   });
   legal.forEach(x => {
-    const l21 = x.list.filter(a => a.ageDays < 21);
+    const l21 = REP.raw.filter(a => a.legal.indexOf(x.l.k) >= 0 && a.ageDays >= 0 && a.ageDays < 21);
     if (l21.length >= 3) alerts.push({ when: last(l21), title: 'Kata kunci hukum: ' + x.l.title, sev: x.t.neg >= 2 ? 'Tinggi' : 'Sedang', text: `${l21.length} berita dalam 21 hari terakhir${x.top ? ' (terbanyak: ' + x.top + ')' : ''}.`, open: O('Peringatan: ' + x.l.title, ['Kata kunci: ' + x.l.kw, 'Aturan: 3 berita atau lebih dalam 21 hari'], l21, 'semua'), rank: 5 });
   });
   provs.forEach(p => {
-    const n14 = p.list.filter(a => a.tone === 'negatif' && a.ageDays < 14);
+    const n14 = REP.raw.filter(a => a.provs.indexOf(p.name) >= 0 && a.tone === 'negatif' && a.ageDays >= 0 && a.ageDays < 14);
     const noQ = n14.filter(a => !a.leaders.length);
     if (n14.length >= 3 && noQ.length === n14.length) alerts.push({ when: last(n14), title: 'Pimpinan tidak tampil', sev: 'Sedang', text: `${p.name}: ${n14.length} berita negatif dalam 14 hari terakhir, tidak satu pun mengutip pimpinan.`, open: O('Peringatan: pimpinan tidak dikutip di ' + p.name, ['Provinsi: ' + p.name, 'Aturan: 3 berita negatif atau lebih dalam 14 hari tanpa kutipan pimpinan'], n14, 'negatif'), rank: 10 });
     if (p.prevN >= 5 && p.p - p.prevScore.p >= 24 && (p.st !== 'Rendah')) alerts.push({ when: repFmtDate(now), title: 'Skor wilayah naik', sev: 'Sedang', text: `${p.name}: skor risiko ${p.prevScore.p}% naik menjadi ${p.p}% dibanding ${D} hari sebelumnya.`, open: O('Peringatan: skor risiko ' + p.name, ['Provinsi: ' + p.name, 'Aturan: skor naik 24 poin persen atau lebih dibanding periode sebelumnya'], p.list, 'negatif'), rank: 15 });
@@ -2389,7 +2402,7 @@ function renderReputasi() {
       <span style="font-weight:500;text-align:left">${x.name}</span><span style="font-weight:600;color:#9F1D1D;white-space:nowrap">${x.t.neg} negatif · ${x.t.all} berita</span></button>`).join('')
     : '<div style="font-size:12.5px;color:#4A5B72">Tidak ada kabupaten/kota yang memenuhi aturan pada periode ini.</div>';
 
-  const periodBtns = [30, 60, 90].map(d => `<button type="button" class="rp-seg ${REP.days === d ? 'on' : ''}" onclick="repSetDays(${d})">${d} hari</button>`).join('');
+  const periodBtns = [7, 14, 30, 60, 90].map(d => `<button type="button" class="rp-seg ${REP.days === d ? 'on' : ''}" onclick="repSetDays(${d})">${d} hari</button>`).join('');
   const unclassified = noCat.length;
   const card = 'background:#fff;border:1px solid #DDE3EC;border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:14px;min-width:0';
   const h2 = 'font-size:16px;font-weight:600', sub = 'font-size:12.5px;color:#4A5B72;margin-top:2px';
@@ -2418,7 +2431,7 @@ function renderReputasi() {
         <div style="display:flex;flex-direction:column;gap:4px">${catHtml}</div>
       </div>
       <div style="${card};flex:1 1 400px">
-        <div><div style="${h2}">Tren mingguan</div><div style="${sub}">Klik batang untuk berita pekan itu; klik angka merah di atasnya untuk yang negatif. Pekan terakhir di kanan.</div></div>
+        <div><div style="${h2}">${daily ? 'Tren harian' : 'Tren mingguan'}</div><div style="${sub}">Klik batang untuk berita ${unitWord} itu; klik angka merah di atasnya untuk yang negatif. ${daily ? 'Hari' : 'Pekan'} terakhir di kanan.</div></div>
         <div style="display:flex;align-items:flex-end;gap:${dense ? 5 : 10}px;height:200px;border-bottom:1px solid #CBD5E3">${weekBars}</div>
         <div style="display:flex;gap:${dense ? 5 : 10}px">${weekLabels}</div>
         <div style="font-size:13px;line-height:1.5;padding:10px 12px;background:#F4F6F9;border-radius:8px">${spkEsc(weekNote)}</div>
@@ -2491,7 +2504,7 @@ function renderReputasi() {
     </div>
 
     <div style="${card}">
-      <div><div style="${h2}">Peringatan dini</div><div style="${sub}">Dibuat otomatis dari aturan sederhana yang tertulis di tiap peringatan. Pengiriman ke Telegram belum diaktifkan.</div></div>
+      <div><div style="${h2}">Peringatan dini</div><div style="${sub}">Dibuat otomatis dari aturan sederhana yang tertulis di tiap peringatan, dan tidak terpengaruh pilihan periode di atas. Pengiriman ke Telegram belum diaktifkan.</div></div>
       <div style="display:flex;flex-direction:column">${alertHtml}</div>
     </div>
 
@@ -2661,6 +2674,184 @@ function resetMonSearch() {
   autoLoadFromDB();
 }
 
+
+// ==================== ANALISIS NARASUMBER (TAB SPOKESPERSON) ====================
+// Tampilan sengaja berbeda dari tab Reputasi: donat komposisi, batang bertumpuk per narasumber,
+// grafik garis tren kutipan, dan kisi tone berita × tone komentar. Semua dihitung dari data yang sama dengan daftar di bawahnya.
+const SPK = { days: 30 };
+function spkSetDays(d) { SPK.days = d; renderSpkAnalytics(); }
+function spkJump(name) {
+  const inp = document.getElementById('spkFilterInput');
+  if (inp) { inp.value = name; if (window._spkRerender) window._spkRerender(); }
+  const el = document.getElementById('spkInternalList');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderSpkAnalytics() {
+  const host = document.getElementById('spkAnalytics');
+  if (!host || !window._spkAllArts) return;
+  const D = SPK.days, now = Date.now();
+  const arts = window._spkAllArts.filter(a => {
+    if (!a.published_at) return false;
+    const age = (now - new Date(a.published_at).getTime()) / 86400000;
+    return age >= 0 && (D === 0 || age < D);
+  });
+  const C = { negatif: '#B42318', netral: '#94A3B8', positif: '#15803D', kosong: '#E2E8F0' };
+  const stanceKey = v => (v === 'positif' || v === 'negatif' || v === 'netral') ? v : 'kosong';
+
+  // ---- agregasi per narasumber dan per berita ----
+  const people = { internal: {}, eksternal: {} };
+  const comp = { int: 0, ext: 0, both: 0, none: 0 };
+  const grid = { internal: {}, eksternal: {} };
+  const bucketOf = a => Math.floor((now - new Date(a.published_at).getTime()) / 86400000);
+  arts.forEach(a => {
+    const tone = a.tone === 'negatif' || a.tone === 'positif' ? a.tone : 'netral';
+    const has = {};
+    [['internal', 'spokesperson_internal', 'spokesperson_internal_stance'], ['eksternal', 'spokesperson_eksternal', 'spokesperson_eksternal_stance']].forEach(([type, f, sf]) => {
+      const entries = parseSpokespersonField(a[f]);
+      if (!entries.length) return;
+      has[type] = true;
+      const st = stanceKey((a[sf] || '').trim());
+      const seen = {};
+      entries.forEach(({ name }) => {
+        const resolved = spkResolve(name), key = normalizeNameKey(resolved);
+        if (!key || seen[key]) return;
+        seen[key] = true;
+        const p = people[type][key] || (people[type][key] = { name: resolved, n: 0, positif: 0, netral: 0, negatif: 0, kosong: 0 });
+        p.n++; p[st]++;
+      });
+      const g = grid[type]; const gk = tone + '|' + st;
+      g[gk] = (g[gk] || 0) + 1;
+    });
+    if (has.internal && has.eksternal) comp.both++; else if (has.internal) comp.int++; else if (has.eksternal) comp.ext++; else comp.none++;
+  });
+  const sorted = type => Object.values(people[type]).sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
+  const listInt = sorted('internal'), listExt = sorted('eksternal');
+  const total = arts.length;
+  const withSpk = total - comp.none;
+  const pct = (n, m) => (m > 0 ? Math.round(n / m * 100) : 0) + '%';
+  const card = 'background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0';
+  const h = 'font-size:14px;font-weight:700', sub = 'font-size:11.5px;color:#64748b;line-height:1.5';
+
+  // ---- donat komposisi ----
+  const segs = [
+    { k: 'Hanya narasumber internal PLN', n: comp.int, c: '#1F5FBF' },
+    { k: 'Internal dan eksternal', n: comp.both, c: '#7C3AED' },
+    { k: 'Hanya narasumber eksternal', n: comp.ext, c: '#D9822B' },
+    { k: 'Tanpa narasumber teridentifikasi', n: comp.none, c: '#CBD5E1' }
+  ];
+  const R = 44, CIRC = 2 * Math.PI * R;
+  let acc = 0;
+  const arcs = total ? segs.filter(s => s.n > 0).map(s => {
+    const len = s.n / total * CIRC, off = -acc; acc += len;
+    return `<circle cx="60" cy="60" r="${R}" fill="none" stroke="${s.c}" stroke-width="18" stroke-dasharray="${len.toFixed(2)} ${(CIRC - len).toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}" transform="rotate(-90 60 60)"><title>${spkEsc(s.k)}: ${s.n}</title></circle>`;
+  }).join('') : '';
+  const donut = `<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center">
+    <svg viewBox="0 0 120 120" width="130" height="130" role="img" aria-label="Komposisi narasumber di berita">${arcs}
+      <text x="60" y="58" text-anchor="middle" font-size="19" font-weight="700" fill="#0f172a">${total}</text>
+      <text x="60" y="73" text-anchor="middle" font-size="8.5" fill="#64748b">berita</text></svg>
+    <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;flex:1 1 170px;min-width:0">
+      ${segs.map(s => `<div style="display:flex;gap:8px;align-items:flex-start"><span style="flex:0 0 11px;height:11px;margin-top:3px;border-radius:2px;background:${s.c}"></span><span style="flex:1 1 auto;min-width:0">${s.k}</span><span style="flex:0 0 auto;font-weight:700;white-space:nowrap">${s.n} <span style="font-weight:400;color:#64748b">(${pct(s.n, total)})</span></span></div>`).join('')}
+    </div></div>`;
+
+  // ---- batang bertumpuk per narasumber ----
+  const barCard = (title, list, note) => {
+    const top = list.slice(0, 8), mx = Math.max(1, ...top.map(p => p.n));
+    const rows = top.map(p => {
+      const seg = ['negatif', 'netral', 'positif', 'kosong'].map(k => p[k] ? `<span title="${spkEsc(p.name)}: ${p[k]} komentar ${k === 'kosong' ? 'belum dinilai' : k}" style="display:block;height:100%;width:${(p[k] / mx * 100).toFixed(2)}%;background:${C[k]}"></span>` : '').join('');
+      return `<div style="display:flex;align-items:center;gap:10px">
+        <button type="button" onclick="spkJump(this.dataset.n)" data-n="${spkEsc(p.name)}" title="Lihat di daftar di bawah" style="flex:0 0 150px;min-width:0;border:0;background:none;padding:2px 0;text-align:left;font:inherit;font-size:12.5px;line-height:1.25;cursor:pointer;color:#0f172a">${spkEsc(p.name)}</button>
+        <div style="flex:1 1 auto;min-width:0;height:16px;background:#f1f5f9;border-radius:4px;display:flex;overflow:hidden">${seg}</div>
+        <div style="flex:0 0 28px;text-align:right;font-size:13px;font-weight:700">${p.n}</div></div>`;
+    }).join('');
+    return `<div style="${card};flex:1 1 340px"><div><div style="${h}">${title}</div><div style="${sub}">${note}</div></div>
+      ${rows || '<div style="font-size:12px;color:#64748b">Belum ada narasumber pada periode ini.</div>'}
+      ${list.length > 8 ? `<div style="${sub}">Menampilkan 8 teratas dari ${list.length} narasumber.</div>` : ''}</div>`;
+  };
+  const conc = (list) => {
+    const t = list.reduce((s, p) => s + p.n, 0), t3 = list.slice(0, 3).reduce((s, p) => s + p.n, 0);
+    return t ? `3 narasumber teratas menyumbang ${pct(t3, t)} dari ${t} kutipan.` : '';
+  };
+
+  // ---- garis tren kutipan ----
+  const daily = D !== 0 && D <= 14, unit = daily ? 1 : 7;
+  const nB = D === 0 ? 13 : Math.min(13, Math.ceil(D / unit));
+  const series = { int: new Array(nB).fill(0), ext: new Array(nB).fill(0) };
+  arts.forEach(a => {
+    const b = Math.floor(bucketOf(a) / unit);
+    if (b < 0 || b >= nB) return;
+    const i = nB - 1 - b;
+    if (parseSpokespersonField(a.spokesperson_internal).length) series.int[i]++;
+    if (parseSpokespersonField(a.spokesperson_eksternal).length) series.ext[i]++;
+  });
+  const LW = 540, LH = 190, ML = 30, MR = 12, MT = 12, MB = 26;
+  const rawMax = Math.max(4, ...series.int, ...series.ext);
+  const yStep = [1, 2, 5, 10, 20, 25, 50, 100, 200].find(st => st * 4 >= rawMax) || 200;
+  const ymax = yStep * 4;
+  const px = i => ML + (nB === 1 ? (LW - ML - MR) / 2 : i / (nB - 1) * (LW - ML - MR));
+  const py = v => MT + (1 - v / ymax) * (LH - MT - MB);
+  const lineOf = (arr, col) => `<polyline fill="none" stroke="${col}" stroke-width="2.2" points="${arr.map((v, i) => px(i).toFixed(1) + ',' + py(v).toFixed(1)).join(' ')}"/>` +
+    arr.map((v, i) => `<circle cx="${px(i).toFixed(1)}" cy="${py(v).toFixed(1)}" r="3.2" fill="${col}"><title>${spkEsc(bLabel(i))}: ${v} berita</title></circle>`).join('');
+  function bLabel(i) {
+    const back = nB - 1 - i;
+    const end = new Date(now - back * unit * 86400000), start = new Date(now - (back * unit + unit - 1) * 86400000);
+    return unit === 1 ? repFmtShort(end) : repFmtShort(start) + ' – ' + repFmtShort(end);
+  }
+  const every = Math.max(1, Math.ceil(nB / 7));
+  const xl = Array.from({ length: nB }, (_, i) => ((nB - 1 - i) % every === 0) ? `<text x="${px(i).toFixed(1)}" y="${LH - 8}" text-anchor="${i === nB - 1 ? 'end' : 'middle'}" font-size="10.5" fill="#64748b">${spkEsc(unit === 1 ? bLabel(i) : repFmtShort(new Date(now - (nB - 1 - i) * unit * 86400000 - (unit - 1) * 86400000)))}</text>` : '').join('');
+  const yTicks = []; for (let v = 0; v <= ymax; v += yStep) yTicks.push(v);
+  const lineSvg = `<div style="overflow-x:auto"><svg viewBox="0 0 ${LW} ${LH}" width="${LW}" height="${LH}" style="max-width:none;display:block" role="img" aria-label="Tren berita bernarasumber">
+    ${yTicks.map(v => `<line x1="${ML}" x2="${LW - MR}" y1="${py(v).toFixed(1)}" y2="${py(v).toFixed(1)}" stroke="#e2e8f0"/><text x="${ML - 6}" y="${(py(v) + 3.5).toFixed(1)}" text-anchor="end" font-size="10.5" fill="#64748b">${v}</text>`).join('')}
+    ${xl}${lineOf(series.ext, '#D9822B')}${lineOf(series.int, '#1F5FBF')}</svg></div>
+    <div style="display:flex;gap:16px;font-size:12px;color:#334155"><span><span style="display:inline-block;width:14px;height:3px;background:#1F5FBF;vertical-align:middle;margin-right:6px"></span>Berita dengan narasumber internal</span><span><span style="display:inline-block;width:14px;height:3px;background:#D9822B;vertical-align:middle;margin-right:6px"></span>Berita dengan narasumber eksternal</span></div>`;
+
+  // ---- kisi tone berita x tone komentar ----
+  const gridCard = (type, title) => {
+    const g = grid[type], rows = ['negatif', 'netral', 'positif'], cols = ['negatif', 'netral', 'positif'];
+    const mx = Math.max(1, ...rows.flatMap(r => cols.map(c => g[r + '|' + c] || 0)));
+    const sumRow = r => cols.reduce((s, c) => s + (g[r + '|' + c] || 0), 0) + (g[r + '|kosong'] || 0);
+    const cell = (r, c) => {
+      const n = g[r + '|' + c] || 0, t = n / mx;
+      const bg = n === 0 ? '#f8fafc' : `rgba(31,95,191,${(0.1 + 0.75 * t).toFixed(2)})`;
+      return `<div style="display:flex;align-items:center;justify-content:center;min-height:38px;border-radius:5px;background:${bg};color:${t > 0.5 ? '#fff' : '#0f172a'};font-weight:700;font-size:14px" title="Berita ${r}, komentar ${c}: ${n}">${n || '–'}</div>`;
+    };
+    const lab = t => `<div style="font-size:11.5px;font-weight:600;text-align:center;color:${C[t]}">${t[0].toUpperCase() + t.slice(1)}</div>`;
+    const negRow = sumRow('negatif'), negNon = (g['negatif|netral'] || 0) + (g['negatif|positif'] || 0);
+    const insight = negRow ? `Dari ${negRow} berita negatif yang memuat narasumber ${type}, ${negNon} (${pct(negNon, negRow)}) komentarnya netral atau positif.` : 'Belum ada berita negatif bernarasumber pada periode ini.';
+    return `<div style="${card};flex:1 1 300px"><div><div style="${h}">${title}</div><div style="${sub}">Baris = tone berita, kolom = tone komentar narasumber. Berita yang komentarnya belum dinilai tidak ditampilkan di kisi.</div></div>
+      <div style="display:grid;grid-template-columns:64px repeat(3,minmax(0,1fr));gap:4px;align-items:stretch">
+        <div></div>${cols.map(lab).join('')}
+        ${rows.map(r => `<div style="display:flex;align-items:center;font-size:11.5px;font-weight:600;color:${C[r]}">${r[0].toUpperCase() + r.slice(1)}</div>${cols.map(c => cell(r, c)).join('')}`).join('')}
+      </div><div style="font-size:12px;line-height:1.5;padding:8px 10px;background:#f1f5f9;border-radius:8px">${insight}</div></div>`;
+  };
+
+  const kpi = (label, value, subt) => `<div style="${card};flex:1 1 150px;gap:4px;padding:12px 14px"><div style="font-size:11.5px;color:#64748b">${label}</div><div style="font-size:24px;font-weight:700;color:#0f172a;line-height:1.1">${value}</div><div style="${sub}">${subt}</div></div>`;
+  const periodBtns = [[7, '7 hari'], [14, '14 hari'], [30, '30 hari'], [90, '90 hari'], [0, 'Semua']].map(([d, l]) =>
+    `<button type="button" onclick="spkSetDays(${d})" style="padding:6px 12px;border:0;font-size:12px;cursor:pointer;font-family:inherit;${SPK.days === d ? 'background:#0f172a;color:#fff;font-weight:600;' : 'background:#fff;color:#475569;'}">${l}</button>`).join('');
+  host.innerHTML = `<div style="display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:center">
+      <div><div style="font-size:15px;font-weight:700">📈 Analisis Narasumber</div><div style="${sub}">Dihitung dari berita pada periode terpilih (tanggal tayang). Klik nama narasumber pada batang untuk melompat ke barisnya di daftar bawah.</div></div>
+      <div style="display:flex;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden">${periodBtns}</div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px">
+      ${kpi('Berita bernarasumber', withSpk, pct(withSpk, total) + ' dari ' + total + ' berita')}
+      ${kpi('Narasumber internal', listInt.length, listInt.length ? 'Terbanyak: ' + spkEsc(listInt[0].name) + ' (' + listInt[0].n + ')' : 'Belum ada')}
+      ${kpi('Narasumber eksternal', listExt.length, listExt.length ? 'Terbanyak: ' + spkEsc(listExt[0].name) + ' (' + listExt[0].n + ')' : 'Belum ada')}
+    </div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#334155;align-items:center">Warna batang tone komentar: ${['negatif', 'netral', 'positif', 'kosong'].map(k => `<span><span style="display:inline-block;width:11px;height:11px;border-radius:2px;background:${C[k]};vertical-align:middle;margin-right:5px"></span>${k === 'kosong' ? 'belum dinilai' : k}</span>`).join('')}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px">
+      <div style="${card};flex:1 1 340px"><div><div style="${h}">Siapa yang bicara di berita</div><div style="${sub}">Komposisi seluruh berita menurut jenis narasumbernya.</div></div>${donut}</div>
+      ${barCard('Narasumber internal PLN terbanyak', listInt, 'Panjang batang = jumlah berita yang mengutipnya, dipecah menurut tone komentarnya sendiri. ' + conc(listInt))}
+      ${barCard('Narasumber eksternal terbanyak', listExt, 'Cara baca sama dengan di samping. ' + conc(listExt))}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px">
+      <div style="${card};flex:1.4 1 420px"><div><div style="${h}">Tren berita bernarasumber</div><div style="${sub}">Jumlah berita per ${unit === 1 ? 'hari' : 'pekan'} yang memuat narasumber internal dan eksternal. Arahkan kursor ke titik untuk angkanya.</div></div>${lineSvg}</div>
+      ${gridCard('internal', 'Tone berita × komentar: internal PLN')}
+      ${gridCard('eksternal', 'Tone berita × komentar: eksternal')}
+    </div>
+  </div>`;
+}
+
 // ==================== RADAR PAPUA ====================
 // ==================== SPOKESPERSON RECAP ====================
 // Pisah satu field spokesperson mentah jadi daftar {name, title} per orang.
@@ -2775,6 +2966,7 @@ async function loadSpokespersonRecap() {
   const aliasMap = {}; // normalizeNameKey(alias) -> canonical display name
   aliases.forEach(al => { aliasMap[normalizeNameKey(al.alias_name)] = al.canonical_name; });
   window._spkAliasMap = aliasMap;
+  window._spkAllArts = allArts;
 
   function aggregate(nameField, stanceField) {
     const map = {};
@@ -2888,6 +3080,7 @@ async function loadSpokespersonRecap() {
 
   document.getElementById('spokespersonLoading').style.display = 'none';
   document.getElementById('spokespersonContent').style.display = 'block';
+  try { renderSpkAnalytics(); } catch (e) { console.error('Analisis narasumber gagal:', e); }
 }
 
 
@@ -3102,14 +3295,15 @@ async function buildSpkMasterData() {
   (window._spkAliasesCache || []).forEach(al => { aliasMap[normalizeNameKey(al.alias_name)] = al.canonical_name; });
   window._spkAliasMap = aliasMap;
 
+  // Hanya dua kolom narasumber dari berita yang punya narasumber (ringan, sekitar sepersepuluh data penuh)
   let all = [], offset = 0;
   while (true) {
-    const r = await fetch(`/api/articles?limit=500&offset=${offset}`);
+    const r = await fetch(`/api/articles?resource=spk-names&limit=1000&offset=${offset}`);
     const d = await r.json();
-    if (!d.articles || !d.articles.length) break;
-    all = all.concat(d.articles);
-    if (d.articles.length < 500) break;
-    offset += 500;
+    if (!d.rows || !d.rows.length) break;
+    all = all.concat(d.rows);
+    if (!d.hasMore) break;
+    offset += 1000;
   }
   const out = {};
   [['internal', 'spokesperson_internal'], ['eksternal', 'spokesperson_eksternal']].forEach(([type, field]) => {
@@ -3132,6 +3326,16 @@ async function buildSpkMasterData() {
       .sort((a, b) => b.count - a.count);
   });
   return out;
+}
+
+// Bangun ulang daftar narasumber di latar belakang tanpa mengosongkan daftar yang sedang dipakai
+function refreshSpkMasterBg() {
+  if (window._spkMasterRefreshing) return;
+  window._spkMasterRefreshing = true;
+  buildSpkMasterData()
+    .then(m => { window._spkMaster = m; if (window._mgr) mgrRefreshLists(); })
+    .catch(e => console.error('Gagal menyegarkan master narasumber:', e))
+    .finally(() => { window._spkMasterRefreshing = false; });
 }
 
 function ensureSpkMaster() {
@@ -3357,7 +3561,7 @@ async function saveMgrSpk() {
       a._locked = true;
       dashAllArticles.filter(x => x.url === a.url).forEach(x => { apply(x); x._locked = true; });
     }
-    window._spkMaster = null; // master data berubah, muat ulang saat dibuka berikutnya
+    refreshSpkMasterBg(); // master data berubah: daftar lama tetap dipakai, yang baru dimuat di latar belakang
     const gi = m.gi;
     closeMgrSpkModal();
     updateCard(gi);
@@ -3524,7 +3728,7 @@ async function deleteArticle(idx) {
       showToast('⚠ Gagal hapus: ' + e.message);
       return;
     }
-    window._spkMaster = null;
+    refreshSpkMasterBg();
   }
 
   allArticles = allArticles.filter(x => x !== a);
@@ -5061,6 +5265,9 @@ function showToast(msg) {
 
 initRssFeeds();
 renderKeywordSidebar();
+
+// Muat daftar narasumber di latar belakang supaya form Kelola Narasumber langsung siap
+setTimeout(() => { try { ensureSpkMaster(); } catch (e) {} }, 2500);
 
 // Auto-load artikel dari database saat halaman dibuka
 async function autoLoadFromDB() {
