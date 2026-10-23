@@ -1,5 +1,6 @@
 const https = require('https');
 const http = require('http');
+const FF = require('../lib/feedfind');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -709,15 +710,32 @@ module.exports = async function handler(req, res) {
     await Promise.allSettled(batch.map(async (feed) => {
       try {
         const xml = await fetchUrl(feed.url);
-        const articles = parseRSS(xml, feed.url);
+        const isSitemap = FF.looksLikeNewsSitemap(xml);
+        const articles = isSitemap ? FF.parseNewsSitemap(xml, feed.url)
+          : FF.looksLikeAtom(xml) && !/<item[\s>]/i.test(xml) ? FF.parseAtom(xml, feed.url)
+          : parseRSS(xml, feed.url);
         // PENTING: semua feed — termasuk subdomain Infonesia manapun (is_infonesia) —
         // WAJIB lolos filter kata kunci penuh di bawah ini. Jangan buat jalan pintas
         // khusus untuk Infonesia lagi (pernah ada bug: feed is_infonesia cuma dicek
         // mengandung "pln" doang, akibatnya berita PLN di luar Papua ikut kesedot).
-        const filtered = articles.filter(a => {
+        let filtered = articles.filter(a => {
           const text = (a.title + ' ' + a.description).toLowerCase();
           return keywordMatch(text, keywords);
         });
+        // Sumber sitemap hanya memuat judul. Berita yang judulnya menyebut PLN/listrik tapi daerahnya
+        // baru disebut di isi berita ikut diperiksa: ambil ringkasan halamannya (maks 8 per putaran).
+        if (isSitemap) {
+          const have = new Set(filtered.map(a => a.url));
+          const cand = articles.filter(a => !have.has(a.url) && /pln|listrik|kelistrikan/i.test(a.title)).slice(0, 8);
+          const fetched = await Promise.all(cand.map(async a => {
+            const r = await FF.fetchText(a.url, { timeout: 4000, maxBytes: 600000 });
+            if (!r.ok) return null;
+            const description = FF.pageDescription(r.body);
+            const text = (a.title + ' ' + description).toLowerCase();
+            return keywordMatch(text, keywords) ? { ...a, description } : null;
+          }));
+          filtered = filtered.concat(fetched.filter(Boolean));
+        }
         results.total += filtered.length;
         if (filtered.length > 0) {
           const saved = await saveToSupabase(filtered, keyword);

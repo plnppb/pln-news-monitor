@@ -1,5 +1,6 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const FF = require('../lib/feedfind');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,6 +13,19 @@ module.exports = async function handler(req, res) {
   // di bawah) — murni mapping tampilan "nama A dianggap sama dengan nama B",
   // TIDAK mengubah data mentah artikel sama sekali, jadi gampang di-undo.
   const isAliases = req.query.resource === 'spokesperson-aliases';
+
+  // GET ?resource=discover&url=<situs> : cari alamat RSS / sitemap berita sebuah media secara otomatis (tidak menyimpan apa pun)
+  if (req.method === 'GET' && req.query.resource === 'discover') {
+    if (req.query.secret !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+      const out = await FF.discoverFeed(req.query.url);
+      if (out.error) return res.status(400).json(out);
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json(out);
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
 
   // GET - ambil semua feeds, ATAU keyword (bisa difilter ?category=), ATAU alias spokesperson
   if (req.method === 'GET') {

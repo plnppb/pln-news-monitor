@@ -58,6 +58,24 @@ export default async function handler(req, res) {
   try {
     const xml = await fetchWithFallback(url);
     const items = [];
+
+    // Sumber sitemap berita (Google News) atau Atom: ubah ke bentuk yang sama dengan RSS
+    if (/<urlset[\s>]/i.test(xml) && /<news:news[\s>]/i.test(xml)) {
+      const host = new URL(url).hostname.replace(/^www\./, '');
+      const re = /<url>([\s\S]*?)<\/url>/gi; let m;
+      const tg = (b, n) => { const x = b.match(new RegExp('<' + n + '[^>]*>([\\s\\S]*?)</' + n + '>', 'i')); return x ? x[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&amp;/g, '&').trim() : ''; };
+      while ((m = re.exec(xml)) !== null) {
+        const b = m[1], title = tg(b, 'news:title'), link = tg(b, 'loc');
+        if (!title || !link) continue;
+        if (q) {
+          const kws = q.toLowerCase().split(/\s+/).filter(k => k.length > 1);
+          if (!kws.every(k => title.toLowerCase().includes(k))) continue;
+        }
+        const d = new Date(tg(b, 'news:publication_date'));
+        items.push({ title, url: link, publishedAt: isNaN(d) ? new Date().toISOString() : d.toISOString(), source: { name: tg(b, 'news:name') || host }, description: '', urlToImage: null });
+      }
+      return res.status(200).json({ status: 'ok', articles: items, count: items.length });
+    }
     const itemRegex = /<item>([\s\S]*?)<\/item>/g;
     let match;
 
