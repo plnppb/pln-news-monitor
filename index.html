@@ -448,6 +448,20 @@
             </label>
             <div id="rssImportPreview" style="margin-top:8px"></div>
           </div>
+
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+            <h4 style="margin-bottom:8px">🔎 Temukan Feed Otomatis</h4>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.6">
+              Untuk media yang alamat RSS-nya tidak diketahui. Tulis <b>satu media per baris</b>: alamat situs saja, atau <code style="background:var(--border);padding:1px 4px;border-radius:3px">Nama Media, alamat situs</code>. Sistem mencari RSS, Atom, atau sitemap berita (untuk media seperti Cepos yang tidak punya RSS), lalu menampilkan hasilnya untuk Anda periksa sebelum disimpan.
+            </div>
+            <textarea id="ffInput" rows="5" placeholder="Contoh isian:&#10;Cepos Online, ceposonline.com&#10;Koreri, https://koreri.com&#10;jubi.id&#10;Pasific Pos, pasificpos.com" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:inherit;"></textarea>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+              <button id="ffRunBtn" class="btn-add-feed" style="background:var(--accent2)" onclick="runFeedDiscovery()">🔎 Cari Feed Otomatis</button>
+              <button id="ffSaveBtn" class="btn-add-feed" style="display:none" onclick="saveDiscoveredFeeds()">💾 Simpan yang dicentang</button>
+              <span id="ffProgress" style="font-size:11px;color:var(--muted)"></span>
+            </div>
+            <div id="ffResults" style="margin-top:8px"></div>
+          </div>
         </div>
       </div>
       <div class="modal-footer" style="font-size:11px;color:var(--muted)">
@@ -2850,6 +2864,117 @@ function renderSpkAnalytics() {
       ${gridCard('eksternal', 'Tone berita × komentar: eksternal')}
     </div>
   </div>`;
+}
+
+
+// ==================== TEMUKAN FEED OTOMATIS ====================
+window._ff = { rows: [] };
+const FF_TYPE = { 'rss': 'RSS', 'atom': 'Atom', 'sitemap-news': 'Sitemap berita' };
+
+function ffParseInput(text) {
+  const seen = new Set(), out = [];
+  text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#')).forEach(line => {
+    let name = '', site = line;
+    const i = line.indexOf(',');
+    if (i > 0) { name = line.slice(0, i).trim(); site = line.slice(i + 1).trim(); }
+    if (!/\./.test(site) || /\s/.test(site)) return;
+    const key = site.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ name, site });
+  });
+  return out;
+}
+
+async function runFeedDiscovery() {
+  const items = ffParseInput(document.getElementById('ffInput').value);
+  if (!items.length) { showToast('⚠ Isi minimal satu alamat situs (satu per baris)'); return; }
+  if (items.length > 40) { showToast('⚠ Maksimal 40 media per proses; pecah jadi beberapa kali'); return; }
+  const btn = document.getElementById('ffRunBtn');
+  btn.disabled = true;
+  document.getElementById('ffSaveBtn').style.display = 'none';
+  let existing = [];
+  try { existing = await fetchFeedsFromDB(); } catch (e) {}
+  const have = new Map(existing.map(f => [extractDomain(f.url), f]));
+  window._ff.rows = items.map(it => ({ ...it, state: 'wait', res: null, pick: false }));
+  ffRenderResults();
+  let done = 0, next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      const row = window._ff.rows[i];
+      row.state = 'run'; ffRenderResults();
+      try {
+        const r = await fetch('/api/feeds?resource=discover&secret=' + encodeURIComponent(CRON_SECRET) + '&url=' + encodeURIComponent(row.site));
+        const d = await r.json();
+        if (!r.ok || d.error) throw new Error(d.error || 'gagal');
+        row.res = d; row.state = 'done';
+        if (!row.name) row.name = d.name || '';
+        const dup = d.best ? have.get(extractDomain(d.best.url)) : null;
+        row.dup = dup ? dup.name : '';
+        row.pick = !!d.best && !dup && d.best.ageDays !== null && d.best.ageDays <= 14;
+      } catch (e) { row.state = 'err'; row.error = e.message; }
+      done++;
+      document.getElementById('ffProgress').textContent = `Diperiksa ${done} dari ${items.length}`;
+      ffRenderResults();
+    }
+  };
+  await Promise.all([worker(), worker()]);
+  btn.disabled = false;
+  document.getElementById('ffProgress').textContent = `Selesai: ${window._ff.rows.filter(r => r.res && r.res.best).length} dari ${items.length} media punya sumber yang bisa dipakai`;
+  document.getElementById('ffSaveBtn').style.display = window._ff.rows.some(r => r.res && r.res.best) ? '' : 'none';
+}
+
+function ffRenderResults() {
+  const rows = window._ff.rows;
+  const th = 'text-align:left;padding:5px 6px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);';
+  const td = 'padding:6px;font-size:11.5px;vertical-align:top;border-bottom:1px solid var(--border);';
+  const body = rows.map((r, i) => {
+    let status = '', pick = '<td style="' + td + '"></td>';
+    if (r.state === 'wait') status = '<span style="color:var(--muted)">menunggu...</span>';
+    else if (r.state === 'run') status = '<span style="color:var(--muted)">⏳ memeriksa...</span>';
+    else if (r.state === 'err') status = '<span style="color:#b91c1c">⚠ ' + spkEsc(r.error) + '</span>';
+    else if (!r.res.best) status = '<span style="color:#b91c1c">✗ Tidak ditemukan RSS atau sitemap berita.</span>' + (r.res.notes.length ? '<div style="color:var(--muted)">' + spkEsc(r.res.notes.join(' ')) + '</div>' : '') + '<div style="color:var(--muted)">Untuk media ini pakai tombol "Tambah Link Berita".</div>';
+    else {
+      const b = r.res.best;
+      const age = b.ageDays === null ? 'tanggal tidak terbaca' : (b.ageDays < 1 ? 'berita terakhir hari ini' : 'berita terakhir ' + Math.round(b.ageDays) + ' hari lalu');
+      status = '<span style="background:#dcfce7;color:#166534;border-radius:4px;padding:1px 6px;font-weight:600">' + FF_TYPE[b.type] + '</span> <span style="color:var(--muted)">' + b.items + ' berita · ' + age + '</span>' +
+        '<div style="word-break:break-all;color:var(--accent2)">' + spkEsc(b.url) + '</div>' +
+        '<div style="color:var(--muted)">Contoh: ' + b.sample.map(x => spkEsc(x.title)).slice(0, 2).join(' · ') + '</div>' +
+        (r.dup ? '<div style="color:#92400e">Domain ini sudah terdaftar sebagai "' + spkEsc(r.dup) + '".</div>' : '') +
+        (r.res.notes.length ? '<div style="color:#92400e">' + spkEsc(r.res.notes.join(' ')) + '</div>' : '') +
+        (b.type === 'sitemap-news' ? '<div style="color:var(--muted)">Sitemap hanya memuat judul; berita yang judulnya menyebut PLN/listrik dibaca isinya untuk memastikan daerahnya.</div>' : '');
+      pick = '<td style="' + td + '"><input type="checkbox" ' + (r.pick ? 'checked' : '') + ' onchange="window._ff.rows[' + i + '].pick=this.checked"></td>';
+    }
+    return '<tr><td style="' + td + '">' + (r.res && r.res.best ? '' : '') + '<input value="' + spkEsc(r.name) + '" placeholder="Nama media" oninput="window._ff.rows[' + i + '].name=this.value" style="width:130px;padding:3px 6px;border:1px solid var(--border2);border-radius:4px;font-size:11.5px"><div style="color:var(--muted);margin-top:2px;word-break:break-all">' + spkEsc(r.site) + '</div></td><td style="' + td + '">' + status + '</td>' + pick + '</tr>';
+  }).join('');
+  document.getElementById('ffResults').innerHTML = rows.length ? '<table style="width:100%;border-collapse:collapse"><thead><tr><th style="' + th + '">Media</th><th style="' + th + '">Hasil</th><th style="' + th + '">Simpan</th></tr></thead><tbody>' + body + '</tbody></table>' : '';
+}
+
+async function saveDiscoveredFeeds() {
+  const picks = window._ff.rows.filter(r => r.pick && r.res && r.res.best && (r.name || '').trim());
+  const nameless = window._ff.rows.filter(r => r.pick && r.res && r.res.best && !(r.name || '').trim()).length;
+  if (nameless) { showToast('⚠ Ada media yang dicentang tapi namanya kosong. Isi nama dulu.'); return; }
+  if (!picks.length) { showToast('⚠ Belum ada yang dicentang'); return; }
+  const btn = document.getElementById('ffSaveBtn');
+  btn.disabled = true; btn.textContent = '⏳ Menyimpan...';
+  try {
+    const resp = await fetch('/api/feeds', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feeds: picks.map(r => ({ name: r.name.trim(), url: r.res.best.url, enabled: true })) })
+    });
+    const d = await resp.json();
+    if (!resp.ok || d.error) throw new Error(d.error || 'Gagal simpan ke server');
+    rssFeeds = await fetchFeedsFromDB();
+    saveRssFeeds(); renderRssStatus(); renderRssTable();
+    picks.forEach(r => { r.pick = false; r.dup = r.name; });
+    ffRenderResults();
+    showToast('✅ ' + picks.length + ' sumber ditambahkan. Berita masuk pada crawl otomatis berikutnya.');
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Simpan yang dicentang';
+  }
 }
 
 // ==================== RADAR PAPUA ====================
