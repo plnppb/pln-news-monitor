@@ -329,7 +329,50 @@ async function fetchFromYouTube(keyword) {
 // dapat banyak artikel sekaligus, requestnya bisa timeout / kena rate limit
 // 15 request/menit dari Gemini.
 
+// Deduplikasi kedua: berita yang SAMA dari media yang SAMA tapi beda URL
+// (mis. feed langsung "Berita Terkini - ANTARA News" vs Google News "ANTARA News").
+// Kunci = judul ternormalisasi (tanpa akhiran " - Nama Media") + inti nama media.
+// Berita berjudul sama dari media BERBEDA tetap disimpan (liputan ulang itu data).
+function dedupTitleKey(t) {
+  let x = String(t || '').toLowerCase();
+  const m = x.match(/^(.*\S)\s+[-|–—]\s+([^-|–—]{2,40})$/);
+  if (m) x = m[1];
+  return x.replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+function dedupSourceKey(s) {
+  return String(s || '').toLowerCase().replace(/berita terkini|terkini|terbaru|\.com|\.id|\.co\.id|www\./g, '').replace(/[^a-z0-9]/g, '');
+}
+function sameOutlet(a, b) { return !!a && !!b && (a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0); }
+
+async function dropNearDuplicates(articles) {
+  const out = [], seen = [];
+  let existing = [];
+  try {
+    const since = new Date(Date.now() - 21 * 86400000).toISOString();
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/articles?select=title,source&published_at=gte.${encodeURIComponent(since)}&limit=2000`, {
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if (r.ok) existing = await r.json();
+  } catch (e) { existing = []; }
+  const byTitle = new Map();
+  const add = (title, source) => {
+    const k = dedupTitleKey(title); if (k.length < 15) return;
+    if (!byTitle.has(k)) byTitle.set(k, []);
+    byTitle.get(k).push(dedupSourceKey(source));
+  };
+  (Array.isArray(existing) ? existing : []).forEach(e => add(e.title, e.source));
+  for (const a of articles) {
+    const k = dedupTitleKey(a.title), sk = dedupSourceKey(a.source);
+    const hit = k.length >= 15 && (byTitle.get(k) || []).some(x => sameOutlet(x, sk));
+    if (hit) continue;
+    out.push(a); add(a.title, a.source);
+  }
+  return out;
+}
+
 async function saveToSupabase(articles, keyword) {
+  if (!articles.length) return { saved: 0 };
+  articles = await dropNearDuplicates(articles);
   if (!articles.length) return { saved: 0 };
 
   const rows = articles.map(a => ({
