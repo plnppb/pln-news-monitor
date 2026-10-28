@@ -4,6 +4,7 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 // (kuota Gemini diikat ke project Google, bukan ke key — jadi key dari
 // akun/project berbeda beneran punya kuota terpisah).
 const TAX = require('../lib/taxonomy');
+const FF = require('../lib/feedfind');
 const TEXT_LIMIT = 800; // batas teks ke AI (naik dari 400 supaya lokasi di paragraf awal terbaca)
 const GEMINI_KEYS = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '')
   .split(',').map(k => k.trim()).filter(Boolean);
@@ -142,6 +143,107 @@ async function analyzeArticle(title, description) {
     }
   }
   return { error: `Semua ${GEMINI_KEYS.length} API key gagal/kehabisan kuota. Error terakhir: ${lastError}` };
+}
+
+
+// ===== MODE ISI NARASUMBER (?mode=spk) =====
+// RSS cuma membawa judul + cuplikan pendek, sedangkan kutipan narasumber biasanya
+// ada di paragraf tengah artikel. Mode ini membuka halaman beritanya, membaca isi
+// lengkap, lalu minta AI mengisi HANYA kolom narasumber. Nama diprioritaskan dari
+// daftar yang sudah ada di database (ejaan + jabatan konsisten); nama baru boleh
+// masuk asal tertulis kata per kata di isi berita (validasi kode, anti-halusinasi).
+// Berita yang sudah punya narasumber, atau dikunci (manual_locked), tidak disentuh.
+async function loadKnownSpeakers() {
+  const headers = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` };
+  const map = new Map(); // nama -> {title(jabatan terbanyak)}
+  for (let off = 0; off < 5000; off += 1000) {
+    let rows = [];
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/articles?select=spokesperson_internal,spokesperson_eksternal&or=(spokesperson_internal.neq.,spokesperson_eksternal.neq.)&order=id.asc&limit=1000&offset=${off}`, { headers });
+      rows = await r.json();
+    } catch (e) { break; }
+    if (!Array.isArray(rows) || !rows.length) break;
+    rows.forEach(row => [row.spokesperson_internal, row.spokesperson_eksternal].forEach(f => {
+      (f || '').split(';').forEach(e => {
+        const [n, j] = e.split('|').map(x => (x || '').trim());
+        if (!n || n.split(' ').length < 2) return;
+        const o = map.get(n) || { jab: {} };
+        if (j) o.jab[j] = (o.jab[j] || 0) + 1;
+        map.set(n, o);
+      });
+    }));
+    if (rows.length < 1000) break;
+  }
+  return [...map.entries()].map(([name, o]) => {
+    const jab = Object.entries(o.jab).sort((a, b) => b[1] - a[1])[0];
+    return { name, jab: jab ? jab[0] : '' };
+  });
+}
+
+async function geminiJson(prompt) {
+  if (!GEMINI_KEYS.length) return { error: 'NO_API_KEY' };
+  let lastError = null;
+  for (let i = 0; i < GEMINI_KEYS.length; i++) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_KEYS[i]}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 600 } }) });
+      const data = await response.json();
+      if (data.error) {
+        lastError = data.error.message;
+        if ((data.error.code === 429 || /quota/i.test(lastError || '')) && i < GEMINI_KEYS.length - 1) continue;
+        return { error: lastError, code: data.error.code };
+      }
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const m = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').match(/\{[\s\S]*\}/);
+      if (!m) return { error: 'NO_JSON' };
+      return { json: JSON.parse(m[0]) };
+    } catch (e) { lastError = e.message; }
+  }
+  return { error: lastError || 'gagal' };
+}
+
+async function spkFromFullText(article, known) {
+  const url = article.url || '';
+  if (!/^https?:\/\//i.test(url)) return { skip: 'link tidak valid' };
+  if (/news\.google\.com/i.test(url)) return { skip: 'link Google News (isi tidak bisa dibuka)' };
+  const page = await FF.fetchText(url, { timeout: 4500, maxBytes: 900000 });
+  if (!page.ok) return { skip: 'halaman tidak bisa dibuka (' + (page.error || 'HTTP ' + page.status) + ')' };
+  const body = FF.extractBodyText(page.body, 7000);
+  if (body.length < 300) return { skip: 'isi berita tidak terbaca' };
+  const text = (article.title + '\n' + body);
+  const norm = normalizeForMatch(text);
+  const hints = known.filter(k => nameAppearsInSource(k.name, norm)).slice(0, 12);
+  const hintTxt = hints.length
+    ? 'DAFTAR NAMA YANG SUDAH TERCATAT (pakai ejaan dan jabatan ini bila orangnya memang dikutip di teks):\n' + hints.map(h => '- ' + h.name + '|' + h.jab).join('\n') + '\n\n'
+    : '';
+  const prompt = `Kamu membantu humas PT PLN (Persero) UIW Papua & Papua Barat mencatat narasumber berita.
+Dari teks berita di bawah, catat orang yang DIKUTIP atau disebut menyampaikan pernyataan.
+- spokesperson_internal: orang dari PLN (PLN UIW PPB, PLN UID/UP3/ULP, PLN Pusat, anak usaha PLN).
+- spokesperson_eksternal: orang di luar PLN (pejabat pemerintah, DPR/DPRD, warga, pihak lain).
+Aturan:
+1. Hanya nama orang spesifik (minimal dua kata). Jabatan/kolektif tanpa nama ("pihak PLN") JANGAN dicatat.
+2. Nama WAJIB tertulis kata per kata di teks. JANGAN mengarang atau menebak. Kalau ragu, kosongkan.
+3. Format "Nama Lengkap|Jabatan". Beberapa orang dipisah titik-koma (;). Jangan gabung dua nama dengan "dan".
+4. Jabatan sesuai teks artikel ini; kalau teks tidak menyebut jabatan tapi orangnya ada di daftar tercatat, pakai jabatan dari daftar.
+5. Stance = sikap pernyataan orang itu sendiri (positif/negatif/netral), bukan tone artikel.
+${hintTxt}Judul: ${article.title}
+Isi berita:
+${body}
+
+Balas HANYA JSON: {"spokesperson_internal":"","spokesperson_internal_stance":"","spokesperson_eksternal":"","spokesperson_eksternal_stance":""}`;
+  const g = await geminiJson(prompt);
+  if (g.error) return { error: g.error, code: g.code };
+  const r = g.json;
+  const out = {
+    spokesperson_internal: validateSpokespersonField(r.spokesperson_internal, norm),
+    spokesperson_eksternal: validateSpokespersonField(r.spokesperson_eksternal, norm)
+  };
+  const okTone = x => ['positif', 'negatif', 'netral'].includes(x) ? x : 'netral';
+  out.spokesperson_internal_stance = out.spokesperson_internal ? okTone(r.spokesperson_internal_stance) : '';
+  out.spokesperson_eksternal_stance = out.spokesperson_eksternal ? okTone(r.spokesperson_eksternal_stance) : '';
+  return { out };
 }
 
 // Artikel yang sudah diedit manual (manual_locked = true) TIDAK ikut dianalisis
@@ -289,6 +391,34 @@ module.exports = async function handler(req, res) {
     } catch (error) {
       return res.status(500).json({ error: error.message });
     }
+  }
+
+  // MODE ISI NARASUMBER dari isi berita lengkap (lihat komentar di atas)
+  if (req.query.mode === 'spk') {
+    try {
+      const sel = 'id,title,url,spokesperson_internal,spokesperson_eksternal';
+      const base = `${SUPABASE_URL}/rest/v1/articles?select=${sel}&hidden=eq.false&or=(spokesperson_internal.is.null,spokesperson_internal.eq.)&or=(spokesperson_eksternal.is.null,spokesperson_eksternal.eq.)${dateFilter}&limit=${batchSize}&offset=${offset}&order=id.asc`;
+      const response = await fetchArticlesSkippingLocked(base);
+      const arts = await response.json();
+      if (!Array.isArray(arts)) return res.status(500).json({ error: 'Gagal membaca artikel', detail: arts });
+      if (!arts.length) return res.status(200).json({ success: true, filterDays: days, message: 'Semua artikel sudah dicek', processed: 0 });
+      const known = await loadKnownSpeakers();
+      let filled = 0, skipped = 0, failed = 0, nothing = 0;
+      const notes = [];
+      for (const a of arts) {
+        const r = await spkFromFullText(a, known);
+        if (r.error) { failed++; if (notes.length < 3) notes.push({ id: a.id, error: r.error }); continue; }
+        if (r.skip) { skipped++; if (notes.length < 3) notes.push({ id: a.id, skip: r.skip }); continue; }
+        if (!r.out.spokesperson_internal && !r.out.spokesperson_eksternal) { nothing++; continue; }
+        const pr = await fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${a.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+          body: JSON.stringify(r.out)
+        });
+        if (pr.ok) filled++; else { failed++; if (notes.length < 3) notes.push({ id: a.id, error: 'simpan gagal ' + pr.status }); }
+      }
+      return res.status(200).json({ success: true, filterDays: days, filled, nothing, skipped, failed, notes, nextOffset: offset + (arts.length - filled), note: arts.length < batchSize ? 'Selesai' : undefined });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
   }
 
   // MODE DEBUG: test 1 artikel dan tampilkan hasil lengkap
