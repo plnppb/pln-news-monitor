@@ -617,6 +617,7 @@
       </div>
       <div style="display:flex;gap:8px;">
         <button class="export-btn" onclick="openAddLinkModal()" title="Tambah berita dari link yang tidak terjaring RSS">➕ Tambah Link Berita</button>
+        <button class="export-btn" onclick="openSpkRerun()" title="Baca isi berita yang narasumbernya masih kosong, lalu isi otomatis" style="background:#1e40af">🔄 Cari Ulang Narasumber</button>
         <button class="export-btn" onclick="exportExcel()">📥 Export Excel</button>
       </div>
     </div>
@@ -812,6 +813,7 @@
     </div>
     <div id="spokespersonLoading" style="text-align:center;color:var(--muted);padding:20px;">⏳ Memuat data...</div>
     <div id="spokespersonContent" style="display:none;">
+      <div id="spkSuggest" style="margin-bottom:18px;"></div>
       <div id="spkAnalytics" style="margin-bottom:22px;"></div>
       <h4 style="margin:16px 0 8px;">🏢 Narasumber Internal PLN</h4>
       <div id="spkInternalList" style="display:flex;flex-direction:column;gap:8px;"></div>
@@ -821,6 +823,20 @@
   </div><!-- end panel-spokesperson-wrap -->
 
   <!-- MODAL: tambah berita manual lewat link (tab Monitor) -->
+  <div id="spkRerunOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;width:min(520px,92vw);padding:20px 22px;box-shadow:0 10px 40px rgba(0,0,0,.25);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:16px;font-weight:700;">🔄 Cari Ulang Narasumber</div><button onclick="closeSpkRerun()" style="border:0;background:none;font-size:20px;cursor:pointer;color:var(--muted)">✕</button></div>
+      <div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:12px;">Membuka halaman tiap berita yang <b>narasumbernya masih kosong</b>, membaca isinya, lalu mengisi nama dan jabatan. Berita yang sudah punya narasumber atau dikunci (🔒) tidak disentuh. Berita dari link Google News dan situs yang memblokir server dilewati (isi tidak bisa dibaca).</div>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
+        <label style="font-size:12.5px">Berita tayang dalam&nbsp;<select id="spkRerunDays" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;"><option value="7">7 hari terakhir</option><option value="14">14 hari terakhir</option><option value="30">30 hari terakhir</option></select></label>
+        <button id="spkRerunBtn" onclick="runSpkRerun()" style="padding:7px 16px;border:0;border-radius:6px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">Mulai</button>
+        <button id="spkRerunStop" onclick="window._spkRun.cancel=true" style="display:none;padding:7px 12px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;">Berhenti</button>
+      </div>
+      <div id="spkRerunMsg" style="font-size:12.5px;line-height:1.7;min-height:40px;"></div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:6px;">Satu berita ±5 detik. Biarkan jendela ini terbuka sampai selesai. Nama yang mirip dengan nama lain akan muncul sebagai saran di tab Spokesperson untuk Anda konfirmasi.</div>
+    </div>
+  </div>
+
   <div id="addLinkOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
     <div style="background:#fff;border-radius:10px;padding:20px;max-width:600px;width:94%;max-height:90vh;overflow-y:auto;">
       <div style="font-weight:700;font-size:15px;margin-bottom:4px;">➕ Tambah Berita dari Link</div>
@@ -3092,9 +3108,13 @@ async function fetchSpokespersonAliases() {
   try {
     const resp = await fetch('/api/feeds?resource=spokesperson-aliases');
     const data = await resp.json();
-    window._spkAliasesCache = data.aliases || [];
+    const all = data.aliases || [];
+    // Baris khusus '__beda__|...' = keputusan admin "ini BUKAN orang yang sama"; disimpan di tabel alias tapi tidak dipakai sebagai alias
+    window._spkRejected = new Set(all.filter(x => (x.alias_name || '').indexOf('__beda__|') === 0).map(x => x.alias_name));
+    window._spkAliasesCache = all.filter(x => (x.alias_name || '').indexOf('__beda__|') !== 0);
   } catch (e) {
     window._spkAliasesCache = [];
+    window._spkRejected = new Set();
   }
   return window._spkAliasesCache;
 }
@@ -3239,6 +3259,7 @@ async function loadSpokespersonRecap() {
   document.getElementById('spokespersonLoading').style.display = 'none';
   document.getElementById('spokespersonContent').style.display = 'block';
   try { renderSpkAnalytics(); } catch (e) { console.error('Analisis narasumber gagal:', e); }
+  try { renderSpkSuggest(); } catch (e) { console.error('Saran nama gagal:', e); }
 }
 
 
@@ -5104,42 +5125,58 @@ function lpRender() {
 
 async function lpNarrative() {
   const D = LP.data; if (!D || !D.arts.length) return;
-  const arts = D.arts;
-  const neg = arts.filter(a => a.tone === 'negatif').slice(-35);
-  const rest = arts.filter(a => a.tone !== 'negatif').slice(-(70 - neg.length));
-  const pick = neg.concat(rest);
-  const items = pick.map((a, i) => ({ n: i + 1, judul: a.title.slice(0, 160), media: a.media, tone: a.tone, kategori: ((TAXO.categories.find(c => c.key === a.cat) || {}).label || ''), lokasi: a.locs.slice(0, 2).join(', '), ringkas: a.resume.slice(0, 160), narasumber: a.inN.concat(a.exN).slice(0, 2).map(p => p.name + (p.title ? ' (' + p.title + ')' : '')).join('; ') }));
-  const T = lpTally(arts);
-  const ids = ['lpTopik', 'lpSensitif', 'lpTopPos', 'lpTopNeg', 'lpEW'];
-  ids.forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = '<span class="lp-note">Menyusun narasi AI...</span>'; });
-  try {
-    const r = await fetch('/api/brief', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'report', jenis: D.type, kata_kunci: D.kw, periode: D.from + ' s.d. ' + D.to, total: arts.length, positif: T.p, netral: T.n, negatif: T.g, tampil: items.length, items }) });
-    const d = await r.json();
-    if (!r.ok || !d.report) throw new Error(d.detail || d.error || 'HTTP ' + r.status);
-    LP.ai = d.report; lpFillAI(pick);
-  } catch (e) {
-    ids.forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = '<span class="lp-note" style="color:#B3261E">Narasi AI belum tersedia (' + spkEsc(e.message) + '). Bagian angka dan grafik tetap valid. Klik "Buat ulang narasi AI" untuk mencoba lagi.</span>'; });
-  }
+  const arts = D.arts, T = lpTally(arts);
+  const mk = (a, i) => ({ n: i + 1, judul: a.title.slice(0, 150), media: a.media, tone: a.tone, kategori: ((TAXO.categories.find(c => c.key === a.cat) || {}).label || ''), lokasi: a.locs.slice(0, 2).join(', '), ringkas: a.resume.slice(0, 130), narasumber: a.inN.concat(a.exN).slice(0, 2).map(p => p.name + (p.title ? ' (' + p.title + ')' : '')).join('; ') });
+  const negAll = arts.filter(a => a.tone === 'negatif');
+  const pickR = negAll.slice(-18).concat(arts.filter(a => a.tone !== 'negatif').slice(-26));
+  const pickE = negAll.slice(-30);
+  const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  ['lpTopik', 'lpSensitif', 'lpTopPos', 'lpTopNeg', 'lpEW'].forEach(id => set(id, '<span class="lp-note">Menyusun narasi AI...</span>'));
+  LP.ai = {};
+  const call = async (bagian, pick) => {
+    let lastErr = '';
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await fetch('/api/brief', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'report', bagian, jenis: D.type, kata_kunci: D.kw, periode: D.from + ' s.d. ' + D.to, total: arts.length, positif: T.p, netral: T.n, negatif: T.g, items: pick.map(mk) }) });
+        const txt = await r.text(); let d = null;
+        try { d = JSON.parse(txt); } catch (e) {}
+        if (!d) throw new Error('server membalas error (HTTP ' + r.status + '), kemungkinan batas waktu terlampaui');
+        if (!r.ok || !d.report) throw new Error(d.detail || d.error || 'HTTP ' + r.status);
+        return d.report;
+      } catch (e) { lastErr = e.message; }
+    }
+    throw new Error(lastErr);
+  };
+  const fail = (ids, msg) => ids.forEach(id => set(id, '<span class="lp-note" style="color:#B3261E">Belum tersedia (' + spkEsc(msg) + '). Angka dan grafik tetap valid. Klik "Buat ulang narasi AI".</span>'));
+  const tasks = [
+    call('ringkas', pickR).then(rep => { Object.assign(LP.ai, rep); lpFillAI(pickR, 'ringkas'); }).catch(e => fail(['lpTopik', 'lpSensitif', 'lpTopPos', 'lpTopNeg'], e.message))
+  ];
+  if (pickE.length) tasks.push(call('ew', pickE).then(rep => { Object.assign(LP.ai, rep); lpFillAI(pickE, 'ew'); }).catch(e => fail(['lpEW'], e.message)));
+  else set('lpEW', '<div class="lp-box">Tidak ada berita negatif pada periode ini, sehingga tidak ada peringatan dini.</div>');
+  await Promise.all(tasks);
 }
 
-function lpFillAI(pick) {
+function lpFillAI(pick, part) {
   const A = LP.ai, byId = n => pick[n - 1];
   const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
-  set('lpTopik', spkEsc(A.topik_utama || '–'));
-  set('lpSensitif', spkEsc(A.isu_sensitif || 'Tidak ada isu sensitif yang menonjol pada periode ini.'));
-  const topics = (list, tone) => {
-    const rows = (Array.isArray(list) ? list : []).map(t => ({ t: String(t.topik || ''), n: [...new Set((t.ids || []).filter(i => byId(i) && byId(i).tone === tone))].length })).filter(x => x.t && x.n).sort((a, b) => b.n - a.n).slice(0, 5);
-    if (!rows.length) return '<span class="lp-note">–</span>';
-    const mx = rows[0].n;
-    return rows.map(x => `<div class="lp-row"><div class="nm" style="flex:0 0 62%">${spkEsc(x.t)}</div><div class="bar"><span style="width:${x.n / mx * 100}%;background:${LP_COL[tone]}"></span></div><div class="v">${x.n}</div></div>`).join('') + (LP.data.arts.length > pick.length ? '<div class="lp-note">Jumlah dihitung dari ' + pick.length + ' berita sampel yang dibaca AI.</div>' : '');
-  };
-  set('lpTopPos', topics(A.topik_positif, 'positif'));
-  set('lpTopNeg', topics(A.topik_negatif, 'negatif'));
-  const ew = (Array.isArray(A.early_warning) ? A.early_warning : []).slice(0, 6);
-  set('lpEW', ew.length ? ew.map((e, i) => {
-    const links = [...new Set((e.ids || []).filter(n => byId(n)))].slice(0, 12).map(n => byId(n));
-    return `<div class="lp-ew"><button class="lp-x no-print" onclick="this.parentNode.remove()" title="Hapus butir ini">✕</button><div class="tt">${i + 1}. ${spkEsc(e.judul || '')}</div><div contenteditable="true">${spkEsc(e.uraian || '')}</div><div class="lp-rec"><b>REKOMENDASI TINDAKAN</b><div contenteditable="true">${spkEsc(e.rekomendasi || '')}</div></div>${links.length ? '<div class="lp-links">' + links.map(a => `<a href="${spkEsc(a.url)}">${spkEsc(a.media)}: ${spkEsc(a.title)}</a>`).join('') + '</div>' : ''}</div>`;
-  }).join('') : '<div class="lp-box">Tidak ada peringatan dini pada periode ini.</div>');
+  if (part === 'ringkas') {
+    set('lpTopik', spkEsc(A.topik_utama || '–'));
+    set('lpSensitif', spkEsc(A.isu_sensitif || 'Tidak ada isu sensitif yang menonjol pada periode ini.'));
+    const topics = (list, tone) => {
+      const rows = (Array.isArray(list) ? list : []).map(t => ({ t: String(t.topik || ''), n: [...new Set((t.ids || []).filter(i => byId(i) && byId(i).tone === tone))].length })).filter(x => x.t && x.n).sort((a, b) => b.n - a.n).slice(0, 5);
+      if (!rows.length) return '<span class="lp-note">–</span>';
+      const mx = rows[0].n;
+      return rows.map(x => `<div class="lp-row"><div class="nm" style="flex:0 0 62%">${spkEsc(x.t)}</div><div class="bar"><span style="width:${x.n / mx * 100}%;background:${LP_COL[tone]}"></span></div><div class="v">${x.n}</div></div>`).join('') + '<div class="lp-note">Jumlah dihitung dari ' + pick.length + ' berita sampel yang dibaca AI.</div>';
+    };
+    set('lpTopPos', topics(A.topik_positif, 'positif'));
+    set('lpTopNeg', topics(A.topik_negatif, 'negatif'));
+  } else {
+    const ew = (Array.isArray(A.early_warning) ? A.early_warning : []).slice(0, 6);
+    set('lpEW', ew.length ? ew.map((e, i) => {
+      const links = [...new Set((e.ids || []).filter(n => byId(n)))].slice(0, 12).map(n => byId(n));
+      return `<div class="lp-ew"><button class="lp-x no-print" onclick="this.parentNode.remove()" title="Hapus butir ini">✕</button><div class="tt">${i + 1}. ${spkEsc(e.judul || '')}</div><div contenteditable="true">${spkEsc(e.uraian || '')}</div><div class="lp-rec"><b>REKOMENDASI TINDAKAN</b><div contenteditable="true">${spkEsc(e.rekomendasi || '')}</div></div>${links.length ? '<div class="lp-links">' + links.map(a => `<a href="${spkEsc(a.url)}">${spkEsc(a.media)}: ${spkEsc(a.title)}</a>`).join('') + '</div>' : ''}</div>`;
+    }).join('') : '<div class="lp-box">Tidak ada peringatan dini pada periode ini.</div>');
+  }
 }
 
 function lpPrint() {
@@ -5152,6 +5189,128 @@ function lpPrint() {
   w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Laporan Pantauan Media PLN UIW PPB</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"><style>@page{size:A4;margin:14mm}body{margin:0;background:#fff}' + LP_CSS + '</style></head><body>' + clone.outerHTML + '</body></html>');
   w.document.close();
   setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 700);
+}
+
+
+// ==================== SARAN GABUNG NAMA (perlu konfirmasi admin) ====================
+// Mendeteksi nama yang mungkin orang yang sama: "Roberth Rumsaur" vs "Robert Rumsaur" (ejaan mirip),
+// "Bashori Alwi" vs "Ahmad Bashori Alwi" (satu nama lebih lengkap). Tidak digabung otomatis:
+// admin memilih. "Gabung" memakai fitur alias yang sudah ada; "Beda orang" disimpan agar tidak ditanya lagi.
+function spkNameTokens(n) {
+  return normalizeNameKey(n || '').replace(/[.,]/g, ' ').replace(/\b(dr|ir|drs|dra|h|hj|prof|se|mm|msi|mt|st)\b/g, ' ').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+}
+function spkLev(a, b) {
+  const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+function spkSimilarReason(a, b) {
+  const ta = spkNameTokens(a), tb = spkNameTokens(b);
+  if (ta.length < 2 && tb.length < 2) return '';
+  const [sh, lo] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  if (sh.length >= 2 && sh.length < lo.length && sh.every(t => lo.indexOf(t) >= 0)) return 'Salah satu nama lebih lengkap';
+  const sa = ta.join(' '), sb = tb.join(' ');
+  if (ta.length >= 2 && tb.length >= 2 && Math.abs(sa.length - sb.length) <= 3) {
+    const lim = Math.max(1, Math.floor(Math.min(sa.length, sb.length) * 0.1));
+    if (spkLev(sa, sb) <= lim) return 'Ejaan mirip';
+  }
+  return '';
+}
+function spkRejectKey(a, b) { return '__beda__|' + [normalizeNameKey(a), normalizeNameKey(b)].sort().join('|'); }
+
+function spkSuggestions() {
+  const arts = window._spkAllArts || [], people = new Map();
+  arts.forEach(a => {
+    ['spokesperson_internal', 'spokesperson_eksternal'].forEach(f => {
+      const seen = new Set();
+      parseSpokespersonField(a[f]).forEach(e => {
+        const nm = spkResolve(e.name || e.nama || ''); if (!nm) return;
+        const k = normalizeNameKey(nm); if (seen.has(k)) return; seen.add(k);
+        const o = people.get(k) || { name: nm, n: 0, titles: {} };
+        o.n++; const t = e.title || e.jabatan || ''; if (t) o.titles[t] = (o.titles[t] || 0) + 1; people.set(k, o);
+      });
+    });
+  });
+  const list = [...people.values()].filter(p => spkNameTokens(p.name).length >= 2);
+  const rej = window._spkRejected || new Set(), out = [];
+  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+    const A = list[i], B = list[j];
+    if (rej.has(spkRejectKey(A.name, B.name))) continue;
+    const why = spkSimilarReason(A.name, B.name); if (!why) continue;
+    const top = p => (Object.entries(p.titles).sort((x, y) => y[1] - x[1])[0] || ['', 0])[0];
+    const pair = A.n >= B.n ? [A, B] : [B, A];
+    out.push({ a: pair[0], b: pair[1], ta: top(pair[0]), tb: top(pair[1]), why });
+  }
+  return out.sort((x, y) => (y.a.n + y.b.n) - (x.a.n + x.b.n));
+}
+
+function renderSpkSuggest() {
+  const host = document.getElementById('spkSuggest'); if (!host) return;
+  const sug = window._spkSug = spkSuggestions();
+  const btn = document.getElementById('tab-spokesperson');
+  if (btn) { if (!btn.dataset.lbl) btn.dataset.lbl = btn.innerHTML; btn.innerHTML = btn.dataset.lbl + (sug.length ? ' <span style="background:#d97706;color:#fff;border-radius:9px;padding:0 7px;font-size:11px;margin-left:4px">' + sug.length + '</span>' : ''); }
+  if (!sug.length) { host.innerHTML = ''; return; }
+  const card = (s, i) => `<div style="border:1px solid #fcd34d;background:#fffbeb;border-radius:8px;padding:10px 12px;margin:8px 0;">
+    <div style="font-size:12px;color:#92400e;margin-bottom:6px;">${spkEsc(s.why)}. Apakah ini orang yang sama?</div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;">
+      <div><b>${spkEsc(s.a.name)}</b> <span style="color:var(--muted)">· ${s.a.n} berita${s.ta ? ' · ' + spkEsc(s.ta) : ''}</span></div>
+      <div><b>${spkEsc(s.b.name)}</b> <span style="color:var(--muted)">· ${s.b.n} berita${s.tb ? ' · ' + spkEsc(s.tb) : ''}</span></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+      <button onclick="spkSugAct(${i},'a')" style="padding:5px 10px;border:0;border-radius:6px;background:#1e8449;color:#fff;font-size:12px;cursor:pointer;">Sama, pakai "${spkEsc(s.a.name)}"</button>
+      <button onclick="spkSugAct(${i},'b')" style="padding:5px 10px;border:0;border-radius:6px;background:#1e8449;color:#fff;font-size:12px;cursor:pointer;">Sama, pakai "${spkEsc(s.b.name)}"</button>
+      <button onclick="spkSugAct(${i},'no')" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:12px;cursor:pointer;">Beda orang</button></div></div>`;
+  host.innerHTML = `<div style="border:1px solid #f59e0b;border-radius:10px;padding:12px 14px;background:#fff;"><div style="font-weight:700;font-size:14px;">⚠ ${sug.length} nama perlu konfirmasi</div><div style="font-size:12px;color:var(--muted);margin:2px 0 6px;">Nama yang mirip ditemukan. Tidak digabung otomatis sebelum Anda memutuskan.</div>${sug.slice(0, 8).map(card).join('')}${sug.length > 8 ? '<div style="font-size:12px;color:var(--muted)">...dan ' + (sug.length - 8) + ' lainnya, tampil setelah yang di atas diselesaikan.</div>' : ''}</div>`;
+}
+
+async function spkSugAct(i, choice) {
+  const s = (window._spkSug || [])[i]; if (!s) return;
+  const post = body => fetch('/api/feeds?resource=spokesperson-aliases', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    let r;
+    if (choice === 'no') r = await post({ alias_name: spkRejectKey(s.a.name, s.b.name), canonical_name: 'beda' });
+    else { const keep = choice === 'a' ? s.a : s.b, other = choice === 'a' ? s.b : s.a; r = await post({ alias_name: other.name, canonical_name: keep.name }); }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (choice === 'no') { (window._spkRejected = window._spkRejected || new Set()).add(spkRejectKey(s.a.name, s.b.name)); window._spkSug.splice(i, 1); renderSpkSuggest(); }
+    else loadSpokespersonRecap(); // muat ulang supaya tabel memakai nama gabungan
+  } catch (e) { alert('Gagal menyimpan: ' + e.message); }
+}
+
+// ==================== CARI ULANG NARASUMBER (massal, dari isi berita) ====================
+window._spkRun = { running: false, cancel: false };
+function openSpkRerun() { document.getElementById('spkRerunOverlay').style.display = 'flex'; }
+function closeSpkRerun() { if (window._spkRun.running && !confirm('Proses masih berjalan. Berhenti dan tutup?')) return; window._spkRun.cancel = true; document.getElementById('spkRerunOverlay').style.display = 'none'; }
+async function runSpkRerun() {
+  const R = window._spkRun; if (R.running) return;
+  const days = parseInt(document.getElementById('spkRerunDays').value, 10) || 7;
+  const msg = document.getElementById('spkRerunMsg'), go = document.getElementById('spkRerunBtn'), stop = document.getElementById('spkRerunStop');
+  R.running = true; R.cancel = false; go.disabled = true; stop.style.display = '';
+  let offset = 0, n = 0, filled = 0, nothing = 0, skipped = 0, failed = 0, last = '', done = false;
+  const show = (extra) => { msg.innerHTML = `Diperiksa: <b>${n}</b> · terisi: <b style="color:#1e8449">${filled}</b> · tidak ada narasumber di teks: ${nothing} · dilewati (Google News/situs memblokir): ${skipped} · gagal: ${failed}` + (extra ? '<br>' + extra : ''); };
+  show('Memulai...');
+  try {
+    while (!R.cancel && n < 1500) {
+      let r;
+      try { r = await (await fetch('/api/analyze-batch?secret=' + encodeURIComponent(CRON_SECRET) + '&mode=spk&batch=1&offset=' + offset + '&days=' + days)).json(); }
+      catch (e) { failed++; show('⚠ Koneksi bermasalah, mencoba lagi...'); await new Promise(x => setTimeout(x, 8000)); if (failed > 8) break; continue; }
+      if (r.error) { show('<span style="color:#B3261E">⚠ ' + spkEsc(String(r.error)) + '</span>'); break; }
+      if (r.message) { done = true; break; }
+      if (r.filterDays !== days) { show('<span style="color:#B3261E">⚠ Server belum diperbarui. Upload api/analyze-batch.js dan lib/feedfind.js terbaru dulu.</span>'); break; }
+      n++; filled += r.filled || 0; nothing += r.nothing || 0; skipped += r.skipped || 0; failed += r.failed || 0;
+      offset = r.nextOffset;
+      const err = r.notes && r.notes[0] && r.notes[0].error;
+      show(err ? '<span style="color:#b45309">Catatan: ' + spkEsc(String(err)) + '</span>' : '');
+      if (r.note === 'Selesai') { done = true; break; }
+      await new Promise(x => setTimeout(x, (r.failed && !r.filled) ? 15000 : 3500));
+    }
+  } finally {
+    R.running = false; go.disabled = false; stop.style.display = 'none';
+    show((done ? '✅ Selesai. ' : R.cancel ? 'Dihentikan. ' : '') + (filled ? '<button onclick="location.reload()" style="margin-left:6px;padding:3px 10px;border:1px solid var(--border);border-radius:5px;background:#fff;cursor:pointer">Muat ulang halaman untuk melihat hasil</button>' : ''));
+  }
 }
 
 function switchTab(tab) {
