@@ -574,6 +574,7 @@
       <button id="tab-monitor" onclick="switchTab('monitor')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📡 Monitor</button>
       <button id="tab-dashboard" onclick="switchTab('dashboard')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📊 Dashboard</button>
       <button id="tab-reputasi" onclick="switchTab('reputasi')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🛡 Reputasi</button>
+      <button id="tab-laporan" onclick="switchTab('laporan')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📄 Laporan</button>
       <button id="tab-radar" onclick="switchTab('radar')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📡 Radar Papua</button>
       <button id="tab-followups" onclick="switchTab('followups')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🗂 Tindak Lanjut</button>
       <button id="tab-spokesperson" onclick="switchTab('spokesperson')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🎙 Spokesperson</button>
@@ -753,6 +754,25 @@
   <!-- TAB: REPUTASI -->
   <div id="panel-reputasi-wrap" style="display:none;">
     <div id="rpRoot"></div>
+  </div>
+
+  <!-- TAB: LAPORAN -->
+  <div id="panel-laporan-wrap" style="display:none;padding:4px 2px 40px;">
+    <div class="no-print" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:6px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <button id="lpType-harian" onclick="lpSetType('harian')" style="padding:7px 16px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-weight:600;font-size:12.5px;">Harian</button>
+        <button id="lpType-mingguan" onclick="lpSetType('mingguan')" style="padding:7px 16px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-weight:600;font-size:12.5px;">Mingguan</button>
+        <button id="lpType-tematik" onclick="lpSetType('tematik')" style="padding:7px 16px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-weight:600;font-size:12.5px;">Tematik (per isu)</button>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+        <label style="font-size:12px;color:var(--muted)">Dari<br><input type="date" id="lpFrom" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;"></label>
+        <label style="font-size:12px;color:var(--muted)">Sampai<br><input type="date" id="lpTo" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;"></label>
+        <div id="lpKwRow" style="display:none;"><label style="font-size:12px;color:var(--muted)">Kata kunci isu<br><input id="lpKw" placeholder="mis. papua spark" onkeydown="if(event.key==='Enter')lpGenerate()" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:220px;"></label></div>
+        <button id="lpBtn" onclick="lpGenerate()" style="padding:8px 18px;border:0;border-radius:6px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">📄 Susun Laporan</button>
+      </div>
+      <div id="lpHint" style="font-size:11.5px;color:var(--muted);margin-top:8px;"></div>
+    </div>
+    <div id="lpOut"></div>
   </div>
 
   <div id="panel-radar-wrap" style="display:none;">
@@ -2255,11 +2275,20 @@ function renderReputasi() {
     return { name: l.name, prov: l.province, list, t: repTally(list) };
   });
   const top10 = locAgg.filter(x => x.t.all > 0).sort((a, b) => b.t.all - a.t.all).slice(0, 10);
+  // Baris tambahan: berita tingkat provinsi & Papua umum (tidak menyebut kab/kota)
+  const hmExtra = [];
+  TAXO.locations.filter(l => l.level === 'provinsi').forEach(l => {
+    const list = cur.filter(a => a.kab.length === 0 && a.locs.indexOf(l.name) >= 0);
+    if (list.length) hmExtra.push({ name: l.name, prov: 'Tingkat provinsi, tanpa kab/kota', list, t: repTally(list) });
+  });
+  const umumList = cur.filter(a => a.kab.length === 0 && a.locs.length === 0 && a.scope === 'papua_umum');
+  if (umumList.length) hmExtra.push({ name: 'Papua umum / regional', prov: 'Tidak menyebut lokasi spesifik', list: umumList, t: repTally(umumList) });
+  hmExtra.sort((x, y) => y.t.all - x.t.all);
   const hmCats = TAXO.categories.filter(c => c.key !== 'lainnya');
   const lerp = (a, b, t) => Math.round(a + (b - a) * t);
-  const hmMax = Math.max(4, ...top10.map(r => Math.max(...hmCats.map(c => r.list.filter(a => a.cat === c.key).length))));
+  const hmMax = Math.max(4, ...top10.concat(hmExtra).map(r => Math.max(...hmCats.map(c => r.list.filter(a => a.cat === c.key).length))));
   let hm = `<div></div>` + hmCats.map(c => `<div style="font-size:12px;font-weight:600;text-align:center;padding:4px 2px;line-height:1.25">${spkEsc(c.label.replace(' & ', ' & ').replace('Kelistrikan Desa & Akses', 'Listrik desa').replace('Tarif, Tagihan & Subsidi', 'Tarif').replace('EBT & Transisi Energi', 'EBT').replace('Proyek & Investasi', 'Proyek').replace('Gangguan & Pemadaman', 'Gangguan').replace('Layanan Pelanggan', 'Layanan').replace('Keselamatan & Insiden', 'Keselamatan').replace('CSR, TJSL & Kemitraan', 'CSR').replace('Korporasi & SDM', 'Korporasi'))}</div>`).join('');
-  top10.forEach(row => {
+  top10.concat(hmExtra).forEach(row => {
     hm += `<div style="display:flex;flex-direction:column;justify-content:center;padding:6px 8px;font-size:13px;font-weight:500">${spkEsc(row.name)}<span style="font-size:11.5px;font-weight:400;color:#4A5B72">${spkEsc(row.prov)}</span></div>`;
     hmCats.forEach(c => {
       const list = row.list.filter(a => a.cat === c.key);
@@ -2277,7 +2306,7 @@ function renderReputasi() {
   const provOnly = noLoc.filter(a => a.locs.length > 0).length;
   const nl = k => noLoc.filter(a => a.locs.length === 0 && a.scope === k).length;
   const noScope = noLoc.filter(a => a.locs.length === 0 && !a.scope).length;
-  const hmNote = `Berita tanpa kabupaten/kota spesifik: ${noLoc.length} (hanya menyebut provinsi ${provOnly}, Papua umum ${nl('papua_umum')}, nasional ${nl('nasional')}, luar wilayah ${nl('luar_wilayah')}, belum jelas atau belum diklasifikasi ${noScope}). Berita yang menyebut lebih dari satu kabupaten/kota dihitung di tiap lokasi. Kategori "Lainnya" tidak ditampilkan di matriks ini.`;
+  const hmNote = `Berita tanpa kabupaten/kota spesifik: ${noLoc.length} (hanya menyebut provinsi ${provOnly}, Papua umum ${nl('papua_umum')}, nasional ${nl('nasional')}, luar wilayah ${nl('luar_wilayah')}, belum jelas atau belum diklasifikasi ${noScope}). Berita tingkat provinsi dan Papua umum ditampilkan di baris bawah matriks; nasional dan luar wilayah tidak. Berita yang menyebut lebih dari satu kabupaten/kota dihitung di tiap lokasi. Kategori "Lainnya" tidak ditampilkan di matriks ini.`;
 
   // ----- Provinsi -----
   const stCol = { Kritis: ['#FBE4E4', '#8F1A1A', '#9F1D1D'], Tinggi: ['#FDE8D7', '#9A3412', '#C2410C'], Sedang: ['#FBF0CC', '#7A5300', '#B7791F'], Rendah: ['#E3EEE8', '#2F5D46', '#4D8B6B'] };
@@ -2454,7 +2483,7 @@ function renderReputasi() {
 
     <div style="${card}">
       <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end">
-        <div><div style="${h2}">Matriks kategori isu × kabupaten/kota</div><div style="${sub}">Sampai 10 kabupaten/kota dengan berita terbanyak. Klik sel untuk daftar beritanya. Angka merah kecil = berita negatif (tampil bila 2 atau lebih; di daftar tetap terlihat semua).</div></div>
+        <div><div style="${h2}">Matriks kategori isu × lokasi</div><div style="${sub}">Sampai 10 kabupaten/kota dengan berita terbanyak, ditambah baris tingkat provinsi dan Papua umum. Klik sel untuk daftar beritanya. Angka merah kecil = berita negatif (tampil bila 2 atau lebih; di daftar tetap terlihat semua).</div></div>
         <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#4A5B72"><span>sedikit</span><div style="width:140px;height:10px;border-radius:5px;background:linear-gradient(90deg,#EAF1FB,#1F5FBF)"></div><span>banyak</span></div>
       </div>
       ${top10.length ? `<div style="overflow-x:auto"><div style="min-width:820px;display:grid;grid-template-columns:190px repeat(${hmCats.length},minmax(0,1fr));gap:4px;align-items:stretch">${hm}</div></div>` : '<div style="font-size:13px;color:#4A5B72">Belum ada berita yang punya lokasi kabupaten/kota. Jalankan classifyAll terlebih dulu.</div>'}
@@ -2934,6 +2963,10 @@ function ffRenderResults() {
     if (r.state === 'wait') status = '<span style="color:var(--muted)">menunggu...</span>';
     else if (r.state === 'run') status = '<span style="color:var(--muted)">⏳ memeriksa...</span>';
     else if (r.state === 'err') status = '<span style="color:#b91c1c">⚠ ' + spkEsc(r.error) + '</span>';
+    else if (!r.res.best && r.res.notes.some(n => n.indexOf('Beranda tidak bisa dibuka') >= 0)) {
+      const dns = r.res.notes.join(' ').indexOf('ENOTFOUND') >= 0;
+      status = '<span style="color:#b91c1c">✗ Situs tidak bisa dibuka dari server, jadi RSS-nya belum bisa dicek.</span><div style="color:var(--muted)">' + (dns ? 'Alamat tidak ditemukan. Periksa penulisan domain (salah ketik?).' : 'Kemungkinan situs memblokir akses server (' + spkEsc(r.res.notes.join(' ').replace(/^.*\((.*?)\).*$/, '$1')) + '). Ini bukan berarti situs tidak punya RSS.') + '</div><div style="color:var(--muted)">Berita dari media ini tetap bisa dimasukkan lewat "Tambah Link Berita": isi judul dan tempel isi beritanya manual.</div>';
+    }
     else if (!r.res.best) status = '<span style="color:#b91c1c">✗ Tidak ditemukan RSS atau sitemap berita.</span>' + (r.res.notes.length ? '<div style="color:var(--muted)">' + spkEsc(r.res.notes.join(' ')) + '</div>' : '') + '<div style="color:var(--muted)">Untuk media ini pakai tombol "Tambah Link Berita".</div>';
     else {
       const b = r.res.best;
@@ -4882,8 +4915,245 @@ function renderPagination() {
 }
 
 // ==================== TAB SYSTEM ====================
+// ==================== LAPORAN (harian / mingguan / tematik) ====================
+const LP = { type: 'mingguan', data: null, ai: null, busy: false, inited: false };
+const LP_COL = { positif: '#1E8449', netral: '#8A97A8', negatif: '#B3261E' };
+const LP_CSS = `
+.lp-rep{font-family:'Inter',Arial,sans-serif;color:#14243B;max-width:980px;margin:0 auto;font-size:13px;line-height:1.55}
+.lp-rep h1{font-size:21px;margin:0 0 4px}.lp-rep h2{font-size:15px;margin:26px 0 10px;padding-bottom:6px;border-bottom:2px solid #004A97;color:#004A97}
+.lp-rep h3{font-size:13px;margin:14px 0 4px}
+.lp-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:3px solid #004A97;padding-bottom:10px;margin-bottom:6px}
+.lp-meta{font-size:12px;color:#4A5B72}
+.lp-box{border:1px solid #D7DFEA;border-radius:8px;padding:12px 14px;margin:8px 0;background:#fff;break-inside:avoid}
+.lp-sub{font-size:11px;font-weight:700;letter-spacing:.04em;color:#4A5B72;text-transform:uppercase;margin-bottom:4px}
+.lp-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.lp-row{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:12px}
+.lp-row .nm{flex:0 0 38%;min-width:0}.lp-row .bar{flex:1;display:flex;height:12px;background:#EEF2F7;border-radius:3px;overflow:hidden}
+.lp-row .v{flex:0 0 34px;text-align:right;font-weight:700}
+.lp-ew{border:1px solid #E6C1BE;border-left:4px solid #B3261E;border-radius:8px;padding:12px 14px;margin:10px 0;background:#FFF9F8;break-inside:avoid}
+.lp-ew .tt{font-weight:700;font-size:14px;margin-bottom:4px}
+.lp-rec{margin-top:8px;padding:8px 10px;background:#F2F6FB;border-radius:6px;font-size:12.5px}
+.lp-rec b{font-size:11px;letter-spacing:.04em;color:#004A97}
+.lp-links{margin-top:8px;font-size:11px;color:#4A5B72}.lp-links a{color:#004A97;text-decoration:none;display:block;margin:2px 0}
+.lp-tbl{width:100%;border-collapse:collapse;font-size:11.5px}.lp-tbl th,.lp-tbl td{border-bottom:1px solid #E3E9F1;padding:5px 6px;text-align:left;vertical-align:top}
+.lp-tbl th{background:#F2F6FB;font-size:11px}.lp-pill{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10.5px;font-weight:700;color:#fff}
+.lp-note{font-size:11px;color:#6B7A90;margin-top:8px}.lp-x{float:right;border:0;background:none;color:#9AA7B8;cursor:pointer;font-size:14px}
+[contenteditable]:focus{outline:2px dashed #7FA6D8;outline-offset:2px}
+@media print{.no-print{display:none!important}}
+`;
+
+function lpWitDate(d) { return new Date(d.getTime() + 9 * 3600000).toISOString().slice(0, 10); }
+function lpAddDays(iso, n) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function lpFmt(iso) { const d = new Date(iso + 'T00:00:00Z'); return d.getUTCDate() + ' ' + REP_MON[d.getUTCMonth()] + ' ' + d.getUTCFullYear(); }
+
+function lpInit() {
+  if (!LP.inited) {
+    LP.inited = true;
+    const st = document.createElement('style'); st.id = 'lpStyle'; st.textContent = LP_CSS; document.head.appendChild(st);
+    lpSetType('mingguan');
+  }
+}
+
+function lpSetType(t) {
+  LP.type = t;
+  ['harian', 'mingguan', 'tematik'].forEach(k => {
+    const b = document.getElementById('lpType-' + k);
+    if (b) { b.style.background = k === t ? 'var(--accent)' : '#fff'; b.style.color = k === t ? '#fff' : 'var(--text)'; }
+  });
+  const today = lpWitDate(new Date());
+  let from = today, to = today;
+  if (t === 'harian') { from = to = lpAddDays(today, -1); }
+  else if (t === 'mingguan') {
+    const dow = new Date(today + 'T00:00:00Z').getUTCDay();
+    const mon = lpAddDays(today, -((dow + 6) % 7));
+    from = lpAddDays(mon, -7); to = lpAddDays(mon, -1);
+  } else { to = today; from = lpAddDays(today, -29); }
+  document.getElementById('lpFrom').value = from;
+  document.getElementById('lpTo').value = to;
+  document.getElementById('lpKwRow').style.display = t === 'tematik' ? 'block' : 'none';
+  const hint = { harian: 'Kemarin (00.00–23.59 WIT).', mingguan: 'Senin sampai Minggu pekan lalu. Tanggal bisa diubah.', tematik: 'Isi kata kunci isu/acara, lalu atur periode awal sampai akhir.' };
+  document.getElementById('lpHint').textContent = hint[t];
+}
+
+function lpPrep(rows) {
+  const split = (f) => (f || '').split(';').map(x => x.trim()).filter(Boolean).map(e => { const p = e.split('|'); return { name: (p[0] || '').trim(), title: (p[1] || '').trim() }; }).filter(p => p.name);
+  return rows.map(r => {
+    const locs = (r.locations || '').split(';').map(x => x.trim()).filter(Boolean);
+    const provs = [];
+    locs.forEach(l => { const p = TAXO_LOC[l] && TAXO_LOC[l].province; if (p && provs.indexOf(p) < 0) provs.push(p); });
+    const pub = new Date(r.published_at);
+    return {
+      title: r.title || '', url: r.url || '', media: r.source || '', pub, day: lpWitDate(pub),
+      tone: r.tone === 'negatif' ? 'negatif' : r.tone === 'positif' ? 'positif' : 'netral', hasTone: !!r.tone,
+      cat: r.category || '', locs, provs, resume: r.resume || '',
+      inN: split(r.spokesperson_internal), exN: split(r.spokesperson_eksternal)
+    };
+  }).filter(a => !isNaN(a.pub));
+}
+
+async function lpGenerate() {
+  if (LP.busy) return;
+  const from = document.getElementById('lpFrom').value, to = document.getElementById('lpTo').value;
+  const kw = LP.type === 'tematik' ? document.getElementById('lpKw').value.trim() : '';
+  const out = document.getElementById('lpOut');
+  if (!from || !to || from > to) { out.innerHTML = '<div class="lp-note" style="color:#B3261E">Periode tidak valid: tanggal awal harus sebelum atau sama dengan tanggal akhir.</div>'; return; }
+  if (LP.type === 'tematik' && !kw) { out.innerHTML = '<div class="lp-note" style="color:#B3261E">Isi kata kunci isu dulu, misalnya: papua spark</div>'; return; }
+  LP.busy = true;
+  const btn = document.getElementById('lpBtn'); btn.disabled = true; btn.textContent = '⏳ Menyusun...';
+  try {
+    const fq = encodeURIComponent(from + 'T00:00:00+09:00'), tq = encodeURIComponent(to + 'T23:59:59+09:00');
+    let rows = [], off = 0;
+    while (off < 5000) {
+      out.innerHTML = '<div class="lp-note" style="padding:30px;text-align:center">Memuat berita... ' + rows.length + '</div>';
+      const r = await fetch('/api/articles?limit=500&offset=' + off + '&from=' + fq + '&to=' + tq + (kw ? '&q=' + encodeURIComponent(kw) : ''));
+      if (!r.ok) throw new Error('Gagal memuat berita (HTTP ' + r.status + ')');
+      const d = await r.json();
+      if (!d.articles || !d.articles.length) break;
+      rows = rows.concat(d.articles);
+      if (d.articles.length < 500) break;
+      off += 500;
+    }
+    const arts = lpPrep(rows).sort((a, b) => a.pub - b.pub);
+    LP.data = { type: LP.type, from, to, kw, arts };
+    LP.ai = null;
+    lpRender();
+    if (arts.length) lpNarrative();
+  } catch (e) {
+    out.innerHTML = '<div class="lp-note" style="color:#B3261E;padding:20px">⚠ ' + spkEsc(e.message) + '</div>';
+  } finally { LP.busy = false; btn.disabled = false; btn.textContent = '📄 Susun Laporan'; }
+}
+
+function lpPct(n, t) { return t ? Math.round(n / t * 100) : 0; }
+function lpCount(list, keyFn) {
+  const m = new Map();
+  list.forEach(a => { const ks = keyFn(a); (Array.isArray(ks) ? ks : [ks]).forEach(k => { if (k) m.set(k, (m.get(k) || 0) + 1); }); });
+  return [...m.entries()].sort((x, y) => y[1] - x[1]);
+}
+function lpSpeakers(arts, field) {
+  const m = new Map();
+  arts.forEach(a => { const seen = new Set(); a[field].forEach(p => {
+    if (seen.has(p.name)) return; seen.add(p.name);
+    const o = m.get(p.name) || { n: 0, t: {} }; o.n++; if (p.title) o.t[p.title] = (o.t[p.title] || 0) + 1; m.set(p.name, o);
+  }); });
+  return [...m.entries()].map(([name, o]) => ({ name, n: o.n, title: (Object.entries(o.t).sort((a, b) => b[1] - a[1])[0] || ['', 0])[0] })).sort((a, b) => b.n - a.n).slice(0, 5);
+}
+
+function lpDonut(p, n, g) {
+  const t = p + n + g || 1, R = 52, C = 2 * Math.PI * R; let off = 0;
+  const seg = (v, col) => { const len = v / t * C; const s = `<circle r="${R}" cx="70" cy="70" fill="none" stroke="${col}" stroke-width="22" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 70 70)"/>`; off += len; return v ? s : ''; };
+  return `<svg width="140" height="140" viewBox="0 0 140 140">${seg(p, LP_COL.positif)}${seg(n, LP_COL.netral)}${seg(g, LP_COL.negatif)}<text x="70" y="66" text-anchor="middle" font-size="22" font-weight="700" fill="#14243B">${p + n + g}</text><text x="70" y="84" text-anchor="middle" font-size="10" fill="#4A5B72">berita</text></svg>`;
+}
+function lpStackRow(name, t) {
+  const tot = t.p + t.n + t.g || 1;
+  return `<div class="lp-row"><div class="nm">${spkEsc(name)}</div><div class="bar"><span style="width:${t.p / tot * 100}%;background:${LP_COL.positif}"></span><span style="width:${t.n / tot * 100}%;background:${LP_COL.netral}"></span><span style="width:${t.g / tot * 100}%;background:${LP_COL.negatif}"></span></div><div class="v">${t.p + t.n + t.g}</div></div>`;
+}
+function lpTally(list) { return { p: list.filter(a => a.tone === 'positif').length, n: list.filter(a => a.tone === 'netral').length, g: list.filter(a => a.tone === 'negatif').length }; }
+
+function lpDaily(arts, from, to) {
+  const days = []; for (let d = from; d <= to && days.length < 93; d = lpAddDays(d, 1)) days.push(d);
+  if (days.length < 2) return '';
+  const by = {}; arts.forEach(a => { (by[a.day] = by[a.day] || []).push(a); });
+  const max = Math.max(1, ...days.map(d => (by[d] || []).length)), H = 110, W = 880, bw = W / days.length;
+  let svg = `<svg viewBox="0 0 ${W} ${H + 26}" width="100%" style="display:block">`;
+  days.forEach((d, i) => {
+    const t = lpTally(by[d] || []); let y = H;
+    [['p', LP_COL.positif], ['n', LP_COL.netral], ['g', LP_COL.negatif]].forEach(([k, c]) => { const h = t[k] / max * (H - 14); y -= h; if (h) svg += `<rect x="${i * bw + 1}" y="${y}" width="${Math.max(1, bw - 2)}" height="${h}" fill="${c}"/>`; });
+    const tot = t.p + t.n + t.g;
+    if (tot && days.length <= 31) svg += `<text x="${i * bw + bw / 2}" y="${y - 3}" text-anchor="middle" font-size="9" fill="#4A5B72">${tot}</text>`;
+    if (days.length <= 15 || i % Math.ceil(days.length / 12) === 0) svg += `<text x="${i * bw + bw / 2}" y="${H + 14}" text-anchor="middle" font-size="9" fill="#4A5B72">${d.slice(8)}/${d.slice(5, 7)}</text>`;
+  });
+  return svg + '</svg>';
+}
+
+function lpRender() {
+  const D = LP.data, arts = D.arts, out = document.getElementById('lpOut');
+  const title = D.type === 'harian' ? 'Laporan Harian Pantauan Media' : D.type === 'mingguan' ? 'Laporan Mingguan Pantauan Media' : 'Laporan Tematik Pantauan Media';
+  const periode = D.from === D.to ? lpFmt(D.from) : lpFmt(D.from) + ' – ' + lpFmt(D.to);
+  const head = `<div class="lp-head"><div><div class="lp-meta">PT PLN (Persero) UIW Papua dan Papua Barat</div><h1>${title}</h1><div class="lp-meta">Periode pantauan: <b>${periode}</b>${D.kw ? ' · Isu: <b>' + spkEsc(D.kw) + '</b>' : ''}</div></div><div class="lp-meta" style="text-align:right">Disusun ${lpFmt(lpWitDate(new Date()))}<br>Total pemberitaan: <b>${arts.length} berita</b></div></div>`;
+  if (!arts.length) { out.innerHTML = `<div class="lp-rep">${head}<div class="lp-box">Tidak ada berita pada periode ini${D.kw ? ' untuk kata kunci tersebut' : ''}.</div></div>`; return; }
+  const T = lpTally(arts), N = arts.length, noTone = arts.filter(a => !a.hasTone).length;
+  const dom = T.p >= T.n && T.p >= T.g ? 'Positif' : T.g > T.n ? 'Negatif' : 'Netral';
+  const cats = lpCount(arts, a => a.cat || 'belum').map(([k, v]) => [k === 'belum' ? 'Belum dikategorikan' : ((TAXO.categories.find(c => c.key === k) || {}).label || k), v, k]);
+  const catTxt = cats.filter(c => c[2] !== 'belum').slice(0, 3).map(c => c[0] + ' (' + c[1] + ')').join(', ');
+  const sentence = `Dari total ${N} berita, terdapat ${T.p} artikel positif (${lpPct(T.p, N)}%), ${T.n} netral (${lpPct(T.n, N)}%), dan ${T.g} negatif (${lpPct(T.g, N)}%).` + (catTxt ? ` Kategori isu terbanyak: ${catTxt}.` : '');
+  let h = `<div class="lp-rep">${head}<h2>Ringkasan Eksekutif</h2>
+    <div class="lp-box"><div class="lp-sub">Dominasi ${dom}</div><div>${spkEsc(sentence)}</div>${noTone ? `<div class="lp-note">${noTone} berita belum dianalisis tone-nya dan dihitung netral.</div>` : ''}</div>
+    <div class="lp-box"><div class="lp-sub">${D.type === 'tematik' ? 'Perkembangan Isu' : 'Topik Utama'}</div><div id="lpTopik" contenteditable="true"><span class="lp-note">Menyusun narasi AI...</span></div></div>
+    <div class="lp-box"><div class="lp-sub">Isu Sensitif</div><div id="lpSensitif" contenteditable="true"><span class="lp-note">Menyusun narasi AI...</span></div></div>
+    <h2>Distribusi &amp; Sentimen</h2><div class="lp-grid">
+    <div class="lp-box"><div class="lp-sub">Komposisi Sentimen</div><div style="display:flex;align-items:center;gap:16px">${lpDonut(T.p, T.n, T.g)}<div style="font-size:12px">${[['positif', 'Positif', T.p], ['netral', 'Netral', T.n], ['negatif', 'Negatif', T.g]].map(x => `<div><span style="display:inline-block;width:10px;height:10px;background:${LP_COL[x[0]]};border-radius:2px;margin-right:6px"></span>${x[1]}: <b>${x[2]}</b> (${lpPct(x[2], N)}%)</div>`).join('')}</div></div></div>
+    <div class="lp-box"><div class="lp-sub">Wilayah</div>${[...TAXO.provinces.map(p => [p, arts.filter(a => a.provs.indexOf(p) >= 0)]), ['Papua umum / tanpa lokasi spesifik', arts.filter(a => !a.provs.length)]].filter(x => x[1].length).map(x => lpStackRow(x[0], lpTally(x[1]))).join('')}</div></div>
+    <div class="lp-box"><div class="lp-sub">Kategori Isu (hijau positif · abu netral · merah negatif)</div>${cats.map(c => lpStackRow(c[0], lpTally(arts.filter(a => (a.cat || 'belum') === c[2])))).join('')}</div>`;
+  const daily = lpDaily(arts, D.from, D.to);
+  if (daily) h += `<div class="lp-box"><div class="lp-sub">Jumlah Berita per Hari</div>${daily}</div>`;
+  h += `<div class="lp-grid"><div class="lp-box"><div class="lp-sub">Topik Positif Teratas</div><div id="lpTopPos"><span class="lp-note">Menyusun...</span></div></div><div class="lp-box"><div class="lp-sub">Topik Negatif Teratas</div><div id="lpTopNeg"><span class="lp-note">Menyusun...</span></div></div></div>`;
+  const sp = (title, f) => { const l = lpSpeakers(arts, f); return `<div class="lp-box"><div class="lp-sub">${title}</div>${l.length ? l.map(p => `<div class="lp-row"><div style="flex:1"><b>${spkEsc(p.name)}</b><br><span style="color:#4A5B72">${spkEsc(p.title)}</span></div><div class="v">${p.n}</div></div>`).join('') : '<span class="lp-note">Tidak ada narasumber tercatat.</span>'}</div>`; };
+  h += `<h2>Narasumber Teratas</h2><div class="lp-grid">${sp('Internal', 'inN')}${sp('Eksternal', 'exN')}</div>`;
+  const mediaAll = lpCount(arts, a => a.media).slice(0, 8), mediaNeg = lpCount(arts.filter(a => a.tone === 'negatif'), a => a.media).slice(0, 5);
+  const mrow = l => l.length ? l.map(m => `<div class="lp-row"><div style="flex:1">${spkEsc(m[0])}</div><div class="v">${m[1]}</div></div>`).join('') : '<span class="lp-note">–</span>';
+  h += `<h2>Media</h2><div class="lp-grid"><div class="lp-box"><div class="lp-sub">Media Terbanyak Memberitakan</div>${mrow(mediaAll)}</div><div class="lp-box"><div class="lp-sub">Media dengan Berita Negatif</div>${mrow(mediaNeg)}</div></div>`;
+  h += `<h2>Early Warning System</h2><div id="lpEW"><span class="lp-note">Menyusun narasi AI...</span></div>`;
+  const list = D.type === 'tematik' ? arts : arts.filter(a => a.tone === 'negatif');
+  h += `<h2>${D.type === 'tematik' ? 'Lampiran: Kronologi Berita (' + list.length + ')' : 'Lampiran: Daftar Berita Negatif (' + list.length + ')'}</h2>` +
+    (list.length ? `<table class="lp-tbl"><tr><th style="width:84px">Tanggal</th><th style="width:22%">Media</th><th>Judul</th><th style="width:62px">Tone</th></tr>${list.slice(0, 400).map(a => `<tr><td>${lpFmt(a.day).replace(/ 20\d\d$/, '')}</td><td>${spkEsc(a.media)}</td><td><a href="${spkEsc(a.url)}" style="color:#004A97;text-decoration:none">${spkEsc(a.title)}</a></td><td><span class="lp-pill" style="background:${LP_COL[a.tone]}">${a.tone}</span></td></tr>`).join('')}</table>${list.length > 400 ? '<div class="lp-note">400 berita pertama ditampilkan.</div>' : ''}` : '<div class="lp-note">Tidak ada berita negatif pada periode ini.</div>');
+  h += `<div class="lp-note" style="margin-top:18px">Sumber: PLN News Monitor. Hanya mencakup berita yang tertangkap sumber RSS/pencarian aplikasi; tone, kategori, lokasi, dan narasumber dianalisis AI dan dapat berbeda dari penilaian manual. Narasi dan rekomendasi bersifat saran dan perlu ditinjau sebelum dipakai.</div></div>`;
+  out.innerHTML = `<div class="no-print" style="display:flex;gap:8px;align-items:center;margin:10px 0 14px"><button onclick="lpPrint()" style="padding:8px 16px;border:0;border-radius:6px;background:var(--accent2,#1E8449);color:#fff;font-weight:600;cursor:pointer">🖨 Cetak / Simpan PDF</button><button id="lpRetry" onclick="lpNarrative()" style="padding:8px 14px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-size:12px">↻ Buat ulang narasi AI</button><span class="lp-note" style="margin:0">Teks narasi bisa diedit langsung di halaman ini sebelum dicetak.</span></div><div id="lpReport">${h}</div>`;
+}
+
+async function lpNarrative() {
+  const D = LP.data; if (!D || !D.arts.length) return;
+  const arts = D.arts;
+  const neg = arts.filter(a => a.tone === 'negatif').slice(-35);
+  const rest = arts.filter(a => a.tone !== 'negatif').slice(-(70 - neg.length));
+  const pick = neg.concat(rest);
+  const items = pick.map((a, i) => ({ n: i + 1, judul: a.title.slice(0, 160), media: a.media, tone: a.tone, kategori: ((TAXO.categories.find(c => c.key === a.cat) || {}).label || ''), lokasi: a.locs.slice(0, 2).join(', '), ringkas: a.resume.slice(0, 160), narasumber: a.inN.concat(a.exN).slice(0, 2).map(p => p.name + (p.title ? ' (' + p.title + ')' : '')).join('; ') }));
+  const T = lpTally(arts);
+  const ids = ['lpTopik', 'lpSensitif', 'lpTopPos', 'lpTopNeg', 'lpEW'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = '<span class="lp-note">Menyusun narasi AI...</span>'; });
+  try {
+    const r = await fetch('/api/brief', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'report', jenis: D.type, kata_kunci: D.kw, periode: D.from + ' s.d. ' + D.to, total: arts.length, positif: T.p, netral: T.n, negatif: T.g, tampil: items.length, items }) });
+    const d = await r.json();
+    if (!r.ok || !d.report) throw new Error(d.detail || d.error || 'HTTP ' + r.status);
+    LP.ai = d.report; lpFillAI(pick);
+  } catch (e) {
+    ids.forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = '<span class="lp-note" style="color:#B3261E">Narasi AI belum tersedia (' + spkEsc(e.message) + '). Bagian angka dan grafik tetap valid. Klik "Buat ulang narasi AI" untuk mencoba lagi.</span>'; });
+  }
+}
+
+function lpFillAI(pick) {
+  const A = LP.ai, byId = n => pick[n - 1];
+  const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  set('lpTopik', spkEsc(A.topik_utama || '–'));
+  set('lpSensitif', spkEsc(A.isu_sensitif || 'Tidak ada isu sensitif yang menonjol pada periode ini.'));
+  const topics = (list, tone) => {
+    const rows = (Array.isArray(list) ? list : []).map(t => ({ t: String(t.topik || ''), n: [...new Set((t.ids || []).filter(i => byId(i) && byId(i).tone === tone))].length })).filter(x => x.t && x.n).sort((a, b) => b.n - a.n).slice(0, 5);
+    if (!rows.length) return '<span class="lp-note">–</span>';
+    const mx = rows[0].n;
+    return rows.map(x => `<div class="lp-row"><div class="nm" style="flex:0 0 62%">${spkEsc(x.t)}</div><div class="bar"><span style="width:${x.n / mx * 100}%;background:${LP_COL[tone]}"></span></div><div class="v">${x.n}</div></div>`).join('') + (LP.data.arts.length > pick.length ? '<div class="lp-note">Jumlah dihitung dari ' + pick.length + ' berita sampel yang dibaca AI.</div>' : '');
+  };
+  set('lpTopPos', topics(A.topik_positif, 'positif'));
+  set('lpTopNeg', topics(A.topik_negatif, 'negatif'));
+  const ew = (Array.isArray(A.early_warning) ? A.early_warning : []).slice(0, 6);
+  set('lpEW', ew.length ? ew.map((e, i) => {
+    const links = [...new Set((e.ids || []).filter(n => byId(n)))].slice(0, 12).map(n => byId(n));
+    return `<div class="lp-ew"><button class="lp-x no-print" onclick="this.parentNode.remove()" title="Hapus butir ini">✕</button><div class="tt">${i + 1}. ${spkEsc(e.judul || '')}</div><div contenteditable="true">${spkEsc(e.uraian || '')}</div><div class="lp-rec"><b>REKOMENDASI TINDAKAN</b><div contenteditable="true">${spkEsc(e.rekomendasi || '')}</div></div>${links.length ? '<div class="lp-links">' + links.map(a => `<a href="${spkEsc(a.url)}">${spkEsc(a.media)}: ${spkEsc(a.title)}</a>`).join('') + '</div>' : ''}</div>`;
+  }).join('') : '<div class="lp-box">Tidak ada peringatan dini pada periode ini.</div>');
+}
+
+function lpPrint() {
+  const rep = document.getElementById('lpReport'); if (!rep) return;
+  const clone = rep.cloneNode(true);
+  clone.querySelectorAll('.no-print').forEach(e => e.remove());
+  clone.querySelectorAll('[contenteditable]').forEach(e => e.removeAttribute('contenteditable'));
+  const w = window.open('', '_blank');
+  if (!w) { alert('Pop-up diblokir browser. Izinkan pop-up untuk situs ini, lalu klik lagi.'); return; }
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Laporan Pantauan Media PLN UIW PPB</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"><style>@page{size:A4;margin:14mm}body{margin:0;background:#fff}' + LP_CSS + '</style></head><body>' + clone.outerHTML + '</body></html>');
+  w.document.close();
+  setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 700);
+}
+
 function switchTab(tab) {
-  const tabs = ['monitor', 'dashboard', 'reputasi', 'radar', 'followups', 'spokesperson', 'youtube'];
+  const tabs = ['monitor', 'dashboard', 'reputasi', 'laporan', 'radar', 'followups', 'spokesperson', 'youtube'];
   tabs.forEach(t => {
     const btn = document.getElementById(`tab-${t}`);
     btn.style.color = tab === t ? 'var(--accent)' : 'var(--muted)';
@@ -4895,6 +5165,7 @@ function switchTab(tab) {
     renderDashboard();
   }
   if (tab === 'reputasi') loadReputasi(true); // selalu ambil data terbaru dari database, jadi hasil edit/hapus langsung terhitung
+  if (tab === 'laporan') lpInit();
   if (tab === 'radar') loadRadarPapua();
   if (tab === 'followups') loadFollowups();
   if (tab === 'spokesperson') loadSpokespersonRecap();
