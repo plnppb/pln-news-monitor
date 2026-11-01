@@ -5,6 +5,7 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 // akun/project berbeda beneran punya kuota terpisah).
 const TAX = require('../lib/taxonomy');
 const FF = require('../lib/feedfind');
+const GN = require('../lib/gnewsdecode');
 const TEXT_LIMIT = 800; // batas teks ke AI (naik dari 400 supaya lokasi di paragraf awal terbaca)
 const GEMINI_KEYS = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '')
   .split(',').map(k => k.trim()).filter(Boolean);
@@ -207,9 +208,14 @@ async function geminiJson(prompt) {
 async function spkFromFullText(article, known) {
   const url = article.url || '';
   if (!/^https?:\/\//i.test(url)) return { skip: 'link tidak valid' };
-  if (/news\.google\.com/i.test(url)) return { skip: 'link Google News (isi tidak bisa dibuka)' };
-  const page = await FF.fetchText(url, { timeout: 4500, maxBytes: 900000 });
-  if (!page.ok) return { skip: 'halaman tidak bisa dibuka (' + (page.error || 'HTTP ' + page.status) + ')' };
+  let target = url;
+  if (/news\.google\.com/i.test(url)) {
+    const d = await GN.decodeGoogleNews(url, { timeout: 3500 });
+    if (!d.url) return { skip: 'link Google News tidak bisa dibongkar (' + (d.error || '?') + ')' };
+    target = d.url;
+  }
+  const page = await FF.fetchText(target, { timeout: 4000, maxBytes: 900000 });
+  if (!page.ok) return { skip: 'halaman ' + (target === url ? '' : '(asli) ') + 'tidak bisa dibuka (' + (page.error || 'HTTP ' + page.status) + ')' };
   const body = FF.extractBodyText(page.body, 7000);
   if (body.length < 300) return { skip: 'isi berita tidak terbaca' };
   const text = (article.title + '\n' + body);
@@ -391,6 +397,18 @@ module.exports = async function handler(req, res) {
     } catch (error) {
       return res.status(500).json({ error: error.message });
     }
+  }
+
+  // MODE UJI (?mode=gdecode&url=LINK_GOOGLE_NEWS): cek apakah link Google News bisa dibongkar dan halaman aslinya terbaca
+  if (req.query.mode === 'gdecode') {
+    const link = String(req.query.url || '');
+    const d = await GN.decodeGoogleNews(link, { timeout: 4500 });
+    const out = { input: link, decode: d };
+    if (d.url && d.stage !== 'bukan-google') {
+      const pg = await FF.fetchText(d.url, { timeout: 4500, maxBytes: 900000 });
+      out.page = { ok: !!pg.ok, status: pg.status || null, error: pg.error || null, textChars: pg.ok ? FF.extractBodyText(pg.body, 7000).length : 0 };
+    }
+    return res.status(200).json(out);
   }
 
   // MODE ISI NARASUMBER dari isi berita lengkap (lihat komentar di atas)

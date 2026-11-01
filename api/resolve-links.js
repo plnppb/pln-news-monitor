@@ -1,5 +1,6 @@
 const https = require('https');
 const http = require('http');
+const GN = require('../lib/gnewsdecode');
 
 // Ikuti HTTP redirect (3xx + header Location) satu langkah.
 // Return null kalau responsnya bukan redirect (nggak bisa diresolve lewat cara ini).
@@ -41,6 +42,7 @@ function followRedirectOnce(urlStr) {
 // JS), kita nyerah dan balikin URL Google-nya apa adanya — lebih baik dari error.
 async function resolveGoogleNewsUrl(urlStr) {
   if (!urlStr || !urlStr.includes('news.google.com')) return urlStr;
+  try { const d = await GN.decodeGoogleNews(urlStr, { timeout: 4000 }); if (d.url) return d.url; } catch (e) {}
   let current = urlStr;
   for (let i = 0; i < 5; i++) {
     const next = await followRedirectOnce(current);

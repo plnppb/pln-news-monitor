@@ -269,6 +269,12 @@ async function handleFetchMeta(req, res) {
   let u;
   try { u = new URL(raw); } catch (e) { return res.status(400).json({ error: 'Format link tidak valid' }); }
   if (!/^https?:$/.test(u.protocol) || isBlockedHost(u.hostname)) return res.status(400).json({ error: 'Link tidak diizinkan' });
+  if (/(^|\.)news\.google\.com$/i.test(u.hostname)) {
+    // Link Google News hanya pengalihan: bongkar dulu supaya yang dibaca dan disimpan adalah alamat berita aslinya
+    const d = await require('../lib/gnewsdecode').decodeGoogleNews(u.toString(), { timeout: 3500 });
+    if (d.url) { try { u = new URL(d.url); } catch (e) {} if (isBlockedHost(u.hostname)) return res.status(400).json({ error: 'Link tidak diizinkan' }); }
+    else return res.status(200).json({ url: u.toString(), fetched: false, source: '', reason: 'Link Google News tidak bisa dibongkar otomatis (' + (d.error || '?') + '). Buka beritanya di browser, tempel alamat aslinya, atau isi judul dan ringkasan manual.' });
+  }
   const finalUrl = u.toString();
 
   try {
