@@ -826,7 +826,7 @@
   <div id="spkRerunOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
     <div style="background:#fff;border-radius:12px;width:min(520px,92vw);padding:20px 22px;box-shadow:0 10px 40px rgba(0,0,0,.25);">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:16px;font-weight:700;">🔄 Cari Ulang Narasumber</div><button onclick="closeSpkRerun()" style="border:0;background:none;font-size:20px;cursor:pointer;color:var(--muted)">✕</button></div>
-      <div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:12px;">Membuka halaman tiap berita yang <b>narasumbernya masih kosong</b>, membaca isinya, lalu mengisi nama dan jabatan. Berita yang sudah punya narasumber atau dikunci (🔒) tidak disentuh. Berita dari link Google News dan situs yang memblokir server dilewati (isi tidak bisa dibaca).</div>
+      <div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:12px;">Membuka halaman tiap berita yang <b>narasumbernya masih kosong</b>, membaca isinya, lalu mengisi nama dan jabatan. Berita yang sudah punya narasumber atau dikunci (🔒) tidak disentuh. Link Google News dibongkar dulu ke alamat situs aslinya. Yang gagal dibongkar, atau situsnya memblokir server, dilewati (isi tidak bisa dibaca).</div>
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
         <label style="font-size:12.5px">Berita tayang dalam&nbsp;<select id="spkRerunDays" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;"><option value="7">7 hari terakhir</option><option value="14">14 hari terakhir</option><option value="30">30 hari terakhir</option></select></label>
         <button id="spkRerunBtn" onclick="runSpkRerun()" style="padding:7px 16px;border:0;border-radius:6px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">Mulai</button>
@@ -5290,7 +5290,7 @@ async function runSpkRerun() {
   const msg = document.getElementById('spkRerunMsg'), go = document.getElementById('spkRerunBtn'), stop = document.getElementById('spkRerunStop');
   R.running = true; R.cancel = false; go.disabled = true; stop.style.display = '';
   let offset = 0, n = 0, filled = 0, nothing = 0, skipped = 0, failed = 0, last = '', done = false;
-  const show = (extra) => { msg.innerHTML = `Diperiksa: <b>${n}</b> · terisi: <b style="color:#1e8449">${filled}</b> · tidak ada narasumber di teks: ${nothing} · dilewati (Google News/situs memblokir): ${skipped} · gagal: ${failed}` + (extra ? '<br>' + extra : ''); };
+  const show = (extra) => { msg.innerHTML = `Diperiksa: <b>${n}</b> · terisi: <b style="color:#1e8449">${filled}</b> · tidak ada narasumber di teks: ${nothing} · dilewati (gagal dibongkar/situs memblokir): ${skipped} · gagal: ${failed}` + (extra ? '<br>' + extra : ''); };
   show('Memulai...');
   try {
     while (!R.cancel && n < 1500) {

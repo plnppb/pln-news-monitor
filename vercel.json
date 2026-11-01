@@ -9,6 +9,12 @@
   "functions": {
     "api/brief.js": {
       "maxDuration": 30
+    },
+    "api/analyze-batch.js": {
+      "maxDuration": 30
+    },
+    "api/articles.js": {
+      "maxDuration": 30
     }
   }
 }
