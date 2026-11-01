@@ -5289,14 +5289,25 @@ async function runSpkRerun() {
   const days = parseInt(document.getElementById('spkRerunDays').value, 10) || 7;
   const msg = document.getElementById('spkRerunMsg'), go = document.getElementById('spkRerunBtn'), stop = document.getElementById('spkRerunStop');
   R.running = true; R.cancel = false; go.disabled = true; stop.style.display = '';
-  let offset = 0, n = 0, filled = 0, nothing = 0, skipped = 0, failed = 0, last = '', done = false;
+  let offset = 0, n = 0, filled = 0, nothing = 0, skipped = 0, failed = 0, stuck = 0, done = false;
   const show = (extra) => { msg.innerHTML = `Diperiksa: <b>${n}</b> · terisi: <b style="color:#1e8449">${filled}</b> · tidak ada narasumber di teks: ${nothing} · dilewati (gagal dibongkar/situs memblokir): ${skipped} · gagal: ${failed}` + (extra ? '<br>' + extra : ''); };
   show('Memulai...');
   try {
     while (!R.cancel && n < 1500) {
-      let r;
-      try { r = await (await fetch('/api/analyze-batch?secret=' + encodeURIComponent(CRON_SECRET) + '&mode=spk&batch=1&offset=' + offset + '&days=' + days)).json(); }
-      catch (e) { failed++; show('⚠ Koneksi bermasalah, mencoba lagi...'); await new Promise(x => setTimeout(x, 8000)); if (failed > 8) break; continue; }
+      let r = null, errMsg = '';
+      try {
+        const resp = await fetch('/api/analyze-batch?secret=' + encodeURIComponent(CRON_SECRET) + '&mode=spk&batch=1&budget=8000&offset=' + offset + '&days=' + days);
+        const txt = await resp.text();
+        try { r = JSON.parse(txt); } catch (e) { errMsg = 'server membalas error (HTTP ' + resp.status + '), kemungkinan batas waktu terlampaui'; }
+      } catch (e) { errMsg = 'tidak ada koneksi ke server'; }
+      if (!r) {
+        failed++; stuck++;
+        if (stuck >= 2) { offset += 1; stuck = 0; skipped++; show('<span style="color:#b45309">Berita ini dilewati (' + errMsg + ').</span>'); }
+        else show('<span style="color:#b45309">⚠ ' + errMsg + '. Mencoba lagi...</span>');
+        if (failed > 25) { show('<span style="color:#B3261E">Terlalu banyak kegagalan beruntun (' + errMsg + '). Dihentikan.</span>'); break; }
+        await new Promise(x => setTimeout(x, 6000)); continue;
+      }
+      stuck = 0;
       if (r.error) { show('<span style="color:#B3261E">⚠ ' + spkEsc(String(r.error)) + '</span>'); break; }
       if (r.message) { done = true; break; }
       if (r.filterDays !== days) { show('<span style="color:#B3261E">⚠ Server belum diperbarui. Upload api/analyze-batch.js dan lib/feedfind.js terbaru dulu.</span>'); break; }
