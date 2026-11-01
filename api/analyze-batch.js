@@ -424,7 +424,11 @@ module.exports = async function handler(req, res) {
       let filled = 0, skipped = 0, failed = 0, nothing = 0;
       const notes = [];
       for (const a of arts) {
-        const r = await spkFromFullText(a, known);
+        const budget = Math.min(parseInt(req.query.budget) || 8000, 25000);
+        const r = await Promise.race([
+          spkFromFullText(a, known),
+          new Promise(resolve => setTimeout(() => resolve({ skip: 'waktu habis (>' + Math.round(budget / 1000) + ' dtk), situs atau Google terlalu lambat' }), budget))
+        ]);
         if (r.error) { failed++; if (notes.length < 3) notes.push({ id: a.id, error: r.error }); continue; }
         if (r.skip) { skipped++; if (notes.length < 3) notes.push({ id: a.id, skip: r.skip }); continue; }
         if (!r.out.spokesperson_internal && !r.out.spokesperson_eksternal) { nothing++; continue; }
