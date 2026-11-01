@@ -5290,7 +5290,9 @@ async function runSpkRerun() {
   const msg = document.getElementById('spkRerunMsg'), go = document.getElementById('spkRerunBtn'), stop = document.getElementById('spkRerunStop');
   R.running = true; R.cancel = false; go.disabled = true; stop.style.display = '';
   let offset = 0, n = 0, filled = 0, nothing = 0, skipped = 0, failed = 0, stuck = 0, done = false;
-  const show = (extra) => { msg.innerHTML = `Diperiksa: <b>${n}</b> · terisi: <b style="color:#1e8449">${filled}</b> · tidak ada narasumber di teks: ${nothing} · dilewati (gagal dibongkar/situs memblokir): ${skipped} · gagal: ${failed}` + (extra ? '<br>' + extra : ''); };
+  const why = {};
+  const reasons = () => { const e = Object.entries(why).sort((x, y) => y[1] - x[1]).slice(0, 5); return e.length ? '<div style="margin-top:4px;font-size:11.5px;color:var(--muted)">Alasan dilewati: ' + e.map(x => spkEsc(x[0]) + ' (' + x[1] + ')').join(' · ') + '</div>' : ''; };
+  const show = (extra) => { msg.innerHTML = `Diperiksa: <b>${n}</b> · terisi: <b style="color:#1e8449">${filled}</b> · tidak ada narasumber di teks: ${nothing} · dilewati (gagal dibongkar/situs memblokir): ${skipped} · gagal: ${failed}` + reasons() + (extra ? '<br>' + extra : ''); };
   show('Memulai...');
   try {
     while (!R.cancel && n < 1500) {
@@ -5313,6 +5315,8 @@ async function runSpkRerun() {
       if (r.filterDays !== days) { show('<span style="color:#B3261E">⚠ Server belum diperbarui. Upload api/analyze-batch.js dan lib/feedfind.js terbaru dulu.</span>'); break; }
       n++; filled += r.filled || 0; nothing += r.nothing || 0; skipped += r.skipped || 0; failed += r.failed || 0;
       offset = r.nextOffset;
+      const sk = r.notes && r.notes[0] && r.notes[0].skip;
+      if (sk) { const key = String(sk).replace(/\(HTTP \d+\)/, '').replace(/>\d+ dtk/, '').replace(/\([^)]*\)\s*$/, '').trim(); const code = (String(sk).match(/HTTP (\d+)/) || [])[1]; const k2 = code ? key + ' [HTTP ' + code + ']' : key; why[k2] = (why[k2] || 0) + 1; }
       const err = r.notes && r.notes[0] && r.notes[0].error;
       show(err ? '<span style="color:#b45309">Catatan: ' + spkEsc(String(err)) + '</span>' : '');
       if (r.note === 'Selesai') { done = true; break; }
