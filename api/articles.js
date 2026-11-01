@@ -421,8 +421,8 @@ async function handleList(req, res) {
     const term = String(q).replace(/[(),*%\\]/g, ' ').trim().slice(0, 80);
     if (term) url += `&or=(${encodeURIComponent('title.ilike.*' + term + '*')},${encodeURIComponent('description.ilike.*' + term + '*')},${encodeURIComponent('source.ilike.*' + term + '*')},${encodeURIComponent('resume.ilike.*' + term + '*')})`;
   }
-  if (from) url += `&published_at=gte.${from}`;
-  if (to) url += `&published_at=lte.${to}`;
+  if (from) url += `&published_at=gte.${encodeURIComponent(from)}`;
+  if (to) url += `&published_at=lte.${encodeURIComponent(to)}`;
   if (created_from) url += `&created_at=gte.${created_from}`;
   if (created_to) url += `&created_at=lte.${created_to}`;
   try {
