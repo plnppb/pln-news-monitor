@@ -5001,13 +5001,15 @@ async function lpGenerate() {
   LP.busy = true;
   const btn = document.getElementById('lpBtn'); btn.disabled = true; btn.textContent = '⏳ Menyusun...';
   try {
-    const fq = encodeURIComponent(from + 'T00:00:00+09:00'), tq = encodeURIComponent(to + 'T23:59:59+09:00');
+    // Pakai format UTC ('Z'): tanda '+' pada zona waktu rusak bila dititipkan di URL tanpa di-encode oleh server
+    const fq = encodeURIComponent(new Date(from + 'T00:00:00+09:00').toISOString()), tq = encodeURIComponent(new Date(to + 'T23:59:59+09:00').toISOString());
     let rows = [], off = 0;
     while (off < 5000) {
       out.innerHTML = '<div class="lp-note" style="padding:30px;text-align:center">Memuat berita... ' + rows.length + '</div>';
       const r = await fetch('/api/articles?limit=500&offset=' + off + '&from=' + fq + '&to=' + tq + (kw ? '&q=' + encodeURIComponent(kw) : ''));
       if (!r.ok) throw new Error('Gagal memuat berita (HTTP ' + r.status + ')');
       const d = await r.json();
+      if (d.articles && !Array.isArray(d.articles)) throw new Error('Database menolak permintaan: ' + (d.articles.message || d.articles.hint || JSON.stringify(d.articles)).slice(0, 160));
       if (!d.articles || !d.articles.length) break;
       rows = rows.concat(d.articles);
       if (d.articles.length < 500) break;
