@@ -190,7 +190,12 @@ async function geminiJson(prompt) {
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_KEYS[i]}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 600 } }) });
-      const data = await response.json();
+      let data = await response.json();
+      if (data.error && (data.error.code === 503 || /high demand|overloaded/i.test(data.error.message || ''))) {
+        await new Promise(x => setTimeout(x, 1200)); // model sedang padat: satu kali coba ulang singkat
+        const r2 = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_KEYS[i]}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 600 } }) });
+        data = await r2.json();
+      }
       if (data.error) {
         lastError = data.error.message;
         if ((data.error.code === 429 || /quota/i.test(lastError || '')) && i < GEMINI_KEYS.length - 1) continue;
