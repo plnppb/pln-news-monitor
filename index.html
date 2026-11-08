@@ -2251,6 +2251,26 @@ function repEditHtml(a) {
       <span style="font-size:11.5px;color:#4A5B72">Berita akan dikunci dari analisis ulang AI</span>
     </div></div>`;
 }
+async function repDelete(url) {
+  const a = repFind(url); if (!a) return;
+  if (!confirm('Hapus berita ini dari monitoring?\n\n"' + a.title + '"\n\nBerita disembunyikan dari semua tab dan tidak muncul lagi walau auto-crawl menemukannya kembali.')) return;
+  try {
+    const resp = await fetch('/api/articles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'hide-article', url }) });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) throw new Error(data.error || 'Gagal hapus');
+  } catch (e) { showToast('⚠ Gagal hapus: ' + e.message); return; }
+  const keep = x => x.url !== url;
+  if (REP.drill) REP.drill.list = REP.drill.list.filter(keep);
+  if (REP.raw) REP.raw = REP.raw.filter(keep);
+  dashAllArticles = dashAllArticles.filter(keep);
+  if (typeof allArticles !== 'undefined') allArticles = allArticles.filter(keep);
+  if (REP.edit && REP.edit.url === url) REP.edit = null;
+  REP.dirty = true;
+  repRenderDrawer();
+  showToast('🗑 Berita dihapus dari monitoring. Angka ringkasan diperbarui saat drawer ditutup');
+  try { refreshSpkMasterBg(); } catch (e) {}
+}
+
 async function repEditSave() {
   const e = REP.edit; if (!e || e.saving) return;
   const a = repFind(e.url); if (!a) return;
@@ -2334,6 +2354,7 @@ function repRenderDrawer() {
           <span class="rp-chip" style="background:#dcfce7;color:#166534">${spkEsc(where)}</span>
           ${a.edited ? '<span class="rp-chip" style="background:#fef3c7;color:#92400e">🔒 diedit</span>' : ''}
           ${REP.edit && REP.edit.url === a.url ? '' : `<button type="button" class="rp-clk" onclick="repEditOpen(this.dataset.u)" data-u="${spkEsc(a.url)}" style="border:1px solid #CBD5E3;background:#fff;border-radius:6px;padding:2px 10px;font-size:12px">✎ Edit</button>`}
+          <button type="button" class="rp-clk" onclick="repDelete(this.dataset.u)" data-u="${spkEsc(a.url)}" title="Hapus berita dari monitoring" style="border:1px solid #F0C4C4;background:#fff;color:#9F1D1D;border-radius:6px;padding:2px 10px;font-size:12px">🗑 Hapus</button>
         </div>
         ${REP.edit && REP.edit.url === a.url ? repEditHtml(a) : ''}
         ${a.resume ? `<div style="font-size:12px;color:#2C3E57;line-height:1.5">${spkEsc(a.resume)}</div>` : ''}
