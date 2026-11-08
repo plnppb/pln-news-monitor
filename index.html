@@ -415,8 +415,13 @@
         <div class="sidebar-label" style="margin-bottom:0">Crawl Manual · Banyak Kata Kunci</div>
         <button class="btn-manage" onclick="renderMkwChips()" title="Muat ulang daftar dari database (kalau baru nambah lewat Kelola Kata Kunci)">🔄</button>
       </div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;">Daftar sama dengan "Kata Kunci Auto-Crawl" di bawah. Tambah/hapus lewat "⚙ Kelola" biar konsisten di dua tempat.</div>
-      <div class="keyword-chips" id="mkwChips"></div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;">Ikut daftar "Kata Kunci Auto-Crawl". Semua terpilih otomatis; klik untuk membatalkan.</div>
+      <div class="mkw-addrow" style="margin-top:0;margin-bottom:5px;">
+        <input type="text" id="mkwFilter" placeholder="Cari kata kunci..." oninput="filterMkwChips(this.value)"/>
+        <button class="btn-manage" onclick="setAllMkw(true)" title="Pilih semua yang tampil">Semua</button>
+        <button class="btn-manage" onclick="setAllMkw(false)" title="Kosongkan pilihan yang tampil">Kosong</button>
+      </div>
+      <div class="keyword-chips" id="mkwChips" style="max-height:112px;overflow-y:auto;padding:4px;border:1px solid var(--border2);border-radius:6px;"></div>
       <div class="mkw-addrow">
         <input type="text" id="mkwNewInput" placeholder="Tambah kata kunci baru..." onkeydown="if(event.key==='Enter')addMkwKeyword()"/>
         <button class="btn-manage" onclick="addMkwKeyword()">+ Tambah</button>
@@ -4776,12 +4781,25 @@ async function renderMkwChips() {
   } catch (e) {
     kwList = MKW_DEFAULTS; // fallback kalau gagal ambil dari server
   }
-  // Sengaja TIDAK auto-select semua lagi — daftar ini sekarang ikut database
-  // "Kata Kunci Auto-Crawl" yang bisa berkembang, jadi biar kamu pilih sendiri
-  // yang mau di-crawl manual sekarang, bukan otomatis jalanin semuanya sekaligus.
-  wrap.innerHTML = kwList.map(kw =>
-    `<div class="chip" data-kw="${kw}" onclick="toggleMkwKeyword(this)">${kw}</div>`
+  // Default: semua kata kunci aktif langsung terpilih (bisa dibatalkan satu-satu)
+    wrap.innerHTML = kwList.map(kw =>
+    `<div class="chip active" data-kw="${spkEsc(kw)}" onclick="toggleMkwKeyword(this)">${spkEsc(kw)}</div>`
   ).join('');
+  const f = document.getElementById('mkwFilter'); if (f) f.value = '';
+  updateMkwCount();
+}
+
+function filterMkwChips(q) {
+  q = (q || '').toLowerCase().trim();
+  document.querySelectorAll('#mkwChips .chip').forEach(c => {
+    c.style.display = !q || (c.getAttribute('data-kw') || '').toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function setAllMkw(on) {
+  document.querySelectorAll('#mkwChips .chip').forEach(c => {
+    if (c.style.display !== 'none') c.classList.toggle('active', on);
+  });
   updateMkwCount();
 }
 
