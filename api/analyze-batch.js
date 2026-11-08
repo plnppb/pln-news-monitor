@@ -220,9 +220,16 @@ async function spkFromFullText(article, known) {
     target = d.url;
   }
   const page = await FF.fetchText(target, { timeout: 4000, maxBytes: 900000 });
-  if (!page.ok) return { skip: 'halaman ' + (target === url ? '' : '(asli) ') + 'tidak bisa dibuka (' + (page.error || 'HTTP ' + page.status) + ')' };
+  if (!page.ok) {
+    const st = page.status || 0, where = target === url ? '' : ' (alamat asli)';
+    if (st === 401 || st === 403 || st === 429) return { skip: 'situs memblokir akses server' + where + ' (HTTP ' + st + ')' };
+    if (st >= 520 && st <= 526) return { skip: 'situs/Cloudflare menolak server' + where + ' (HTTP ' + st + ')' };
+    if (st === 404 || st === 410) return { skip: 'halaman tidak ditemukan' + where + ' (HTTP ' + st + ')' };
+    return { skip: 'halaman tidak bisa dibuka' + where + ' (' + (page.error || 'HTTP ' + st) + ')' };
+  }
+  if (FF.looksLikeBotWall(page.body)) return { skip: 'situs menampilkan verifikasi bot (Cloudflare)' };
   const body = FF.extractBodyText(page.body, 7000);
-  if (body.length < 300) return { skip: 'isi berita tidak terbaca' };
+  if (body.length < 150) return { skip: 'isi berita tidak terbaca (teks hanya ' + body.length + ' karakter)' };
   const text = (article.title + '\n' + body);
   const norm = normalizeForMatch(text);
   const hints = known.filter(k => nameAppearsInSource(k.name, norm)).slice(0, 12);
