@@ -56,6 +56,34 @@
   .sidebar{width:268px;min-width:268px;background:var(--surface);border-right:1px solid var(--border);padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:18px;}
   .main{flex:1;overflow-y:auto;padding:20px 24px;background:var(--bg);}
 
+  /* ===== Menu samping bisa disembunyikan + tampilan HP/tablet ===== */
+  .header-left{display:flex;align-items:center;min-width:0;}
+  .menu-btn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;margin-right:12px;border:1px solid rgba(255,255,255,.4);border-radius:8px;background:rgba(255,255,255,.12);color:#fff;font-size:19px;line-height:1;cursor:pointer;flex-shrink:0;}
+  .menu-btn:hover{background:rgba(255,255,255,.22);}
+  .sb-backdrop{display:none;}
+  body.sb-hidden .sidebar{display:none;}
+  .tab-nav{overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:thin;}
+  .tab-nav button{white-space:nowrap;flex-shrink:0;}
+  @media (max-width:900px){
+    header{padding:0 12px;}
+    .logo{min-width:0;}
+    .logo-text{font-size:14px;white-space:nowrap;}
+    .logo-sub,#hdr-time{display:none;}
+    .header-stats{gap:8px;}
+    .stat-pill{font-size:11px;white-space:nowrap;}
+    .app{height:calc(100vh - 56px);height:calc(100dvh - 56px);}
+    .sidebar,body.sb-hidden .sidebar{display:flex;position:fixed;top:56px;bottom:0;left:0;width:min(86vw,330px);min-width:0;z-index:90;transform:translateX(-105%);transition:transform .22s ease;}
+    body.sb-open .sidebar{transform:none;box-shadow:8px 0 28px rgba(0,0,0,.28);}
+    body.sb-open .sb-backdrop{display:block;position:fixed;top:56px;left:0;right:0;bottom:0;background:rgba(0,0,0,.38);z-index:80;}
+    .main{padding:12px;width:100%;min-width:0;}
+    .tab-nav button{padding:8px 14px !important;}
+  }
+  @media (max-width:560px){
+    .stat-pill:nth-child(2){display:none;}
+    .main{padding:10px;}
+    .main select,.main input{max-width:100%;}
+  }
+
   .sidebar-label{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
   .keyword-chips{display:flex;flex-wrap:wrap;gap:5px;}
   .chip{background:var(--surface2);border:1px solid var(--border2);border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer;transition:all 0.15s;color:var(--text2);}
@@ -316,12 +344,15 @@
 <body>
 
 <header>
+  <div class="header-left">
+  <button class="menu-btn" id="menuBtn" onclick="toggleSidebar()" aria-label="Tampilkan/sembunyikan menu" title="Menu">☰</button>
   <div class="logo">
     <div class="logo-icon">⚡</div>
     <div>
       <div class="logo-text">PLN News Monitor</div>
       <div class="logo-sub">UIW Papua & Papua Barat</div>
     </div>
+  </div>
   </div>
   <div class="header-stats">
     <div class="stat-pill"><div class="dot"></div> Live</div>
@@ -331,6 +362,7 @@
 </header>
 
 <div class="app">
+  <div class="sb-backdrop" onclick="closeSidebar()"></div>
   <div class="sidebar">
     <!-- KEYWORDS -->
     <div>
@@ -570,7 +602,7 @@
     </div>
 
     <!-- TAB NAVIGATION -->
-    <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border1);padding-bottom:0;">
+    <div class="tab-nav" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border1);padding-bottom:0;">
       <button id="tab-monitor" onclick="switchTab('monitor')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📡 Monitor</button>
       <button id="tab-dashboard" onclick="switchTab('dashboard')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📊 Dashboard</button>
       <button id="tab-reputasi" onclick="switchTab('reputasi')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🛡 Reputasi</button>
@@ -4960,6 +4992,7 @@ const LP_CSS = `
 .lp-tbl th{background:#F2F6FB;font-size:11px}.lp-pill{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10.5px;font-weight:700;color:#fff}
 .lp-note{font-size:11px;color:#6B7A90;margin-top:8px}.lp-x{float:right;border:0;background:none;color:#9AA7B8;cursor:pointer;font-size:14px}
 [contenteditable]:focus{outline:2px dashed #7FA6D8;outline-offset:2px}
+@media(max-width:700px){.lp-grid{grid-template-columns:1fr}.lp-head{flex-direction:column;align-items:flex-start}.lp-row .nm{flex-basis:44%}}
 @media print{.no-print{display:none!important}}
 `;
 
@@ -5292,7 +5325,7 @@ async function runSpkRerun() {
   let offset = 0, n = 0, filled = 0, nothing = 0, skipped = 0, failed = 0, stuck = 0, done = false;
   const why = {};
   const reasons = () => { const e = Object.entries(why).sort((x, y) => y[1] - x[1]).slice(0, 5); return e.length ? '<div style="margin-top:4px;font-size:11.5px;color:var(--muted)">Alasan dilewati: ' + e.map(x => spkEsc(x[0]) + ' (' + x[1] + ')').join(' · ') + '</div>' : ''; };
-  const show = (extra) => { msg.innerHTML = `Diperiksa: <b>${n}</b> · terisi: <b style="color:#1e8449">${filled}</b> · tidak ada narasumber di teks: ${nothing} · dilewati (gagal dibongkar/situs memblokir): ${skipped} · gagal: ${failed}` + reasons() + (extra ? '<br>' + extra : ''); };
+  const show = (extra) => { msg.innerHTML = `Diperiksa: <b>${n}</b> · terisi: <b style="color:#1e8449">${filled}</b> · tidak ada narasumber di teks: ${nothing} · dilewati: ${skipped} · gagal: ${failed}` + reasons() + (extra ? '<br>' + extra : ''); };
   show('Memulai...');
   try {
     while (!R.cancel && n < 1500) {
@@ -5327,6 +5360,29 @@ async function runSpkRerun() {
     show((done ? '✅ Selesai. ' : R.cancel ? 'Dihentikan. ' : '') + (filled ? '<button onclick="location.reload()" style="margin-left:6px;padding:3px 10px;border:1px solid var(--border);border-radius:5px;background:#fff;cursor:pointer">Muat ulang halaman untuk melihat hasil</button>' : ''));
   }
 }
+
+
+// ==================== MENU SAMPING (sembunyikan/tampilkan) ====================
+function sbIsMobile() { return window.matchMedia('(max-width:900px)').matches; }
+function toggleSidebar() {
+  if (sbIsMobile()) document.body.classList.toggle('sb-open');
+  else {
+    const hid = document.body.classList.toggle('sb-hidden');
+    try { localStorage.setItem('sbHidden', hid ? '1' : '0'); } catch (e) {}
+  }
+}
+function closeSidebar() { document.body.classList.remove('sb-open'); }
+(function initSidebar() {
+  try { if (localStorage.getItem('sbHidden') === '1' && !sbIsMobile()) document.body.classList.add('sb-hidden'); } catch (e) {}
+  // di HP: setelah menekan tombol aksi/kata kunci di menu, tutup menu agar hasilnya langsung terlihat
+  document.addEventListener('click', ev => {
+    if (!sbIsMobile() || !document.body.classList.contains('sb-open')) return;
+    const t = ev.target.closest('.sidebar .chip, .sidebar button');
+    if (!t) return;
+    if (t.classList.contains('chip') || /cari berita|jalankan|crawl/i.test(t.textContent || '')) setTimeout(closeSidebar, 200);
+  });
+  window.addEventListener('resize', () => { if (!sbIsMobile()) closeSidebar(); });
+})();
 
 function switchTab(tab) {
   const tabs = ['monitor', 'dashboard', 'reputasi', 'laporan', 'radar', 'followups', 'spokesperson', 'youtube'];
