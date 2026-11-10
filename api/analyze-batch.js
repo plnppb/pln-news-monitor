@@ -539,11 +539,14 @@ module.exports = async function handler(req, res) {
       // GitHub Actions), bukan di dalam function ini.
     }
 
-    const nextOffset = offset + batchSize;
+    // Mode biasa: berita yang berhasil dianalisis keluar dari daftar "belum dianalisis",
+    // jadi offset hanya maju sebanyak yang GAGAL. (Dulu selalu maju sebesar batch, sehingga
+    // berita berikutnya ikut terlewat tiap kali satu pasang berhasil dianalisis.)
+    const nextOffset = reanalyze ? offset + batchSize : offset + failed;
     return res.status(200).json({
       success: true, filterDays: days, processed, failed, toneCount, errors,
       nextOffset,
-      note: articles.length < batchSize ? 'Selesai' : `Masih ada, panggil lagi dengan offset=${nextOffset}`
+      note: articles.length < batchSize && !failed ? 'Selesai' : `Masih ada, panggil lagi dengan offset=${nextOffset}`
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });
