@@ -406,6 +406,11 @@
           ⚡ Jalankan Sekarang (YouTube)
         </button>
         <div id="youtubeCrawlStatus" style="font-size:10px;color:#0369a1;margin-top:6px;line-height:1.6;max-height:90px;overflow-y:auto;"></div>
+        <button onclick="runAnalyzePending()" id="analyzePendingBtn"
+          style="width:100%;margin-top:6px;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;">
+          🧠 Analisis Berita yang Belum Terisi (tone, kategori, lokasi, kutipan)
+        </button>
+        <div id="analyzePendingStatus" style="font-size:10px;color:#0369a1;margin-top:6px;line-height:1.6;max-height:90px;overflow-y:auto;"></div>
       </div>
     </div>
 
@@ -4873,6 +4878,52 @@ function removeMkwChip(ev, el) {
 
 function updateMkwCount() {
   document.getElementById('mkwSelCount').textContent = document.querySelectorAll('#mkwChips .chip.active').length;
+}
+
+// Analisis AI untuk berita di database yang belum punya tone/kategori/lokasi/kutipan.
+// Dijalankan dari browser: 2 berita per permintaan, dengan jeda supaya aman dari limit Gemini.
+let analyzePendingRun = false;
+async function runAnalyzePending() {
+  const btn = document.getElementById('analyzePendingBtn');
+  const st = document.getElementById('analyzePendingStatus');
+  if (analyzePendingRun) { analyzePendingRun = false; btn.textContent = '⏹ Menghentikan...'; return; }
+  analyzePendingRun = true;
+  btn.textContent = '⏹ Hentikan analisis';
+  let offset = 0, done = 0, failedTotal = 0, noProgress = 0, reason = '';
+  const log = m => { st.innerHTML = m; };
+  try {
+    while (analyzePendingRun) {
+      let d;
+      try {
+        const r = await fetch('/api/analyze-batch?secret=' + encodeURIComponent(CRON_SECRET) + '&batch=2&offset=' + offset);
+        const txt = await r.text();
+        try { d = JSON.parse(txt); } catch (e) { throw new Error('Server tidak membalas dengan benar (kemungkinan timeout)'); }
+        if (d.error) throw new Error(d.error);
+      } catch (e) {
+        noProgress++;
+        log('⚠ ' + spkEsc(e.message) + ' (percobaan ' + noProgress + '/3)');
+        if (noProgress >= 3) { reason = 'Berhenti: ' + e.message; break; }
+        await new Promise(r => setTimeout(r, 6000)); continue;
+      }
+      if (d.message === 'Semua artikel sudah dianalisis') { reason = failedTotal ? 'Selesai, tapi ' + failedTotal + ' berita gagal dianalisis AI.' : 'Selesai: semua berita sudah dianalisis.'; break; }
+      done += d.processed || 0; failedTotal += d.failed || 0;
+      if ((d.processed || 0) === 0 && (d.failed || 0) > 0) {
+        noProgress++;
+        const why = d.errors && d.errors[0] ? d.errors[0].error : 'AI gagal menjawab';
+        if (noProgress >= 3) { reason = 'Berhenti: AI gagal berturut-turut (' + String(why).slice(0, 120) + '). Kemungkinan kuota Gemini habis atau server AI sedang penuh; coba lagi nanti.'; break; }
+      } else noProgress = 0;
+      offset = d.nextOffset != null ? d.nextOffset : offset + 2;
+      log('⏳ Terisi ' + done + ' berita' + (failedTotal ? ', gagal ' + failedTotal : '') + '...');
+      if (d.note === 'Selesai') { reason = 'Selesai.'; break; }
+      await new Promise(r => setTimeout(r, 6500));
+    }
+  } finally {
+    const stopped = !analyzePendingRun;
+    analyzePendingRun = false;
+    btn.textContent = '🧠 Analisis Berita yang Belum Terisi (tone, kategori, lokasi, kutipan)';
+    log('<strong>' + (stopped && !reason ? 'Dihentikan. ' : '') + (reason ? spkEsc(reason) + ' ' : '') + 'Total terisi ' + done + (failedTotal ? ', gagal ' + failedTotal + ' (akan dicoba lagi di putaran berikutnya)' : '') + '.</strong>');
+    if (done > 0) { try { await autoLoadFromDB(); } catch (e) {} }
+  }
 }
 
 async function runFeedsCrawlNow() {
