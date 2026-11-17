@@ -98,7 +98,7 @@ function parseRSS(xml, feedUrl) {
     const pubDate = getTag('pubDate');
     const description = getTag('description').replace(/<[^>]+>/g, '').substring(0, 500);
     if (!title || !link) continue;
-    items.push({ title, url: link, source: sourceName, published_at: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(), description, origin_api: 'rss' });
+    items.push({ title, url: link, source: sourceName, published_at: (pubDate && !isNaN(new Date(pubDate))) ? new Date(pubDate).toISOString() : new Date().toISOString(), description, origin_api: 'rss' });
   }
   return items;
 }
@@ -779,6 +779,17 @@ module.exports = async function handler(req, res) {
           }));
           filtered = filtered.concat(fetched.filter(Boolean));
         }
+        // Batas umur berita: feed/sitemap sering memuat arsip lama (mis. sitemap penuh atau feed yang
+        // menyertakan berita bertahun-tahun lalu). Tanpa batas ini semuanya ikut tersimpan.
+        // Default 30 hari ke belakang; ubah lewat ?days=N atau ?dateFrom=YYYY-MM-DD.
+        const feedDays = Math.max(1, parseInt(req.query.days, 10) || 30);
+        const feedCutoff = req.query.dateFrom ? new Date(req.query.dateFrom) : new Date(Date.now() - feedDays * 86400000);
+        const beforeAge = filtered.length;
+        filtered = filtered.filter(a => {
+          const t = new Date(a.published_at).getTime();
+          return !isNaN(t) && t >= feedCutoff.getTime();
+        });
+        results.tooOld = (results.tooOld || 0) + (beforeAge - filtered.length);
         results.total += filtered.length;
         if (filtered.length > 0) {
           const saved = await saveToSupabase(filtered, keyword);
