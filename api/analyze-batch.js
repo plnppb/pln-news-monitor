@@ -25,6 +25,8 @@ KASUS KHUSUS:
 - "kurangi durasi pemadaman X persen" = POSITIF  
 - "jadwalkan pemadaman pemeliharaan" = NETRAL
 - "DPR/DPRD soroti" = NEGATIF
+- Unjuk rasa/demo/aksi massa/ultimatum dari warga, mahasiswa, ormas atau kelompok (GMNI, PMII, HMI, LSM, dsb.) yang menuntut atau mendesak PLN menjelaskan/memperbaiki sesuatu = NEGATIF, walau judul tidak memakai kata "keluhkan" atau "protes"
+- "pemadaman berulang", "padam terus", "sering padam" = NEGATIF. Kata "desak"/"tuntut" dari pihak luar ke PLN = NEGATIF (bukan "permintaan biasa")
 - "PLN teken MoU" (PLN inisiator, dampak nyata) = POSITIF
 - "PLN perpanjang/lanjutkan promo yang sudah ada" = NETRAL (bukan pencapaian baru)
 

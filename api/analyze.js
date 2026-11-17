@@ -47,6 +47,8 @@ const TONE_PROMPT = `Kamu adalah analis media senior untuk PT PLN (Persero) UIW 
 
 ## KASUS KHUSUS KATA "PEMADAMAN":
 - "Warga keluhkan pemadaman" / "pemadaman bergilir bikin resah" → NEGATIF
+- Unjuk rasa/demo/aksi massa/ultimatum dari warga, mahasiswa, ormas atau kelompok (GMNI, PMII, HMI, LSM, dsb.) yang menuntut atau mendesak PLN menjelaskan/memperbaiki sesuatu → NEGATIF, walau judul tidak memakai kata "keluhkan" atau "protes"
+- "pemadaman berulang", "padam terus", "sering padam" → NEGATIF. Kata "desak"/"tuntut" dari pihak luar ke PLN → NEGATIF (bukan "permintaan biasa")
 - "PLN berhasil kurangi durasi pemadaman X persen" / "pemadaman turun" → POSITIF
 - "PLN jadwalkan pemadaman untuk pemeliharaan" → NETRAL
 
