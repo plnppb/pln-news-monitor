@@ -927,12 +927,20 @@
     </div>
     <div id="spokespersonLoading" style="text-align:center;color:var(--muted);padding:20px;">⏳ Memuat data...</div>
     <div id="spokespersonContent" style="display:none;">
-      <div id="spkSuggest" style="margin-bottom:18px;"></div>
-      <div id="spkAnalytics" style="margin-bottom:22px;"></div>
-      <h4 style="margin:16px 0 8px;">🏢 Narasumber Internal PLN</h4>
-      <div id="spkInternalList" style="display:flex;flex-direction:column;gap:8px;"></div>
-      <h4 style="margin:24px 0 8px;">👤 Narasumber Eksternal</h4>
-      <div id="spkExternalList" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;">
+        <button class="br-btn" id="ssub-analisis" onclick="spkSub('analisis')">📊 Analisis</button>
+        <button class="br-btn" id="ssub-rekap" onclick="spkSub('rekap')">🏆 Rekap semua narasumber</button>
+      </div>
+      <div id="spkPaneAnalisis">
+        <div id="spkSuggest" style="margin-bottom:18px;"></div>
+        <div id="spkAnalytics" style="margin-bottom:22px;"></div>
+      </div>
+      <div id="spkPaneRekap" style="display:none;">
+        <h4 style="margin:16px 0 8px;">🏢 Narasumber Internal PLN</h4>
+        <div id="spkInternalList" style="display:flex;flex-direction:column;gap:8px;"></div>
+        <h4 style="margin:24px 0 8px;">👤 Narasumber Eksternal</h4>
+        <div id="spkExternalList" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
     </div>
   </div><!-- end panel-spokesperson-wrap -->
 
@@ -3047,11 +3055,19 @@ function resetMonSearch() {
 // ==================== ANALISIS NARASUMBER (TAB SPOKESPERSON) ====================
 // Tampilan sengaja berbeda dari tab Reputasi: donat komposisi, batang bertumpuk per narasumber,
 // grafik garis tren kutipan, dan kisi tone berita × tone komentar. Semua dihitung dari data yang sama dengan daftar di bawahnya.
-const SPK = { days: 7 };
+const SPK = { days: 7, sub: 'analisis' };
+function spkSub(n) {
+  SPK.sub = n;
+  document.getElementById('spkPaneAnalisis').style.display = n === 'analisis' ? 'block' : 'none';
+  document.getElementById('spkPaneRekap').style.display = n === 'rekap' ? 'block' : 'none';
+  ['analisis', 'rekap'].forEach(k => { const b = document.getElementById('ssub-' + k); if (b) { b.style.fontWeight = k === n ? '700' : '400'; b.style.borderColor = k === n ? 'var(--accent2)' : ''; } });
+  if (n === 'rekap' && window._spkRerender) window._spkRerender();
+}
 function spkSetDays(d) { SPK.days = d; renderSpkAnalytics(); }
 function spkJump(name) {
   const inp = document.getElementById('spkFilterInput');
   if (inp) { inp.value = name; if (window._spkRerender) window._spkRerender(); }
+  spkSub('rekap');
   const el = document.getElementById('spkInternalList');
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -3429,26 +3445,38 @@ async function fetchSpokespersonAliases() {
   return window._spkAliasesCache;
 }
 
-async function loadSpokespersonRecap() {
+const SPK_CACHE = { t: 0, arts: null };
+async function spkFetchAll() {
+  const size = 1000;
+  const get = async off => {
+    const r = await fetch(`/api/articles?resource=spk-data&limit=${size}&offset=${off}`);
+    const d = await r.json();
+    if (!Array.isArray(d.articles)) throw new Error(d.error || 'respons tidak valid');
+    return d;
+  };
+  const first = await get(0);
+  let all = first.articles;
+  const pages = Math.ceil((first.total || all.length) / size);
+  if (pages > 1) {
+    const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => get((i + 1) * size)));
+    rest.forEach(d => { all = all.concat(d.articles); });
+  }
+  return all;
+}
+async function loadSpokespersonRecap(useCache) {
+  let allArts;
+  if (useCache && SPK_CACHE.arts && Date.now() - SPK_CACHE.t < 5 * 60e3 && window._spkAllArts === SPK_CACHE.arts) {
+    return; // data masih segar dan sudah tampil, tidak perlu muat ulang
+  }
   document.getElementById('spokespersonLoading').style.display = 'block';
   document.getElementById('spokespersonContent').style.display = 'none';
-
-  let allArts = [];
-  let offset = 0;
-  const pageSize = 500;
   try {
-    while (true) {
-      const resp = await fetch(`/api/articles?limit=${pageSize}&offset=${offset}`);
-      const data = await resp.json();
-      if (!data.articles || !data.articles.length) break;
-      allArts = allArts.concat(data.articles);
-      if (data.articles.length < pageSize) break;
-      offset += pageSize;
-    }
+    allArts = await spkFetchAll();
   } catch (e) {
     document.getElementById('spokespersonLoading').innerHTML = `⚠ Gagal memuat: ${e.message}`;
     return;
   }
+  SPK_CACHE.arts = allArts; SPK_CACHE.t = Date.now();
 
   const aliases = await fetchSpokespersonAliases();
   const aliasMap = {}; // normalizeNameKey(alias) -> canonical display name
@@ -3510,8 +3538,11 @@ async function loadSpokespersonRecap() {
       return;
     }
     const filter = ((document.getElementById('spkFilterInput') || {}).value || '').toLowerCase().trim();
+    window._spkShowAll = window._spkShowAll || {};
+    const cap = (filter || window._spkShowAll[type]) ? Infinity : 25;
     const th = 'padding:8px;font-weight:600;border-bottom:1px solid var(--border);';
     const rows = list.map((d, i) => {
+      if (i >= cap) return '';
       const titles = Object.values(d.titles).sort((a, b) => b.count - a.count);
       if (filter) {
         const hay = (d.displayName + ' ' + titles.map(t => t.display).join(' ')).toLowerCase();
@@ -3539,7 +3570,7 @@ async function loadSpokespersonRecap() {
             <button onclick="openMergeModal('${type}', ${i})" style="${btn}">🔗 Gabung</button>
           </td>
         </tr>
-        <tr id="${detailId}" style="display:none;background:#fafbfc;"><td colspan="5" style="padding:0 12px 10px;">${renderSpkArticleList(d, type, i)}</td></tr>`;
+        <tr id="${detailId}" style="display:none;background:#fafbfc;"><td colspan="5" style="padding:0 12px 10px;" data-lazy="${type}|${i}"></td></tr>`;
     }).join('');
     el.innerHTML = rows.trim()
       ? `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid var(--border);">
@@ -3547,6 +3578,7 @@ async function loadSpokespersonRecap() {
              <th style="${th}">Nama</th><th style="${th}">Jabatan</th><th style="${th}">Tone Pemberitaan</th><th style="${th}">Tone Komentar</th><th style="${th}"></th>
            </tr></thead><tbody>${rows}</tbody></table></div>`
       : '<div style="color:var(--muted);font-size:12px;padding:10px;">Tidak ada yang cocok dengan pencarian.</div>';
+    if (rows.trim() && list.length > cap) el.innerHTML += `<div style="text-align:center;padding:10px"><button class="br-btn" onclick="window._spkShowAll['${type}']=true;window._spkRerender()">Tampilkan semua ${list.length} narasumber (sekarang top ${cap})</button></div>`;
   }
 
   let internalList = aggregate('spokesperson_internal', 'spokesperson_internal_stance');
@@ -3556,7 +3588,7 @@ async function loadSpokespersonRecap() {
     const open = Array.from(document.querySelectorAll('tr[id^="spkd-"]')).filter(tr => tr.style.display === 'table-row').map(tr => tr.id);
     renderList(internalList, 'spkInternalList', 'internal');
     renderList(externalList, 'spkExternalList', 'eksternal');
-    open.forEach(id => { const tr = document.getElementById(id); if (tr) tr.style.display = 'table-row'; });
+    open.forEach(id => { const tr = document.getElementById(id); if (tr) { tr.style.display = 'none'; toggleSpkDetail(id); } });
   };
   // Hitung ulang agregat dari data artikel yang sudah ada di memori (tanpa muat ulang dari server)
   window._spkRecompute = () => {
@@ -3564,9 +3596,10 @@ async function loadSpokespersonRecap() {
     externalList = aggregate('spokesperson_eksternal', 'spokesperson_eksternal_stance');
     window._spkRerender();
   };
-  window._spkRerender();
+  if (SPK.sub === 'rekap') window._spkRerender();
 
   document.getElementById('spokespersonLoading').style.display = 'none';
+  spkSub(SPK.sub);
   document.getElementById('spokespersonContent').style.display = 'block';
   try { renderSpkAnalytics(); } catch (e) { console.error('Analisis narasumber gagal:', e); }
   try { renderSpkSuggest(); } catch (e) { console.error('Saran nama gagal:', e); }
@@ -3586,7 +3619,17 @@ function spkToneBadge(label, tone) {
 
 function toggleSpkDetail(id) {
   const tr = document.getElementById(id);
-  if (tr) tr.style.display = tr.style.display === 'none' ? 'table-row' : 'none';
+  if (!tr) return;
+  const open = tr.style.display === 'none';
+  if (open) {
+    const td = tr.querySelector('td[data-lazy]');
+    if (td && td.getAttribute('data-lazy')) {
+      const [type, i] = td.getAttribute('data-lazy').split('|');
+      const d = (window._spkListByType[type] || [])[+i];
+      if (d) { td.innerHTML = renderSpkArticleList(d, type, +i); td.removeAttribute('data-lazy'); }
+    }
+  }
+  tr.style.display = open ? 'table-row' : 'none';
 }
 
 function spkStanceSelect(type, personIdx, ai, current) {
@@ -5845,7 +5888,7 @@ function switchTab(tab) {
   if (tab === 'laporan') lpInit();
   if (tab === 'radar') loadRadarPapua();
   if (tab === 'followups') loadFollowups();
-  if (tab === 'spokesperson') loadSpokespersonRecap();
+  if (tab === 'spokesperson') loadSpokespersonRecap(true);
   if (tab === 'youtube') loadYoutubeMentions();
   // Scroll ke atas
   document.querySelector('.main').scrollTop = 0;
