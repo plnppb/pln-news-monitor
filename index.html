@@ -887,7 +887,14 @@
     <div style="background:#fefce8;border:1px solid #fde047;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#854d0e;">
       📡 Radar berita umum Papua (kebakaran, bencana, keamanan, dll) — di luar konteks PLN, tanpa analisis tone. Diperbarui otomatis tiap 6 jam.
     </div>
-    <div id="radarList" style="display:flex;flex-direction:column;gap:8px;"></div>
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
+      <button class="br-btn" id="rsub-highlight" onclick="radarSub('highlight')">⭐ Highlight kejadian besar</button>
+      <button class="br-btn" id="rsub-berita" onclick="radarSub('berita')">📰 Semua berita</button>
+      <button class="br-btn" id="rsub-kalender" onclick="radarSub('kalender')">📅 Kalender momentum 12 bulan</button>
+    </div>
+    <div id="radarHighlight" style="display:none;"></div>
+    <div id="radarList" style="display:none;flex-direction:column;gap:8px;"></div>
+    <div id="radarKalender" style="display:none;"></div>
   </div><!-- end panel-radar-wrap -->
 
   <!-- PANEL TINDAK LANJUT (KANBAN) -->
@@ -4400,13 +4407,118 @@ async function removeAlias(index) {
   loadSpokespersonRecap();
 }
 
+const RADAR = { rows: null, sub: 'highlight', p: null };
+function fetchRadarOnce(force) {
+  if (RADAR.rows && !force) return Promise.resolve(RADAR.rows);
+  if (RADAR.p && !force) return RADAR.p;
+  RADAR.p = fetch('/api/articles?resource=radar&limit=200').then(r => r.json()).then(d => { RADAR.rows = d.articles || []; RADAR.p = null; return RADAR.rows; }).catch(e => { RADAR.p = null; throw e; });
+  return RADAR.p;
+}
+// Kata yang terlalu umum untuk dipakai mencocokkan berita sekejadian
+const HL_STOP = new Set('yang dan di ke dari untuk dengan pada ini itu akan atau oleh dalam juga tak tidak ada para hari lalu usai jelang saat bakal resmi warga papua barat selatan tengah pegunungan daya kota kabupaten kab provinsi pemprov pemkab pemkot bupati wali gubernur polres polda polisi kepala dinas antara rri jubi suara cenderawasih kata ujar tegaskan minta sebut terkait sejumlah beberapa lebih sudah belum masih akan telah harus dapat bisa agar hingga'.split(' '));
+// Penanda kejadian besar: bobot lebih tinggi = lebih layak jadi highlight
+const HL_KEYS = [
+  [/kapolda|kapolres|sertijab|pelantikan|dilantik|rotasi|mutasi|pj\.? gubernur|gubernur baru|bupati baru|dirut|danrem|pangdam|kajati/i, 'Pergantian pejabat', 3],
+  [/gempa|banjir|longsor|tsunami|kebakaran|puting beliung|kekeringan|erupsi|bencana/i, 'Bencana', 3],
+  [/kkb|kkt|tpnpb|penembakan|tewas|gugur|ditembak|kontak tembak|penyerangan|pembakaran|kerusuhan|ricuh|demo|unjuk rasa|aksi massa|blokade/i, 'Keamanan', 3],
+  [/pesawat|kecelakaan|jatuh|hilang kontak|tenggelam/i, 'Kecelakaan', 2],
+  [/pemekaran|otsus|dob |pilkada|pemilu|putusan mk|sengketa|apbd|dana otsus|kunjungan presiden|kunjungan wapres|menteri/i, 'Politik & kebijakan', 2],
+  [/pln|listrik|padam|blackout/i, 'Kelistrikan', 2],
+  [/pt freeport|freeport|tambang|smelter|pltu|proyek strategis|psn|food estate|lumbung pangan/i, 'Ekonomi & proyek', 1]
+];
+function hlTokens(t) {
+  return Array.from(new Set(String(t || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3 && !HL_STOP.has(w))));
+}
+function hlBuild(rows) {
+  const now = Date.now(), horizon = 72 * 3600e3;
+  const items = (rows || []).map(r => ({ r, t: hlTokens(r.title), ts: new Date(r.published_at || r.created_at || 0).getTime() }))
+    .filter(x => x.ts && now - x.ts < horizon && x.ts - now < 36e5);
+  const par = items.map((_, i) => i);
+  const find = i => par[i] === i ? i : (par[i] = find(par[i]));
+  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+    const a = items[i].t, b = items[j].t; if (!a.length || !b.length) continue;
+    const inter = a.filter(w => b.indexOf(w) >= 0).length;
+    const jac = inter / (a.length + b.length - inter);
+    if (inter >= 3 || (inter >= 2 && jac >= 0.34)) par[find(i)] = find(j);
+  }
+  const g = {};
+  items.forEach((x, i) => (g[find(i)] = g[find(i)] || []).push(x));
+  const out = [];
+  Object.values(g).forEach(list => {
+    const sources = Array.from(new Set(list.map(x => x.r.source).filter(Boolean)));
+    const text = list.map(x => x.r.title).join(' ');
+    let cat = '', w = 0;
+    HL_KEYS.forEach(k => { if (k[0].test(text) && k[2] > w) { w = k[2]; cat = k[1]; } });
+    const big = sources.length >= 3 || (sources.length >= 2 && w >= 3);
+    if (!big) return;
+    const newest = Math.max.apply(null, list.map(x => x.ts));
+    const sorted = list.slice().sort((a, b) => b.ts - a.ts);
+    out.push({ list: sorted, sources, cat: cat || 'Isu menonjol', score: sources.length * 2 + w + Math.min(list.length, 6) * 0.3, newest });
+  });
+  return out.sort((a, b) => b.score - a.score || b.newest - a.newest);
+}
+function brHighlightMini() {
+  if (!RADAR.rows) return '<span style="color:var(--muted)">Memuat radar...</span>';
+  const h = hlBuild(RADAR.rows).slice(0, 3);
+  if (!h.length) return '<span style="color:var(--muted)">Belum ada kejadian besar yang diberitakan banyak media dalam 3 hari terakhir.</span>';
+  return h.map(x => `<div class="row" style="flex-direction:column"><span><b>${brEsc(x.list[0].title)}</b></span><span style="color:var(--muted);font-size:11.5px">${brEsc(x.cat)} · ${x.sources.length} media · ${x.list.length} berita</span></div>`).join('');
+}
+function renderHighlight() {
+  const el = document.getElementById('radarHighlight');
+  const h = hlBuild(RADAR.rows || []);
+  const info = '<div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">Dikelompokkan otomatis: kejadian yang sama diberitakan ≥3 media (atau ≥2 media untuk pergantian pejabat, bencana, keamanan) dalam 72 jam terakhir. Ini penyaring otomatis berbasis kata, jadi tetap periksa isinya.</div>';
+  if (!h.length) { el.innerHTML = info + '<div style="text-align:center;color:var(--muted);padding:20px;">Belum ada kejadian besar terdeteksi. Radar diperbarui tiap 6 jam.</div>'; return; }
+  const col = { 'Pergantian pejabat': '#dbeafe', 'Bencana': '#fee2e2', 'Keamanan': '#fee2e2', 'Kecelakaan': '#ffedd5', 'Politik & kebijakan': '#ede9fe', 'Kelistrikan': '#fef3c7' };
+  el.innerHTML = info + h.map(x => `<div class="card" style="padding:12px 14px;margin-bottom:8px;">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${col[x.cat] || '#f1f5f9'}">${brEsc(x.cat)}</span><span style="font-size:11px;color:var(--muted)">${x.sources.length} media · ${x.list.length} berita · terbaru ${brEsc(new Date(x.newest).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}</span></div>
+    <div style="font-weight:600"><a href="${brEsc(x.list[0].r.url)}" target="_blank" rel="noopener">${brEsc(x.list[0].r.title)}</a></div>
+    <details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">Lihat ${x.list.length} berita terkait</summary>${x.list.map(y => `<div style="font-size:12px;margin-top:4px"><span style="color:var(--accent2);font-weight:600">${brEsc(y.r.source || '')}</span> · <a href="${brEsc(y.r.url)}" target="_blank" rel="noopener">${brEsc(y.r.title)}</a></div>`).join('')}</details></div>`).join('');
+}
+function renderKalender() {
+  const el = document.getElementById('radarKalender');
+  const list = brMomentsBetween(366);
+  const custom = brCustomMoments();
+  let lastM = '';
+  const rows = list.map(m => {
+    const mo = m.date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+    const head = mo !== lastM ? `<div style="font-weight:700;margin:14px 0 6px;font-size:13px">${brEsc(mo)}</div>` : '';
+    lastM = mo;
+    const ty = BR_CAL_TYPES[m.t] || BR_CAL_TYPES.nasional;
+    return head + `<div class="card" style="padding:8px 12px;margin-bottom:5px;display:flex;gap:10px;align-items:flex-start;"><div style="min-width:92px;font-size:12px;font-weight:600">${brEsc(m.date.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' }))}<div style="font-weight:400;color:var(--muted);font-size:11px">${m.days === 0 ? 'hari ini' : 'H-' + m.days}</div></div><div style="flex:1;font-size:12.5px"><b>${brEsc(m.n)}</b> <span style="font-size:10.5px;padding:1px 7px;border-radius:9px;background:${ty[1]};color:${ty[2]}">${ty[0]}</span>${m.v === false ? ' <span style="font-size:10.5px;padding:1px 7px;border-radius:9px;background:#fef9c3;color:#854d0e">cek tanggal</span>' : ''}${m.c ? `<div style="color:var(--muted);font-size:11.5px;margin-top:2px">${brEsc(m.c)}</div>` : ''}</div>${m.t === 'custom' ? `<button class="br-btn" onclick="brDelMoment(${m.custom})">Hapus</button>` : ''}</div>`;
+  }).join('');
+  el.innerHTML = `<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">Libur nasional 2027 dari SKB 3 Menteri. Tanggal HUT daerah yang belum saya pastikan diberi label "cek tanggal". Hari raya keagamaan bisa bergeser, cocokkan lagi dengan penetapan resmi.</div>
+    <div class="card" style="padding:10px 12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><b style="font-size:12px">Tambah momentum:</b><input id="kmDate" type="date" style="padding:5px;border:1px solid var(--border);border-radius:6px;font-size:12px"><input id="kmName" placeholder="Nama (mis. HUT Kab. Mimika)" style="flex:1;min-width:160px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px"><label style="font-size:12px"><input id="kmYearly" type="checkbox" checked> ulang tiap tahun</label><button class="br-btn" onclick="brAddMoment()">Simpan</button></div>
+    ${rows || '<div style="padding:20px;text-align:center;color:var(--muted)">Tidak ada momentum.</div>'}`;
+}
+function brAddMoment() {
+  const d = document.getElementById('kmDate').value, n = document.getElementById('kmName').value.trim();
+  if (!d || !n) { showToast('Isi tanggal dan nama dulu'); return; }
+  const yearly = document.getElementById('kmYearly').checked;
+  const a = brCustomMoments(); a.push({ d: yearly ? d.slice(5) : d, n, c: '' });
+  try { localStorage.setItem('brCustomMoments', JSON.stringify(a)); } catch (e) { showToast('Gagal menyimpan di browser ini'); return; }
+  renderKalender(); showToast('Momentum ditambahkan (tersimpan di browser ini)');
+}
+function brDelMoment(i) { const a = brCustomMoments(); a.splice(i, 1); try { localStorage.setItem('brCustomMoments', JSON.stringify(a)); } catch (e) {} renderKalender(); }
+function radarSub(name) {
+  RADAR.sub = name;
+  ['highlight', 'berita', 'kalender'].forEach(k => {
+    const el = document.getElementById(k === 'highlight' ? 'radarHighlight' : k === 'berita' ? 'radarList' : 'radarKalender');
+    if (el) el.style.display = k === name ? (k === 'berita' ? 'flex' : 'block') : 'none';
+    const b = document.getElementById('rsub-' + k); if (b) b.style.fontWeight = k === name ? '700' : '400', b.style.borderColor = k === name ? 'var(--accent2)' : '';
+  });
+  if (name === 'kalender') renderKalender();
+  else if (name === 'highlight') { fetchRadarOnce().then(renderHighlight).catch(e => { document.getElementById('radarHighlight').innerHTML = '<div style="color:#dc2626;padding:20px">⚠ ' + brEsc(e.message) + '</div>'; }); }
+}
 async function loadRadarPapua() {
+  radarSub(RADAR.sub || 'highlight');
+  fetchRadarOnce(true).then(() => { if (RADAR.sub === 'highlight') renderHighlight(); }).catch(() => {});
+  return loadRadarList();
+}
+async function loadRadarList() {
   const el = document.getElementById('radarList');
   el.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;">⏳ Memuat...</div>';
   try {
-    const resp = await fetch('/api/articles?resource=radar&limit=200');
-    const data = await resp.json();
-    const articles = data.articles || [];
+    const articles = await fetchRadarOnce();
     if (!articles.length) {
       el.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;">Belum ada data. Radar diperbarui otomatis tiap 6 jam.</div>';
       return;
@@ -6298,14 +6410,61 @@ async function autoLoadFromDB() {
 const BR = { rows: [], fu: [], health: null, loading: false, loadedAt: 0 };
 const BR_NAT = /kompas|detik|cnn|cnbc|tempo|tirto|liputan6|kumparan|republika|merdeka|okezone|sindo|bisnis\.com|kontan|metrotv|media indonesia|suara\.com|jpnn|inews|beritasatu|rri\b/i;
 const BR_STAKE_KEY = ['DPRD / DPR', 'Mahasiswa', 'Ormas / LSM', 'Pemerintah daerah', 'Pemerintah pusat', 'Aparat penegak hukum'];
-const BR_MOMENTS = [ // [bulan(1-12), hari, nama, catatan]
-  [2, 9, 'Hari Pers Nasional', 'Banyak liputan media, momen baik untuk siaran pers positif'],
-  [4, 20, 'Hari Konsumen Nasional', 'Isu layanan pelanggan lebih mudah diangkat'],
-  [8, 17, 'HUT Kemerdekaan RI', 'Isu pemerataan listrik desa biasanya naik'],
-  [10, 27, 'Hari Listrik Nasional / HUT PLN', 'Puncak pemberitaan positif dan kegiatan PLN'],
-  [12, 9, 'Hari Anti Korupsi Sedunia', 'Perhatikan isu pengadaan dan integritas'],
-  [12, 24, 'Siaga Natal dan Tahun Baru (24 Des - 2 Jan)', 'Beban puncak: antisipasi pemadaman dan keluhan']
+// Kalender momentum. d = 'MM-DD' (berulang tiap tahun) atau 'YYYY-MM-DD' (sekali). t: libur | nasional | daerah | pln | waspada
+// v:false = tanggal belum saya pastikan dari sumber resmi, cek dulu sebelum dipakai.
+const BR_CAL = [
+  { d: '01-01', n: 'Tahun Baru Masehi', t: 'libur', c: 'Penutupan siaga Nataru, evaluasi beban listrik akhir tahun' },
+  { d: '02-05', n: 'HUT Pekabaran Injil di Tanah Papua', t: 'daerah', c: 'Hari penting di Tanah Papua, sering ada libur daerah dan kegiatan besar di gereja' },
+  { d: '02-09', n: 'Hari Pers Nasional', t: 'nasional', c: 'Banyak liputan media, momen baik untuk siaran pers dan silaturahmi media' },
+  { d: '02-12', n: 'HUT Kabupaten Merauke', t: 'daerah', c: 'Tanggal dari ingatan saya (HUT ke-124 pada 2026 sudah terkonfirmasi, tanggal pastinya belum)', v: false },
+  { d: '03-07', n: 'HUT Kota Jayapura', t: 'daerah', c: 'Upacara dan pesta rakyat di Jayapura (HUT ke-116 pada 7 Maret 2026)' },
+  { d: '04-20', n: 'Hari Konsumen Nasional', t: 'nasional', c: 'Isu layanan pelanggan lebih mudah diangkat' },
+  { d: '04-22', n: 'Hari Bumi', t: 'nasional', c: 'Momen pesan energi bersih dan EBT' },
+  { d: '05-01', n: 'Hari Buruh / Hari Integrasi Papua', t: 'waspada', c: 'Kegiatan massa mungkin terjadi, pantau isu keamanan dan aksi' },
+  { d: '05-20', n: 'Hari Kebangkitan Nasional', t: 'nasional', c: '' },
+  { d: '06-01', n: 'Hari Lahir Pancasila', t: 'libur', c: '' },
+  { d: '07-01', n: 'HUT Bhayangkara (Polri)', t: 'nasional', c: 'Pemangku kepentingan keamanan, banyak kegiatan bersama' },
+  { d: '08-17', n: 'HUT Kemerdekaan RI', t: 'libur', c: 'Isu pemerataan listrik desa biasanya naik, program "listrik untuk kemerdekaan"' },
+  { d: '09-04', n: 'Hari Pelanggan Nasional', t: 'pln', c: 'Momen kampanye layanan pelanggan PLN' },
+  { d: '10-05', n: 'HUT TNI', t: 'nasional', c: '' },
+  { d: '10-12', n: 'HUT Provinsi Papua Barat', t: 'daerah', c: 'Upacara di Manokwari (HUT ke-24 pada 12 Okt 2023)' },
+  { d: '10-27', n: 'Hari Listrik Nasional / HUT PLN', t: 'pln', c: 'Puncak pemberitaan positif dan kegiatan PLN' },
+  { d: '11-10', n: 'Hari Pahlawan', t: 'nasional', c: '' },
+  { d: '11-11', n: 'Hari jadi Provinsi Papua Selatan, Papua Tengah, dan Papua Pegunungan', t: 'daerah', c: 'Diresmikan 11 November 2022. Upacara dan kegiatan di tiga ibu kota provinsi' },
+  { d: '11-21', n: 'Hari Otonomi Khusus Papua', t: 'daerah', c: 'Peringatan UU Otsus. Tanggal dari ingatan saya, cek dulu', v: false },
+  { d: '12-01', n: '1 Desember (tanggal sensitif di Papua)', t: 'waspada', c: 'Potensi aksi dan isu keamanan, antisipasi gangguan dan isu sabotase jaringan' },
+  { d: '12-09', n: 'HUT Provinsi Papua Barat Daya / Hari Anti Korupsi Sedunia', t: 'daerah', c: 'Papua Barat Daya diresmikan 9 Desember 2022. Isu integritas dan pengadaan juga naik' },
+  { d: '12-24', n: 'Awal siaga Natal dan Tahun Baru (24 Des - 2 Jan)', t: 'pln', c: 'Beban puncak: siapkan juru bicara dan informasi pemulihan' },
+  { d: '12-25', n: 'Hari Raya Natal', t: 'libur', c: 'Hari raya terbesar di Tanah Papua, beban listrik dan perhatian publik tinggi' },
+  // Tanggal khusus 2027 (SKB 3 Menteri 15 September 2026) dan perkiraan
+  { d: '2027-01-05', n: 'Isra Mikraj', t: 'libur', c: '' },
+  { d: '2027-02-06', n: 'Tahun Baru Imlek 2578', t: 'libur', c: 'Cuti bersama 5 Februari' },
+  { d: '2027-02-08', n: 'Perkiraan awal Ramadan 1448 H', t: 'nasional', c: 'Perkiraan saja. Ditetapkan Menteri Agama. Pola konsumsi listrik berubah, banyak keluhan sahur dan buka puasa', v: false },
+  { d: '2027-03-08', n: 'Hari Raya Nyepi', t: 'libur', c: '' },
+  { d: '2027-03-10', n: 'Idulfitri 1448 H (10-11 Maret)', t: 'libur', c: 'Cuti bersama 9, 12, 15 Maret. Puncak arus mudik dan perhatian publik pada keandalan listrik' },
+  { d: '2027-03-26', n: 'Wafat Yesus Kristus (Jumat Agung)', t: 'libur', c: 'Cuti bersama 25 Maret. Penting di Tanah Papua' },
+  { d: '2027-03-28', n: 'Paskah', t: 'libur', c: '' },
+  { d: '2027-05-06', n: 'Kenaikan Yesus Kristus', t: 'libur', c: '' },
+  { d: '2027-05-17', n: 'Iduladha 1448 H', t: 'libur', c: 'Cuti bersama 18 Mei' },
+  { d: '2027-05-20', n: 'Hari Raya Waisak', t: 'libur', c: 'Cuti bersama 19 Mei' },
+  { d: '2027-06-06', n: '1 Muharam / Tahun Baru Islam 1449 H', t: 'libur', c: '' },
+  { d: '2027-08-15', n: 'Maulid Nabi Muhammad SAW', t: 'libur', c: '' }
 ];
+const BR_CAL_TYPES = { libur: ['Libur nasional', '#dbeafe', '#1e40af'], nasional: ['Nasional', '#f1f5f9', '#475569'], daerah: ['Daerah', '#dcfce7', '#166534'], pln: ['PLN', '#fef3c7', '#92400e'], waspada: ['Waspada', '#fee2e2', '#991b1b'], custom: ['Tambahan', '#ede9fe', '#5b21b6'] };
+
+function brCustomMoments() { try { const a = JSON.parse(localStorage.getItem('brCustomMoments') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function brMomentsBetween(days) {
+  const now = new Date(); const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()); const end = new Date(start.getTime() + days * 86400000);
+  const out = [];
+  BR_CAL.concat(brCustomMoments().map((m, i) => Object.assign({}, m, { t: 'custom', custom: i }))).forEach(m => {
+    const p = m.d.split('-').map(Number);
+    if (p.length === 3) { const d = new Date(p[0], p[1] - 1, p[2]); if (d >= start && d < end) out.push(Object.assign({}, m, { date: d })); }
+    else { for (let y = start.getFullYear(); y <= end.getFullYear(); y++) { const d = new Date(y, p[0] - 1, p[1]); if (d >= start && d < end) out.push(Object.assign({}, m, { date: d })); } }
+  });
+  return out.sort((a, b) => a.date - b.date).map(m => Object.assign(m, { days: Math.round((m.date - start) / 86400000) }));
+}
+function brFmtDay(d) { return d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }); }
+
 
 function brEsc(x) { return spkEsc(String(x == null ? '' : x)); }
 function brAgo(ms) { const h = Math.floor(ms / 3600000); return h < 1 ? 'baru saja' : h < 24 ? h + ' jam lalu' : Math.floor(h / 24) + ' hari lalu'; }
@@ -6332,6 +6491,7 @@ async function loadBeranda(force) {
   BR.loading = true;
   if (!BR.rows.length) root.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Memuat ringkasan...</div>';
   try {
+    fetchRadarOnce().then(() => { if (document.getElementById('panel-beranda-wrap').style.display !== 'none') renderBeranda(); }).catch(() => {});
     const [rows, fu, health] = await Promise.all([
       brFetchRows(14),
       fetch('/api/articles?resource=followups').then(r => r.json()).catch(() => ({ followups: [] })),
@@ -6388,9 +6548,12 @@ function renderBeranda() {
   const idx = l => { const t = repTally(l); const n = t.pos + t.neg + t.neu; return n ? Math.round((t.pos - t.neg) / n * 100) : 0; };
   const tc = repTally(cur), tp = repTally(prev);
   const iC = idx(cur), iP = idx(prev), dI = iC - iP;
-  const neg3 = ok.filter(a => a.tone === 'negatif' && a.ageDays >= 0 && a.ageDays < 3);
-  const groups = brGroups(neg3);
   const tix = brTicketMap();
+  const isClosed = f => !!f && (f.status === 'selesai' || f.response_status === 'tidak_perlu' || f.response_status === 'ditangani');
+  const negAll = ok.filter(a => a.tone === 'negatif' && a.ageDays >= 0 && a.ageDays < 3);
+  const neg3 = negAll.filter(a => !isClosed(tix[a.url]));
+  const closedArts = negAll.filter(a => isClosed(tix[a.url]));
+  const groups = brGroups(neg3);
   const arrow = (d, goodUp) => d === 0 ? '<span style="color:var(--muted)">sama dengan minggu lalu</span>' : `<span style="color:${(d > 0) === goodUp ? '#15803d' : '#b91c1c'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)} dari minggu lalu</span>`;
   const H = BR.health;
   let banners = '';
@@ -6409,7 +6572,7 @@ function renderBeranda() {
   </div>`;
 
   const statusLbl = { baru: 'Baru', proses: 'Dalam penanganan', selesai: 'Selesai' };
-  const respOpt = [['belum', 'Belum direspons'], ['hak_jawab', 'Hak jawab dikirim'], ['klarifikasi', 'Klarifikasi terbit'], ['tidak_perlu', 'Tidak perlu respons']];
+  const respOpt = [['belum', 'Belum direspons'], ['hak_jawab', 'Hak jawab dikirim'], ['klarifikasi', 'Klarifikasi terbit'], ['ditangani', 'Sudah ditangani di luar aplikasi'], ['tidak_perlu', 'Tidak perlu tindak lanjut']];
   const issues = groups.length ? groups.map((g, gi) => {
     const f = g.list.map(a => tix[a.url]).find(Boolean);
     const catLbl = repCatLabel(g.cat);
@@ -6431,22 +6594,30 @@ function renderBeranda() {
       <div class="br-ctl">
         ${f ? '' : `<button class="br-btn pri" onclick="brCreateTicket(${gi})">📌 Tindak lanjuti</button>`}
         <button class="br-btn" onclick="brOpenDraft(${gi})">✍ Draft respons</button>
+        <button class="br-btn" onclick="brClose(${gi},'ditangani')" title="Sudah ditangani di belakang layar. Isu ini disembunyikan dari daftar.">✔ Sudah ditangani</button>
+        <button class="br-btn" onclick="brClose(${gi},'tidak_perlu')" title="Tidak perlu ditindaklanjuti. Isu ini disembunyikan dari daftar.">🚫 Tidak perlu tindak lanjut</button>
       </div>
       ${ctl}
     </div>`;
   }).join('') : '<div style="padding:18px;border:1px dashed var(--border2);border-radius:10px;color:var(--muted);font-size:13px">✅ Tidak ada berita negatif baru dalam 3 hari terakhir.</div>';
   BR.groups = groups;
+  const cg = {};
+  closedArts.forEach(a => { const f = tix[a.url]; (cg[f.id] = cg[f.id] || { f, list: [] }).list.push(a); });
+  const closedHtml = Object.values(cg).length ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12.5px;color:var(--muted)">✅ Sudah ditangani / tidak perlu tindak lanjut (${closedArts.length} berita)</summary>${Object.values(cg).map(x => {
+    const why = x.f.response_status === 'tidak_perlu' ? 'Tidak perlu tindak lanjut' : x.f.response_status === 'ditangani' ? 'Sudah ditangani di luar aplikasi' : 'Tiket selesai';
+    return `<div class="br-issue" style="border-left-color:#86efac;opacity:.85"><div style="font-size:12.5px"><b>${brEsc(x.list[0].title)}</b>${x.list.length > 1 ? ' <span style="color:var(--muted)">+' + (x.list.length - 1) + ' berita lain</span>' : ''}</div><div style="font-size:11.5px;color:var(--muted);margin:3px 0 6px">${why}${x.f.pic ? ' · PIC: ' + brEsc(x.f.pic) : ''}</div><button class="br-btn" onclick="brReopen(${x.f.id})">↩ Buka lagi</button></div>`;
+  }).join('')}</details>` : '';
 
   const terms = brTerms();
   const msg = terms.map(t => { let re; try { re = new RegExp(t, 'i'); } catch (e) { re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); } return [t, cur.filter(a => re.test(a.title + ' ' + a.resume)).length]; });
-  const now = new Date();
-  const mom = BR_MOMENTS.map(m => { let d = new Date(now.getFullYear(), m[0] - 1, m[1]); if (d < new Date(now.getFullYear(), now.getMonth(), now.getDate())) d = new Date(now.getFullYear() + 1, m[0] - 1, m[1]); return { d, days: Math.round((d - now) / 86400000), n: m[2], c: m[3] }; }).sort((a, b) => a.d - b.d).slice(0, 3);
+  const mom = brMomentsBetween(400).slice(0, 4);
 
   root.innerHTML = banners + kpi + `
   <div class="br-cols">
     <div>
       <div class="br-sec">🚨 Perlu Respons Hari Ini <span style="font-weight:400;font-size:12px;color:var(--muted)">· berita negatif 3 hari terakhir, dikelompokkan per isu</span></div>
       ${issues}
+      ${closedHtml}
     </div>
     <div>
       <div class="br-sec">🎯 Pesan Kunci (7 hari)</div>
@@ -6455,7 +6626,10 @@ function renderBeranda() {
         <div style="font-size:11px;color:var(--muted)">Menghitung berapa banyak berita yang memuat pesan yang ingin PLN dorong.</div>
       </div>
       <div class="br-sec" style="margin-top:14px">📅 Momentum Mendatang</div>
-      <div class="set-card"><div class="br-mini">${mom.map(m => `<div class="row" style="flex-direction:column"><span><b>${brEsc(m.n)}</b> <span style="color:var(--muted)">· ${m.days === 0 ? 'hari ini' : m.days + ' hari lagi'}</span></span><span style="color:var(--muted);font-size:11.5px">${brEsc(m.c)}</span></div>`).join('')}</div></div>
+      <div class="set-card"><div class="br-mini">${mom.map(m => `<div class="row" style="flex-direction:column"><span><b>${brEsc(m.n)}</b></span><span style="font-size:11.5px">${brEsc(brFmtDay(m.date))} <span style="color:var(--muted)">· ${m.days === 0 ? 'hari ini' : 'H-' + m.days}</span></span>${m.c ? `<span style="color:var(--muted);font-size:11.5px">${brEsc(m.c)}</span>` : ''}</div>`).join('')}</div>
+        <div class="br-ctl"><button class="br-btn" onclick="switchTab('radar');radarSub('kalender')">📅 Lihat kalender 12 bulan</button></div></div>
+      <div class="br-sec" style="margin-top:14px">⭐ Highlight Tanah Papua <span style="font-weight:400;font-size:11.5px;color:var(--muted)">· 3 hari</span></div>
+      <div class="set-card"><div class="br-mini">${brHighlightMini()}</div><div class="br-ctl"><button class="br-btn" onclick="switchTab('radar');radarSub('highlight')">Lihat semua highlight</button></div></div>
       <div class="br-sec" style="margin-top:14px">🔗 Pintasan</div>
       <div class="br-ctl" style="margin-top:0"><button class="br-btn" onclick="switchTab('reputasi')">🛡 Reputasi</button><button class="br-btn" onclick="switchTab('laporan')">📄 Buat Laporan</button><button class="br-btn" onclick="switchTab('followups')">🗂 Tindak Lanjut</button></div>
       <div style="font-size:11px;color:var(--muted);margin-top:10px">Data diperbarui ${new Date(BR.loadedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} · <a href="#" onclick="loadBeranda(true);return false">muat ulang</a></div>
@@ -6487,6 +6661,37 @@ async function brCreateTicket(gi) {
     BR.fu = ((await (await fetch('/api/articles?resource=followups')).json()).followups) || BR.fu;
     renderBeranda();
   } catch (e) { showToast('⚠ Gagal membuat tiket: ' + e.message); }
+}
+async function brReloadFollowups() {
+  try { const d = await (await fetch('/api/articles?resource=followups')).json(); BR.fu = d.followups || BR.fu; } catch (e) {}
+}
+async function brClose(gi, kind) {
+  const g = BR.groups[gi]; if (!g) return;
+  try {
+    let f = g.list.map(a => brTicketMap()[a.url]).find(Boolean);
+    if (!f) {
+      const first = g.list[0];
+      await brPost({ mode: 'pin', article_url: first.url, article_title: first.title, article_source: first.media, article_published_at: first.pub.toISOString(),
+        articles: g.list.map(a => ({ url: a.url, title: a.title, source: a.media, published_at: a.pub.toISOString() })) });
+      await brReloadFollowups();
+      f = g.list.map(a => brTicketMap()[a.url]).find(Boolean);
+      if (!f) throw new Error('Tiket tidak ditemukan setelah dibuat');
+    }
+    await brPost({ mode: 'update-status', id: f.id, status: 'selesai' });
+    f.status = 'selesai';
+    try { await brPost({ mode: 'update-followup', id: f.id, response_status: kind }); f.response_status = kind; }
+    catch (e) { showToast('Isu ditutup, tapi alasan belum tersimpan: ' + e.message); }
+    await brReloadFollowups();
+    renderBeranda();
+    showToast(kind === 'tidak_perlu' ? '🚫 Ditandai tidak perlu tindak lanjut. Bisa dibuka lagi di bagian bawah.' : '✔ Ditandai sudah ditangani. Bisa dibuka lagi di bagian bawah.');
+  } catch (e) { showToast('⚠ Gagal: ' + e.message); }
+}
+async function brReopen(id) {
+  try {
+    await brPost({ mode: 'update-status', id, status: 'proses' });
+    try { await brPost({ mode: 'update-followup', id, response_status: 'belum' }); } catch (e) {}
+    await brReloadFollowups(); renderBeranda(); showToast('↩ Dibuka lagi');
+  } catch (e) { showToast('⚠ ' + e.message); }
 }
 async function brSetTicketStatus(id, status) {
   try { await brPost({ mode: 'update-status', id, status }); const f = BR.fu.find(x => x.id === id); if (f) f.status = status; showToast('✅ Status tiket diubah'); }
