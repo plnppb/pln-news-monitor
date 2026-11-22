@@ -564,7 +564,7 @@ async function handleUnpin(req, res) {
 async function handleUpdateFollowup(req, res) {
   const { id, pic, response_status } = req.body || {};
   if (!id) return res.status(400).json({ error: 'id wajib diisi' });
-  const allowed = ['belum', 'hak_jawab', 'klarifikasi', 'tidak_perlu'];
+  const allowed = ['belum', 'hak_jawab', 'klarifikasi', 'tidak_perlu', 'ditangani'];
   const patch = { updated_at: new Date().toISOString() };
   if (pic !== undefined) patch.pic = String(pic).slice(0, 80);
   if (response_status !== undefined) {
