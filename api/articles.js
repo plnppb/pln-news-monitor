@@ -416,6 +416,26 @@ async function handleSpkNames(req, res) {
   }
 }
 
+// ===== GET ?resource=spk-data: data ringan untuk tab Narasumber (tanpa deskripsi/resume yang besar) =====
+async function handleSpkData(req, res) {
+  const limit = Math.min(parseInt(req.query.limit) || 1000, 1000);
+  const offset = parseInt(req.query.offset) || 0;
+  const cols = 'id,url,title,source,published_at,tone,category,manual_locked,spokesperson_internal,spokesperson_internal_stance,spokesperson_eksternal,spokesperson_eksternal_stance';
+  const base = `${SUPABASE_URL}/rest/v1/articles?select=${cols}&order=published_at.desc&limit=${limit}&offset=${offset}`;
+  const headers = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Range-Unit': 'items', 'Prefer': 'count=exact' };
+  try {
+    let r = await fetch(base + '&hidden=eq.false', { headers });
+    if (!r.ok) r = await fetch(base, { headers });
+    const rows = await r.json();
+    if (!Array.isArray(rows)) return res.status(500).json({ error: 'Gagal membaca data narasumber' });
+    const total = parseInt((r.headers.get('content-range') || '').split('/')[1]) || rows.length;
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ articles: rows, total });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
 // ===== GET: baca daftar artikel (perilaku asli, tidak berubah) =====
 async function handleList(req, res) {
   const { keyword, source, from, to, created_from, created_to, q, limit = 500, offset = 0 } = req.query;
@@ -897,6 +917,7 @@ module.exports = async function handler(req, res) {
     if (req.query.resource === 'radar') return handleListRadar(req, res);
     if (req.query.resource === 'health') return handleHealth(req, res);
     if (req.query.resource === 'spk-names') return handleSpkNames(req, res);
+    if (req.query.resource === 'spk-data') return handleSpkData(req, res);
     return handleList(req, res);
   }
 
