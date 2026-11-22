@@ -276,6 +276,15 @@ async function fetchArticlesSkippingLocked(url) {
   return response;
 }
 
+// Mode biasa (isi yang belum dianalisis): ambil termasuk yang terkunci. Kalau kolom-kolom pilihan belum ada di DB,
+// ulangi dengan kolom dasar saja.
+async function fetchPendingIncludingLocked(url) {
+  const headers = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` };
+  let response = await fetch(url, { headers });
+  if (!response.ok) response = await fetch(url.replace(/select=[^&]*/, 'select=id,title,description,url,source,published_at'), { headers });
+  return response;
+}
+
 // ===== Peringatan Telegram untuk berita NEGATIF baru (opsional) =====
 // Aktif hanya bila TELEGRAM_BOT_TOKEN dan TELEGRAM_CHAT_ID diisi di Vercel.
 // ALERT_MODE=semua -> semua berita negatif baru; default "penting" -> hanya yang dimuat media nasional,
@@ -498,10 +507,12 @@ module.exports = async function handler(req, res) {
     if (reanalyze) {
       url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description,url,source,published_at${dateFilter}&limit=${batchSize}&offset=${offset}&order=id.asc`;
     } else {
-      url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description,url,source,published_at&or=(tone.is.null,tone.eq.)${dateFilter}&limit=${batchSize}&offset=${offset}&order=id.asc`;
+      // Berita yang tone-nya masih kosong SELALU diproses, termasuk yang sudah dikunci (🔒) karena
+      // kategori/lokasinya pernah diedit manual. Isian manual itu tidak ditimpa (lihat bagian simpan di bawah).
+      url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description,url,source,published_at,manual_locked,category,category_secondary,locations,geo_scope,spokesperson_internal,spokesperson_internal_stance,spokesperson_eksternal,spokesperson_eksternal_stance&or=(tone.is.null,tone.eq.)${dateFilter}&limit=${batchSize}&offset=${offset}&order=id.asc`;
     }
 
-    const response = await fetchArticlesSkippingLocked(url);
+    const response = reanalyze ? await fetchArticlesSkippingLocked(url) : await fetchPendingIncludingLocked(url);
     const articles = await response.json();
 
     if (!Array.isArray(articles) || !articles.length) {
@@ -532,6 +543,13 @@ module.exports = async function handler(req, res) {
         locations: result.locations || '',
         geo_scope: result.geo_scope || ''
       };
+      if (article.manual_locked) {
+        // berita terkunci: hanya isi yang masih kosong, jangan timpa hasil edit manual
+        if (article.category) { delete fullBody.category; delete fullBody.category_secondary; }
+        if (article.locations || article.geo_scope) { delete fullBody.locations; delete fullBody.geo_scope; }
+        if (article.spokesperson_internal) { delete fullBody.spokesperson_internal; delete fullBody.spokesperson_internal_stance; }
+        if (article.spokesperson_eksternal) { delete fullBody.spokesperson_eksternal; delete fullBody.spokesperson_eksternal_stance; }
+      }
       const doPatch = body => fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${article.id}`, {
         method: 'PATCH',
         headers: {

@@ -600,15 +600,16 @@ async function handleHealth(req, res) {
   };
   try {
     const since24 = encodeURIComponent(new Date(Date.now() - 86400000).toISOString());
-    const [total, pending, last24, newest] = await Promise.all([
+    const [total, pending, pendingLocked, last24, newest] = await Promise.all([
       count('hidden=not.is.true'),
       count('hidden=not.is.true&or=(tone.is.null,tone.eq.)'),
+      count('hidden=not.is.true&manual_locked=eq.true&or=(tone.is.null,tone.eq.)'),
       count(`hidden=not.is.true&created_at=gte.${since24}`),
       fetch(`${SUPABASE_URL}/rest/v1/articles?select=created_at,published_at&order=created_at.desc&limit=1`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }).then(r => r.json())
     ]);
     const geminiKeys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean).length;
     return res.status(200).json({
-      total, pending, last24,
+      total, pending, pendingLocked, last24,
       newestCreatedAt: Array.isArray(newest) && newest[0] ? newest[0].created_at : null,
       geminiKeys,
       telegram: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID)
