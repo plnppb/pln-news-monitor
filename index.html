@@ -282,6 +282,45 @@
   .icon-btn:hover{background:var(--accent-light);color:var(--accent);border-color:var(--accent2);}
   .icon-btn.active{color:var(--warn);background:#fef3c7;border-color:var(--warn);}
 
+  /* ---- UI v2: grup tab, kartu pengaturan, menu aksi, beranda ---- */
+  .tab-sep{width:1px;background:var(--border2);margin:8px 6px;flex-shrink:0;}
+  .set-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;align-items:start;}
+  .set-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;min-width:0;}
+  .set-title{font-weight:700;font-size:14px;color:var(--text);}
+  .icon-btn{min-width:34px;min-height:34px;font-size:14px;display:inline-flex;align-items:center;justify-content:center;gap:4px;}
+  .icon-btn.pri{background:var(--accent-light);color:var(--accent);border-color:var(--accent2);font-weight:600;}
+  @media (pointer:coarse){.icon-btn{min-width:42px;min-height:42px;font-size:16px;}.act-menu button{padding:12px 14px !important;}}
+  .card-actions{align-items:flex-start;}
+  .act-wrap{position:relative;}
+  .act-menu{display:none;position:absolute;right:0;top:100%;margin-top:4px;z-index:60;background:var(--surface);border:1px solid var(--border2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:230px;padding:4px;}
+  .act-menu.open{display:block;}
+  .act-menu button{display:block;width:100%;text-align:left;background:none;border:none;padding:8px 10px;font-size:12.5px;border-radius:6px;cursor:pointer;color:var(--text);font-family:inherit;}
+  .act-menu button:hover{background:var(--surface2);}
+  .act-menu button.danger{color:#b91c1c;}
+  .tone-badge.pending{background:#fef3c7;color:#92400e;}
+  .stats-bar{grid-template-columns:repeat(auto-fit,minmax(130px,1fr));}
+  .br-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px;}
+  .br-kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow);}
+  .br-kpi .v{font-size:26px;font-weight:800;line-height:1.1;}
+  .br-kpi .l{font-size:11.5px;color:var(--muted);margin-top:3px;}
+  .br-kpi .d{font-size:11.5px;margin-top:4px;font-weight:600;}
+  .br-banner{border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .br-banner.warn{background:#fef3c7;border:1px solid #fcd34d;color:#78350f;}
+  .br-banner.bad{background:#fee2e2;border:1px solid #fca5a5;color:#7f1d1d;}
+  .br-cols{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:14px;align-items:start;}
+  @media (max-width:980px){.br-cols{grid-template-columns:1fr;}}
+  .br-sec{font-weight:700;font-size:14px;margin:4px 0 8px;}
+  .br-issue{background:var(--surface);border:1px solid var(--border);border-left:5px solid #94a3b8;border-radius:10px;padding:12px 14px;margin-bottom:10px;box-shadow:var(--shadow);}
+  .br-issue.tinggi{border-left-color:#dc2626;} .br-issue.sedang{border-left-color:#f59e0b;} .br-issue.rendah{border-left-color:#94a3b8;}
+  .lvl{display:inline-block;font-size:10.5px;font-weight:700;border-radius:10px;padding:2px 8px;}
+  .lvl.tinggi{background:#fee2e2;color:#991b1b;} .lvl.sedang{background:#fef3c7;color:#92400e;} .lvl.rendah{background:#f1f5f9;color:#475569;}
+  .br-ctl{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;}
+  .br-ctl select,.br-ctl input{font-size:12px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px;background:var(--surface);color:var(--text);}
+  .br-btn{font-size:12px;padding:6px 11px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);cursor:pointer;font-weight:600;color:var(--text);font-family:inherit;}
+  .br-btn.pri{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .br-mini{font-size:12px;line-height:1.7;}
+  .br-mini .row{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dashed var(--border);padding:3px 0;}
+
   .card-title{font-size:14px;font-weight:600;line-height:1.5;margin-bottom:6px;}
   .card-title a{color:var(--text);text-decoration:none;}
   .card-title a:hover{color:var(--accent2);text-decoration:underline;}
@@ -389,57 +428,35 @@
         <div class="rss-progress-bar"><div class="rss-progress-fill" id="rssProgressFill"></div></div>
         <div class="rss-progress-label" id="rssProgressLabel">Mengambil berita...</div>
       </div>
-      <!-- Auto Crawl Status -->
-      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:8px 10px;margin-bottom:8px;">
-        <div style="font-size:11px;font-weight:600;color:#0369a1;margin-bottom:4px;">🤖 Auto-Crawl Aktif</div>
-        <div style="font-size:10px;color:#0369a1;line-height:1.6;">
-          ✅ Artikel dikumpulkan otomatis tiap <strong>6 jam</strong> (07:00, 13:00, 19:00, 01:00 WIT).<br>
-          Buka tab <strong>📊 Dashboard</strong> untuk lihat semua hasil.
-        </div>
-        <button onclick="runFeedsCrawlNow()" id="feedsCrawlBtn"
-          style="width:100%;margin-top:6px;background:#0369a1;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;">
-          ⚡ Jalankan Sekarang (Semua Feed RSS)
-        </button>
-        <div id="feedsCrawlStatus" style="font-size:10px;color:#0369a1;margin-top:6px;line-height:1.6;max-height:90px;overflow-y:auto;"></div>
-        <button onclick="runYoutubeCrawlNow()" id="youtubeCrawlBtn"
-          style="width:100%;margin-top:6px;background:#dc2626;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;">
-          ⚡ Jalankan Sekarang (YouTube)
-        </button>
-        <div id="youtubeCrawlStatus" style="font-size:10px;color:#0369a1;margin-top:6px;line-height:1.6;max-height:90px;overflow-y:auto;"></div>
-        <button onclick="runAnalyzePending()" id="analyzePendingBtn"
-          style="width:100%;margin-top:6px;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;">
-          🧠 Analisis Berita yang Belum Terisi (tone, kategori, lokasi, kutipan)
-        </button>
-        <div id="analyzePendingStatus" style="font-size:10px;color:#0369a1;margin-top:6px;line-height:1.6;max-height:90px;overflow-y:auto;"></div>
+
+    </div>
+
+
+
+
+
+    <!-- FILTERS -->
+    <div>
+      <div class="sidebar-label">Filter Tone</div>
+      <div class="filter-row">
+        <div class="filter-btn active" onclick="filterTone('semua',this)">Semua</div>
+        <div class="filter-btn" onclick="filterTone('positif',this)">✓ Pos</div>
+        <div class="filter-btn" onclick="filterTone('negatif',this)">✗ Neg</div>
+        <div class="filter-btn" onclick="filterTone('netral',this)">— Net</div>
+        <div class="filter-btn" onclick="filterTone('belum',this)" title="Berita yang belum dianalisis AI">⏳ Belum</div>
+      </div>
+    </div>
+    <div>
+      <div class="sidebar-label">Filter Sumber</div>
+      <div id="sourceFilters" class="filter-row">
+        <div class="filter-btn active" onclick="filterSource('semua',this)">Semua</div>
+        <div class="filter-btn" onclick="filterSource('newsapi',this)">NewsAPI</div>
+        <div class="filter-btn" onclick="filterSource('gnews',this)">GNews</div>
       </div>
     </div>
 
-    <!-- MULTI-KEYWORD CRAWL -->
-    <div>
-      <div class="rss-section-header">
-        <div class="sidebar-label" style="margin-bottom:0">Crawl Manual · Banyak Kata Kunci</div>
-        <button class="btn-manage" onclick="renderMkwChips()" title="Muat ulang daftar dari database (kalau baru nambah lewat Kelola Kata Kunci)">🔄</button>
-      </div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;">Ikut daftar "Kata Kunci Auto-Crawl". Semua terpilih otomatis; klik untuk membatalkan.</div>
-      <div class="mkw-addrow" style="margin-top:0;margin-bottom:5px;">
-        <input type="text" id="mkwFilter" placeholder="Cari kata kunci..." oninput="filterMkwChips(this.value)"/>
-        <button class="btn-manage" onclick="setAllMkw(true)" title="Pilih semua yang tampil">Semua</button>
-        <button class="btn-manage" onclick="setAllMkw(false)" title="Kosongkan pilihan yang tampil">Kosong</button>
-      </div>
-      <div class="keyword-chips" id="mkwChips" style="max-height:112px;overflow-y:auto;padding:4px;border:1px solid var(--border2);border-radius:6px;"></div>
-      <div class="mkw-addrow">
-        <input type="text" id="mkwNewInput" placeholder="Tambah kata kunci baru..." onkeydown="if(event.key==='Enter')addMkwKeyword()"/>
-        <button class="btn-manage" onclick="addMkwKeyword()">+ Tambah</button>
-      </div>
-      <div class="mkw-addrow" style="margin-top:8px;">
-        <input type="date" id="mkwDateFrom" title="Dari tanggal" style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text2);"/>
-        <input type="date" id="mkwDateTo" title="Sampai tanggal" style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text2);"/>
-        <button class="btn-manage" onclick="document.getElementById('mkwDateFrom').value='';document.getElementById('mkwDateTo').value='';" title="Kosongkan tanggal">✕</button>
-      </div>
-      <div style="font-size:10px;color:var(--muted);margin-top:4px;">Kosongkan untuk default 30 hari terakhir.</div>
-      <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="runMultiKeywordCrawl()" id="mkwRunBtn">🚀 Jalankan Crawl (<span id="mkwSelCount">0</span> keyword)</button>
-      <div class="mkw-status" id="mkwStatus"></div>
-    </div>
+
+  </div>
 
   <!-- RSS MODAL -->
   <div class="modal-overlay" id="rssModal">
@@ -556,32 +573,85 @@
     </div>
   </div>
 
-    <!-- FILTERS -->
-    <div>
-      <div class="sidebar-label">Filter Tone</div>
-      <div class="filter-row">
-        <div class="filter-btn active" onclick="filterTone('semua',this)">Semua</div>
-        <div class="filter-btn" onclick="filterTone('positif',this)">✓ Pos</div>
-        <div class="filter-btn" onclick="filterTone('negatif',this)">✗ Neg</div>
-        <div class="filter-btn" onclick="filterTone('netral',this)">— Net</div>
-      </div>
-    </div>
-    <div>
-      <div class="sidebar-label">Filter Sumber</div>
-      <div id="sourceFilters" class="filter-row">
-        <div class="filter-btn active" onclick="filterSource('semua',this)">Semua</div>
-        <div class="filter-btn" onclick="filterSource('newsapi',this)">NewsAPI</div>
-        <div class="filter-btn" onclick="filterSource('gnews',this)">GNews</div>
-      </div>
-    </div>
-
-    <!-- TINDAK LANJUT SHORTCUT -->
-    <div>
-      <div class="sidebar-label">Tindak Lanjut</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Artikel yang di-📌 tampil di tab "🗂 Tindak Lanjut" di atas.</div>
-      <button class="btn btn-ghost" style="width:100%" onclick="switchTab('followups')">🗂 Buka Tindak Lanjut</button>
+  <div class="main">
+    <!-- TAB NAVIGATION -->
+    <div class="tab-nav" style="display:flex;gap:2px;margin-bottom:16px;border-bottom:2px solid var(--border1);padding-bottom:0;">
+      <button id="tab-beranda" onclick="switchTab('beranda')" style="padding:8px 16px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🏠 Beranda</button>
+      <span class="tab-sep"></span>
+      <button id="tab-monitor" onclick="switchTab('monitor')" style="padding:8px 16px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📡 Monitor</button>
+      <button id="tab-radar" onclick="switchTab('radar')" style="padding:8px 16px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🛰 Radar Papua</button>
+      <button id="tab-youtube" onclick="switchTab('youtube')" style="padding:8px 16px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🎥 YouTube</button>
+      <span class="tab-sep"></span>
+      <button id="tab-dashboard" onclick="switchTab('dashboard')" style="padding:8px 16px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📊 Dashboard</button>
+      <button id="tab-reputasi" onclick="switchTab('reputasi')" style="padding:8px 16px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🛡 Reputasi</button>
+      <button id="tab-spokesperson" onclick="switchTab('spokesperson')" style="padding:8px 16px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🎙 Narasumber</button>
+      <span class="tab-sep"></span>
+      <button id="tab-followups" onclick="switchTab('followups')" style="padding:8px 16px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🗂 Tindak Lanjut</button>
+      <button id="tab-laporan" onclick="switchTab('laporan')" style="padding:8px 16px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📄 Laporan</button>
+      <button id="tab-pengaturan" onclick="switchTab('pengaturan')" style="padding:8px 16px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;margin-left:auto;">⚙ Pengaturan</button>
     </div>
 
+    <!-- PANEL BERANDA -->
+    <div id="panel-beranda-wrap" style="display:none;"><div id="brRoot"><div style="padding:40px;text-align:center;color:var(--muted)">Memuat ringkasan...</div></div></div>
+
+    <!-- PANEL PENGATURAN -->
+    <div id="panel-pengaturan-wrap" style="display:none;padding-bottom:40px;">
+      <div class="set-grid">
+        <div class="set-card"><div class="set-title">🩺 Kesehatan Data</div><div id="healthBox" style="font-size:12.5px;color:var(--muted)">Memuat...</div></div>
+        <div class="set-card"><div class="set-title">🤖 Crawl & Analisis</div>
+      <!-- Auto Crawl Status -->
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:8px 10px;margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:600;color:#0369a1;margin-bottom:4px;">🤖 Auto-Crawl Aktif</div>
+        <div style="font-size:10px;color:#0369a1;line-height:1.6;">
+          ✅ Artikel dikumpulkan otomatis tiap <strong>6 jam</strong> (07:00, 13:00, 19:00, 01:00 WIT).<br>
+          Buka tab <strong>📊 Dashboard</strong> untuk lihat semua hasil.
+        </div>
+        <button onclick="runFeedsCrawlNow()" id="feedsCrawlBtn"
+          style="width:100%;margin-top:6px;background:#0369a1;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;">
+          ⚡ Jalankan Sekarang (Semua Feed RSS)
+        </button>
+        <div id="feedsCrawlStatus" style="font-size:10px;color:#0369a1;margin-top:6px;line-height:1.6;max-height:90px;overflow-y:auto;"></div>
+        <button onclick="runYoutubeCrawlNow()" id="youtubeCrawlBtn"
+          style="width:100%;margin-top:6px;background:#dc2626;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;">
+          ⚡ Jalankan Sekarang (YouTube)
+        </button>
+        <div id="youtubeCrawlStatus" style="font-size:10px;color:#0369a1;margin-top:6px;line-height:1.6;max-height:90px;overflow-y:auto;"></div>
+        <button onclick="runAnalyzePending()" id="analyzePendingBtn"
+          style="width:100%;margin-top:6px;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;">
+          🧠 Analisis Berita yang Belum Terisi (tone, kategori, lokasi, kutipan)
+        </button>
+        <div id="analyzePendingStatus" style="font-size:10px;color:#0369a1;margin-top:6px;line-height:1.6;max-height:90px;overflow-y:auto;"></div>
+      </div>
+        </div>
+        <div class="set-card">
+    <!-- MULTI-KEYWORD CRAWL -->
+    <div>
+      <div class="rss-section-header">
+        <div class="sidebar-label" style="margin-bottom:0">Crawl Manual · Banyak Kata Kunci</div>
+        <button class="btn-manage" onclick="renderMkwChips()" title="Muat ulang daftar dari database (kalau baru nambah lewat Kelola Kata Kunci)">🔄</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;">Ikut daftar "Kata Kunci Auto-Crawl". Semua terpilih otomatis; klik untuk membatalkan.</div>
+      <div class="mkw-addrow" style="margin-top:0;margin-bottom:5px;">
+        <input type="text" id="mkwFilter" placeholder="Cari kata kunci..." oninput="filterMkwChips(this.value)"/>
+        <button class="btn-manage" onclick="setAllMkw(true)" title="Pilih semua yang tampil">Semua</button>
+        <button class="btn-manage" onclick="setAllMkw(false)" title="Kosongkan pilihan yang tampil">Kosong</button>
+      </div>
+      <div class="keyword-chips" id="mkwChips" style="max-height:112px;overflow-y:auto;padding:4px;border:1px solid var(--border2);border-radius:6px;"></div>
+      <div class="mkw-addrow">
+        <input type="text" id="mkwNewInput" placeholder="Tambah kata kunci baru..." onkeydown="if(event.key==='Enter')addMkwKeyword()"/>
+        <button class="btn-manage" onclick="addMkwKeyword()">+ Tambah</button>
+      </div>
+      <div class="mkw-addrow" style="margin-top:8px;">
+        <input type="date" id="mkwDateFrom" title="Dari tanggal" style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text2);"/>
+        <input type="date" id="mkwDateTo" title="Sampai tanggal" style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text2);"/>
+        <button class="btn-manage" onclick="document.getElementById('mkwDateFrom').value='';document.getElementById('mkwDateTo').value='';" title="Kosongkan tanggal">✕</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px;">Kosongkan untuk default 30 hari terakhir.</div>
+      <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="runMultiKeywordCrawl()" id="mkwRunBtn">🚀 Jalankan Crawl (<span id="mkwSelCount">0</span> keyword)</button>
+      <div class="mkw-status" id="mkwStatus"></div>
+    </div>
+        </div>
+        <div class="set-card"><div class="set-title">🔑 Kata Kunci & Sumber</div>
     <!-- KEYWORD MANAGER (bottom) -->
     <div>
       <div class="rss-section-header">
@@ -599,9 +669,16 @@
       </div>
       <div id="rssStatusList" style="display:flex;flex-direction:column;gap:4px;margin-top:6px"></div>
     </div>
-  </div>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+            <div class="sidebar-label">Peringatan Telegram</div>
+            <div id="tgInfo" style="font-size:11.5px;color:var(--muted);line-height:1.6">Memeriksa...</div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-  <div class="main">
+    <!-- PANEL MONITOR -->
+    <div id="panel-monitor-wrap">
     <!-- BRIEF -->
     <div class="brief-card">
       <div class="brief-header">
@@ -611,20 +688,6 @@
       <div id="briefContent" class="brief-placeholder">Cari berita terlebih dahulu, lalu klik Generate untuk ringkasan harian dari AI.</div>
     </div>
 
-    <!-- TAB NAVIGATION -->
-    <div class="tab-nav" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border1);padding-bottom:0;">
-      <button id="tab-monitor" onclick="switchTab('monitor')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📡 Monitor</button>
-      <button id="tab-dashboard" onclick="switchTab('dashboard')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📊 Dashboard</button>
-      <button id="tab-reputasi" onclick="switchTab('reputasi')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🛡 Reputasi</button>
-      <button id="tab-laporan" onclick="switchTab('laporan')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📄 Laporan</button>
-      <button id="tab-radar" onclick="switchTab('radar')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">📡 Radar Papua</button>
-      <button id="tab-followups" onclick="switchTab('followups')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🗂 Tindak Lanjut</button>
-      <button id="tab-spokesperson" onclick="switchTab('spokesperson')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🎙 Spokesperson</button>
-      <button id="tab-youtube" onclick="switchTab('youtube')" style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Inter',sans-serif;">🎥 YouTube</button>
-    </div>
-
-    <!-- PANEL MONITOR -->
-    <div id="panel-monitor-wrap">
 
     <!-- STATS -->
     <div class="stats-bar">
@@ -632,6 +695,7 @@
       <div class="stat-card pos" style="cursor:pointer" onclick="filterToneFromCard('positif')"><div class="num" id="statPos">0</div><div class="lbl">Tone Positif</div></div>
       <div class="stat-card neg" style="cursor:pointer" onclick="filterToneFromCard('negatif')"><div class="num" id="statNeg">0</div><div class="lbl">Tone Negatif</div></div>
       <div class="stat-card neu" style="cursor:pointer" onclick="filterToneFromCard('netral')"><div class="num" id="statNeu">0</div><div class="lbl">Tone Netral</div></div>
+      <div class="stat-card" style="cursor:pointer" onclick="filterToneFromCard('belum')" title="Belum dianalisis AI, tidak dihitung ke tone"><div class="num" id="statPend" style="color:#b45309">0</div><div class="lbl">⏳ Belum Dianalisis</div></div>
     </div>
 
     <!-- PROGRESS -->
@@ -796,6 +860,7 @@
   <!-- PANEL RADAR PAPUA -->
   <!-- TAB: REPUTASI -->
   <div id="panel-reputasi-wrap" style="display:none;">
+    <div id="rpPendBanner"></div>
     <div id="rpRoot"></div>
   </div>
 
@@ -1727,7 +1792,7 @@ function renderArticles(articles) {
 function renderCard(a, i) {
   const gi = allArticles.indexOf(a);
   const date = a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '—';
-  const tc = a._tone ? getToneClass(a._tone) : '';
+  const tc = (a._tone && !a._pending) ? getToneClass(a._tone) : '';
   const url = a.url || '#';
   const srcName = a.source?.name || 'RSS';
   const isBookmarked = bookmarks.some(b => b.url === a.url);
@@ -1750,7 +1815,7 @@ function renderCard(a, i) {
       <div class="card-meta">
         <span class="source-badge">${srcName}</span>
         <span class="date-badge">${date}</span>
-        ${tc
+        ${a._pending ? `<span class="tone-badge pending" title="Belum dianalisis AI, jadi belum ada tone. Tidak dihitung di statistik.">⏳ Belum dianalisis</span>` : tc
           ? (a._fromDB
               ? `<select class="tone-badge ${tc}" style="border:none;cursor:pointer;font-weight:600;" onchange="changeArticleTone(${gi}, this.value)" title="Klik untuk koreksi tone kalau AI-nya salah nilai">
                    <option value="positif" ${a._tone==='positif'?'selected':''}>Positif</option>
@@ -1761,17 +1826,21 @@ function renderCard(a, i) {
           : ''}
       </div>
       <div class="card-actions">
-        ${a._fromDB ? `<button class="icon-btn ${a._locked ? 'active' : ''}" onclick="toggleLock(${gi})" title="${a._locked ? 'Terkunci: sudah diedit manual, tidak ditimpa analisis ulang AI. Klik untuk membuka kunci.' : 'Belum dikunci: bisa ditimpa analisis ulang AI. Klik untuk mengunci.'}">${a._locked ? '🔒' : '🔓'}</button>` : ''}
-        <button class="icon-btn" onclick="openMgrSpkModal(${gi})" title="Kelola narasumber: tambah / edit / hapus">👥</button>
-        <button class="icon-btn" onclick="openTagModal(${gi})" title="Edit kategori isu & lokasi">🏷</button>
+        <button class="icon-btn pri" onclick="openQuickEdit(${gi})" title="Edit tone, kategori, dan lokasi sekaligus">✎ <span style="font-size:12px">Edit</span></button>
         <button class="icon-btn" onclick="pinArticle(${gi})" title="Tambahkan ke Tindak Lanjut">📌</button>
-        <a href="${url}" target="_blank" rel="noopener" style="text-decoration:none">
-          <button class="icon-btn" title="Buka artikel">↗</button>
-        </a>
-        ${a._fromDB
-          ? `<button class="icon-btn" disabled title="Sudah ada di database" style="opacity:0.6;cursor:default">✅</button>`
-          : `<button class="icon-btn" id="savedb-${gi}" onclick="saveArticleToDB(${gi})" title="Masukkan ke database, biar auto-crawl selanjutnya nangkep ini terus">💾</button>`}
-        <button class="icon-btn" onclick="deleteArticle(${gi})" title="Hapus berita ini dari monitoring">🗑</button>
+        <a href="${url}" target="_blank" rel="noopener" style="text-decoration:none"><button class="icon-btn" title="Buka artikel">↗</button></a>
+        <div class="act-wrap">
+          <button class="icon-btn" onclick="toggleActMenu(event,${gi})" title="Aksi lainnya">⋯</button>
+          <div class="act-menu" id="am-${gi}">
+            ${a._fromDB ? `<button onclick="toggleLock(${gi})">${a._locked ? '🔒 Terkunci dari analisis ulang AI (klik untuk buka kunci)' : '🔓 Kunci dari analisis ulang AI'}</button>` : ''}
+            <button onclick="openMgrSpkModal(${gi})">👥 Kelola narasumber</button>
+            <button onclick="openTagModal(${gi})">🏷 Kategori lengkap (termasuk sekunder)</button>
+            ${a._fromDB
+              ? `<button disabled style="opacity:.55;cursor:default">✅ Sudah tersimpan di database</button>`
+              : `<button id="savedb-${gi}" onclick="saveArticleToDB(${gi})">💾 Simpan ke database</button>`}
+            <button class="danger" onclick="deleteArticle(${gi})">🗑 Hapus dari monitoring</button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="card-title"><a href="${url}" target="_blank" rel="noopener">${a.title||'Tanpa judul'}</a></div>
@@ -1848,6 +1917,7 @@ function updateStats(articles) {
   document.getElementById('statPos').textContent = an.filter(a=>a._tone==='positif').length;
   document.getElementById('statNeg').textContent = an.filter(a=>a._tone==='negatif').length;
   document.getElementById('statNeu').textContent = an.filter(a=>a._tone==='netral').length;
+  const sp = document.getElementById('statPend'); if (sp) sp.textContent = articles.filter(a=>a._pending).length;
 }
 
 function applyFilters() {
@@ -1858,7 +1928,8 @@ function applyFilters() {
       (x._locations || '') + ' ' + (x._spkInternal || '') + ' ' + (x._spkExternal || '') + ' ' + (x._category || '')).toLowerCase();
     return qWords.every(w => hay.indexOf(w) >= 0);
   });
-  if (currentFilter.tone !== 'semua') a = a.filter(x => x._tone === currentFilter.tone);
+  if (currentFilter.tone === 'belum') a = a.filter(x => x._pending);
+  else if (currentFilter.tone !== 'semua') a = a.filter(x => x._tone === currentFilter.tone && !x._pending);
   if (currentFilter.source !== 'semua') a = a.filter(x => x._source === currentFilter.source || (currentFilter.source === 'rss' && x._source?.startsWith('rss_')));
   filteredArticles = a;
 }
@@ -1866,7 +1937,7 @@ function applyFilters() {
 function filterToneFromCard(val) {
   const buttons = document.querySelectorAll('.filter-row')[0]?.querySelectorAll('.filter-btn');
   if (!buttons) return;
-  const map = { semua: 0, positif: 1, negatif: 2, netral: 3 };
+  const map = { semua: 0, positif: 1, negatif: 2, netral: 3, belum: 4 };
   const idx = map[val];
   if (idx === undefined) return;
   filterTone(val, buttons[idx]);
@@ -2031,7 +2102,7 @@ async function saveAddLink() {
     const art = {
       title: a.title || title, url: a.url || st.url, publishedAt: a.published_at || published_at, createdAt: a.created_at,
       source: { name: a.source || 'Manual' }, description: a.description || '', keyword: 'manual-add',
-      _tone: a.tone || 'netral', _resume: a.resume || '',
+      _tone: a.tone || 'netral', _pending: !a.tone, _resume: a.resume || '',
       _spkInternal: a.spokesperson_internal || '', _spkExternal: a.spokesperson_eksternal || '',
       _spkInternalStance: a.spokesperson_internal_stance || '', _spkExternalStance: a.spokesperson_eksternal_stance || '',
       _locked: false, _category: a.category || '', _categorySecondary: a.category_secondary || '',
@@ -2120,7 +2191,7 @@ function repPrepare(rows) {
       ageDays: (now - pub.getTime()) / 86400000,
       tone: r.tone === 'negatif' ? 'negatif' : r.tone === 'positif' ? 'positif' : 'netral',
       cat: r.category || '', cat2: r.category_secondary || '', locs, kab, provs,
-      scope: r.geo_scope || '', stake, legal, leaders, resume: r.resume || ''
+      scope: r.geo_scope || '', stake, legal, leaders, resume: r.resume || '', pending: !r.tone
     };
   });
 }
@@ -2150,7 +2221,7 @@ async function loadReputasi(force) {
   REP.loading = true;
   root.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)" id="rpStatus">Memuat data...</div>';
   try {
-    REP.raw = repPrepare(await repFetch(span));
+    { const all = repPrepare(await repFetch(span)); REP.pendingN = all.filter(a => a.pending).length; REP.raw = all.filter(a => !a.pending); repPendBanner(); }
     REP.loadedSpan = span;
     REP.loading = false;
     renderReputasi();
@@ -2193,13 +2264,51 @@ function repClose() {
 function repSetTab(t) { REP.tab = t; repRenderDrawer(); }
 
 // ===== Edit cepat tone / kategori / lokasi langsung di drawer =====
-function repFind(url) { return (REP.drill && REP.drill.list.find(x => x.url === url)) || (REP.raw || []).find(x => x.url === url); }
+function repFind(url) { return (REP.drill && REP.drill.list.find(x => x.url === url)) || (REP.ext || []).find(x => x.url === url) || (REP.raw || []).find(x => x.url === url); }
+// ===== Edit cepat di Monitor (memakai editor yang sama dengan drawer Reputasi) =====
+function toggleActMenu(ev, gi) {
+  ev.stopPropagation();
+  const m = document.getElementById('am-' + gi); if (!m) return;
+  const was = m.classList.contains('open');
+  document.querySelectorAll('.act-menu.open').forEach(x => x.classList.remove('open'));
+  if (!was) m.classList.add('open');
+}
+document.addEventListener('click', () => document.querySelectorAll('.act-menu.open').forEach(x => x.classList.remove('open')));
+
+function openQuickEdit(gi) {
+  const a = allArticles[gi]; if (!a) return;
+  if (!a._fromDB) { showToast('Simpan berita ke database dulu (menu ⋯ → Simpan ke database) supaya bisa diedit.'); return; }
+  const locs = (a._locations || '').split(';').map(x => x.trim()).filter(Boolean);
+  REP.ext = [{ url: a.url, title: a.title || '', tone: a._pending ? '' : a._tone, cat: a._category || '', cat2: a._categorySecondary || '', locs, scope: a._geoScope || '' }];
+  REP.editHook = (kind, item) => {
+    REP.editHook = null;
+    closeQuickEdit();
+    if (kind === 'saved') {
+      const idx = allArticles.findIndex(x => x.url === (item && item.url));
+      if (idx >= 0) { try { updateCard(idx); } catch (e) { renderPage(currentPage); } }
+      try { updateStats(filteredArticles); } catch (e) {}
+      document.getElementById('statPend') && updateStats(filteredArticles);
+    }
+  };
+  repEditOpen(a.url);
+  let m = document.getElementById('qeModal');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'qeModal'; m.className = 'modal-overlay';
+    m.addEventListener('click', ev => { if (ev.target === m) repEditCancel(); });
+    document.body.appendChild(m);
+  }
+  m.innerHTML = '<div class="modal" style="max-width:560px;width:94vw"><div class="modal-header"><h3>✎ Edit berita</h3><button class="modal-close" onclick="repEditCancel()">✕</button></div><div class="modal-body"><div style="font-weight:600;font-size:13px;margin-bottom:10px;line-height:1.4">' + spkEsc(a.title || '') + '</div>' + repEditHtml(REP.ext[0]) + '</div></div>';
+  m.style.display = 'flex';
+  repEditLocList(); repEditInfo();
+}
+function closeQuickEdit() { const m = document.getElementById('qeModal'); if (m) m.style.display = 'none'; }
+
 function repEditOpen(url) {
   const a = repFind(url); if (!a) return;
   REP.edit = { url, tone: a.tone, cat: a.cat || 'lainnya', locs: new Set(a.locs), scope: a.scope || '', q: '', saving: false };
   repRenderDrawer();
 }
-function repEditCancel() { REP.edit = null; repRenderDrawer(); }
+function repEditCancel() { REP.edit = null; if (REP.editHook) REP.editHook('cancel'); repRenderDrawer(); }
 function repEditSet(k, v) {
   if (!REP.edit) return;
   REP.edit[k] = v;
@@ -2236,7 +2345,7 @@ function repEditHtml(a) {
   const e = REP.edit;
   const sel = 'border:1px solid #CBD5E3;border-radius:6px;padding:5px 8px;font-size:13px;background:#fff;width:100%;box-sizing:border-box';
   const lab = 'font-size:12px;font-weight:600;color:#4A5B72;margin-bottom:3px;display:block';
-  const toneOpt = [['negatif', 'Negatif'], ['netral', 'Netral'], ['positif', 'Positif']].map(x => `<option value="${x[0]}" ${e.tone === x[0] ? 'selected' : ''}>${x[1]}</option>`).join('');
+  const toneOpt = (e.tone ? '' : '<option value="" selected disabled>— belum dianalisis —</option>') + [['negatif', 'Negatif'], ['netral', 'Netral'], ['positif', 'Positif']].map(x => `<option value="${x[0]}" ${e.tone === x[0] ? 'selected' : ''}>${x[1]}</option>`).join('');
   const catOpt = TAXO.categories.map(c => `<option value="${c.key}" ${e.cat === c.key ? 'selected' : ''}>${spkEsc(c.label)}</option>`).join('');
   const scopeOpt = '<option value="">(tidak jelas)</option>' + TAXO.scopes.map(c => `<option value="${c.key}" ${e.scope === c.key ? 'selected' : ''}>${spkEsc(c.label)}</option>`).join('');
   return `<div id="repEd" style="background:#F6F8FB;border:1px solid #DDE3EC;border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:8px">
@@ -2279,12 +2388,13 @@ async function repDelete(url) {
 async function repEditSave() {
   const e = REP.edit; if (!e || e.saving) return;
   const a = repFind(e.url); if (!a) return;
-  const locs = TAXO.locations.map(l => l.name).filter(n => e.locs.has(n));
+  const known = TAXO.locations.map(l => l.name);
+  const locs = known.filter(n => e.locs.has(n)).concat([...e.locs].filter(n => known.indexOf(n) < 0)); // nama lama di luar daftar tidak dibuang diam-diam
   const scope = locs.length ? '' : (e.scope || '');
   const toneCh = e.tone !== a.tone;
   const catCh = e.cat !== (a.cat || 'lainnya');
   const locCh = locs.join(';') !== a.locs.join(';') || scope !== (a.scope || '');
-  if (!toneCh && !catCh && !locCh) { REP.edit = null; repRenderDrawer(); return; }
+  if (!toneCh && !catCh && !locCh) { REP.edit = null; if (REP.editHook) REP.editHook('cancel'); repRenderDrawer(); return; }
   e.saving = true;
   const btn = document.getElementById('repEdSave'); if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan...'; }
   const post = async body => {
@@ -2309,11 +2419,13 @@ async function repEditSave() {
     a.scope = scope; a.edited = true;
     // sinkronkan ke tab Monitor bila artikelnya sudah termuat di sana
     [typeof allArticles !== 'undefined' ? allArticles : [], dashAllArticles].forEach(arr => (arr || []).filter(x => x.url === a.url).forEach(x => {
-      x.tone = e.tone; x._category = e.cat; x._locations = locs.join(';'); x._geoScope = scope; x._locked = true;
+      x._tone = e.tone; x._pending = false; x._category = e.cat; x._categorySecondary = a.cat2 || ''; x._locations = locs.join(';'); x._geoScope = scope; x._locked = true;
+      x.tone = e.tone;
     }));
     REP.dirty = true; REP.edit = null;
+    if (REP.editHook) REP.editHook('saved', a);
     repRenderDrawer();
-    showToast('✅ Tersimpan (🔒 dikunci dari analisis ulang AI). Angka ringkasan diperbarui saat drawer ditutup');
+    showToast('✅ Tersimpan (🔒 dikunci dari analisis ulang AI).' + (REP.drill ? ' Angka ringkasan diperbarui saat drawer ditutup' : ''));
   } catch (err) {
     e.saving = false;
     if (btn) { btn.disabled = false; btn.textContent = 'Simpan'; }
@@ -2324,6 +2436,7 @@ async function repEditSave() {
 function repRenderDrawer() {
   const el = document.getElementById('rpDrawer');
   const dr = REP.drill;
+  if (!el) return;
   if (!dr) { el.innerHTML = ''; return; }
   const oldBody = document.getElementById('rpDrawerBody');
   const keepScroll = oldBody ? oldBody.scrollTop : 0;
@@ -2393,7 +2506,13 @@ function repCatLabel(k) {
   return c ? c.label : k;
 }
 
+function repPendBanner() {
+  const el = document.getElementById('rpPendBanner'); if (!el) return;
+  el.innerHTML = REP.pendingN ? `<div class="br-banner warn">⏳ <span><b>${REP.pendingN} berita belum dianalisis AI</b> sehingga tidak ikut dihitung di angka reputasi di bawah.</span><button class="br-btn" onclick="switchTab('pengaturan');runAnalyzePending()">🧠 Analisis sekarang</button></div>` : '';
+}
+
 function renderReputasi() {
+  repPendBanner();
   const root = document.getElementById('rpRoot');
   REP.reg = [];
   const now = new Date();
@@ -2886,7 +3005,7 @@ function mapDbRowToArticle(a) {
   return {
     title: a.title, url: a.url, publishedAt: a.published_at, createdAt: a.created_at,
     source: { name: a.source }, description: a.description, keyword: a.keyword,
-    _tone: a.tone || 'netral', _resume: a.resume || '',
+    _tone: a.tone || 'netral', _pending: !a.tone, _resume: a.resume || '',
     _spkInternal: a.spokesperson_internal || '', _spkExternal: a.spokesperson_eksternal || '',
     _spkInternalStance: a.spokesperson_internal_stance || '', _spkExternalStance: a.spokesperson_eksternal_stance || '',
     _locked: !!a.manual_locked, _category: a.category || '', _categorySecondary: a.category_secondary || '',
@@ -5596,13 +5715,16 @@ function closeSidebar() { document.body.classList.remove('sb-open'); }
 })();
 
 function switchTab(tab) {
-  const tabs = ['monitor', 'dashboard', 'reputasi', 'laporan', 'radar', 'followups', 'spokesperson', 'youtube'];
+  const tabs = ['beranda', 'monitor', 'radar', 'youtube', 'dashboard', 'reputasi', 'spokesperson', 'followups', 'laporan', 'pengaturan'];
   tabs.forEach(t => {
     const btn = document.getElementById(`tab-${t}`);
-    btn.style.color = tab === t ? 'var(--accent)' : 'var(--muted)';
-    btn.style.borderBottomColor = tab === t ? 'var(--accent)' : 'transparent';
-    document.getElementById(`panel-${t}-wrap`).style.display = tab === t ? 'block' : 'none';
+    if (btn) { btn.style.color = tab === t ? 'var(--accent)' : 'var(--muted)'; btn.style.borderBottomColor = tab === t ? 'var(--accent)' : 'transparent'; }
+    const pn = document.getElementById(`panel-${t}-wrap`);
+    if (pn) pn.style.display = tab === t ? 'block' : 'none';
   });
+  try { const ab = document.getElementById(`tab-${tab}`); if (ab && ab.scrollIntoView) ab.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (e) {}
+  if (tab === 'beranda') loadBeranda();
+  if (tab === 'pengaturan') loadHealth();
   if (tab === 'dashboard') {
     dashAllArticles = []; // force fresh load setiap buka tab
     renderDashboard();
@@ -5686,6 +5808,7 @@ async function loadFromDB() {
         description: a.description,
         keyword: a.keyword,
         _tone: a.tone || 'netral',
+        _pending: !a.tone,
         _resume: a.resume || '',
         _spkInternal: a.spokesperson_internal || '',
         _spkExternal: a.spokesperson_eksternal || '',
@@ -5747,10 +5870,11 @@ async function renderDashboard() {
   // Tone Distribution
   const tones = { positif: 0, negatif: 0, netral: 0 };
   articles.forEach(a => {
+    if (a._pending) return; // belum dianalisis: jangan dihitung sebagai netral
     const t = a._tone || 'netral';
     tones[t] = (tones[t] || 0) + 1;
   });
-  const total = articles.length || 1;
+  const total = (tones.positif + tones.negatif + tones.netral) || 1;
   const pPos = Math.round(tones.positif / total * 100);
   const pNeg = Math.round(tones.negatif / total * 100);
   const pNet = Math.round(tones.netral / total * 100);
@@ -5764,7 +5888,7 @@ async function renderDashboard() {
     <span class="tone-legend-item"><span class="tone-dot" style="background:var(--neg)"></span>Negatif ${pNeg}% (${tones.negatif})</span>
     <span class="tone-legend-item"><span class="tone-dot" style="background:var(--neu)"></span>Netral ${pNet}% (${tones.netral})</span>`;
   const analyzed = articles.filter(a => a._analyzed).length;
-  document.getElementById('dashToneDetail').innerHTML = `<p style="font-size:11px;color:var(--muted);margin-top:6px;">${analyzed} dari ${articles.length} artikel sudah dianalisis AI</p>`;
+  document.getElementById('dashToneDetail').innerHTML = `<p style="font-size:11px;color:var(--muted);margin-top:6px;">${analyzed} dari ${articles.length} artikel sudah dianalisis AI${articles.some(a => a._pending) ? ' · ' + articles.filter(a => a._pending).length + ' belum punya tone (tidak dihitung di grafik)' : ''}</p>`;
 
   // Perbandingan Bulan
   const bulanIni = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][thisMonth];
@@ -6138,6 +6262,7 @@ async function autoLoadFromDB() {
         description: a.description,
         keyword: a.keyword,
         _tone: a.tone || 'netral',
+        _pending: !a.tone,
         _resume: a.resume || '',
         _spkInternal: a.spokesperson_internal || '',
         _spkExternal: a.spokesperson_eksternal || '',
@@ -6169,8 +6294,267 @@ async function autoLoadFromDB() {
   }
 }
 
+// ==================== BERANDA: "Perlu Respons Hari Ini" ====================
+const BR = { rows: [], fu: [], health: null, loading: false, loadedAt: 0 };
+const BR_NAT = /kompas|detik|cnn|cnbc|tempo|tirto|liputan6|kumparan|republika|merdeka|okezone|sindo|bisnis\.com|kontan|metrotv|media indonesia|suara\.com|jpnn|inews|beritasatu|rri\b/i;
+const BR_STAKE_KEY = ['DPRD / DPR', 'Mahasiswa', 'Ormas / LSM', 'Pemerintah daerah', 'Pemerintah pusat', 'Aparat penegak hukum'];
+const BR_MOMENTS = [ // [bulan(1-12), hari, nama, catatan]
+  [2, 9, 'Hari Pers Nasional', 'Banyak liputan media, momen baik untuk siaran pers positif'],
+  [4, 20, 'Hari Konsumen Nasional', 'Isu layanan pelanggan lebih mudah diangkat'],
+  [8, 17, 'HUT Kemerdekaan RI', 'Isu pemerataan listrik desa biasanya naik'],
+  [10, 27, 'Hari Listrik Nasional / HUT PLN', 'Puncak pemberitaan positif dan kegiatan PLN'],
+  [12, 9, 'Hari Anti Korupsi Sedunia', 'Perhatikan isu pengadaan dan integritas'],
+  [12, 24, 'Siaga Natal dan Tahun Baru (24 Des - 2 Jan)', 'Beban puncak: antisipasi pemadaman dan keluhan']
+];
+
+function brEsc(x) { return spkEsc(String(x == null ? '' : x)); }
+function brAgo(ms) { const h = Math.floor(ms / 3600000); return h < 1 ? 'baru saja' : h < 24 ? h + ' jam lalu' : Math.floor(h / 24) + ' hari lalu'; }
+
+async function brFetchRows(days) {
+  const from = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+  let out = [], offset = 0;
+  while (true) {
+    const r = await fetch('/api/articles?limit=500&offset=' + offset + '&from=' + from);
+    if (!r.ok) throw new Error('Gagal memuat artikel (HTTP ' + r.status + ')');
+    const d = await r.json();
+    if (!d.articles || !d.articles.length) break;
+    out = out.concat(d.articles);
+    if (d.articles.length < 500) break;
+    offset += 500;
+  }
+  return out;
+}
+
+async function loadBeranda(force) {
+  const root = document.getElementById('brRoot');
+  if (!root || BR.loading) return;
+  if (!force && BR.rows.length && Date.now() - BR.loadedAt < 120000) { renderBeranda(); return; }
+  BR.loading = true;
+  if (!BR.rows.length) root.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Memuat ringkasan...</div>';
+  try {
+    const [rows, fu, health] = await Promise.all([
+      brFetchRows(14),
+      fetch('/api/articles?resource=followups').then(r => r.json()).catch(() => ({ followups: [] })),
+      fetch('/api/articles?resource=health').then(r => r.json()).catch(() => null)
+    ]);
+    BR.rows = repPrepare(rows);
+    BR.fu = (fu && fu.followups) || [];
+    BR.health = health && !health.error ? health : null;
+    BR.loadedAt = Date.now();
+    BR.loading = false;
+    renderBeranda();
+  } catch (e) {
+    BR.loading = false;
+    root.innerHTML = '<div style="padding:40px;text-align:center;color:#9F1D1D">⚠ ' + brEsc(e.message) + '</div>';
+  }
+}
+
+function brTicketMap() {
+  const m = {};
+  BR.fu.forEach(f => {
+    const urls = (f.articles && f.articles.length ? f.articles.map(a => a.url) : []).concat(f.article_url ? [f.article_url] : []);
+    urls.forEach(u => { if (u) m[u] = f; });
+  });
+  return m;
+}
+
+function brGroups(neg3) {
+  const g = {};
+  neg3.forEach(a => {
+    const place = a.provs[0] || (a.scope || 'umum');
+    const key = (a.cat || 'lainnya') + '|' + (a.kab[0] || place);
+    (g[key] = g[key] || { key, cat: a.cat || 'lainnya', place: a.kab[0] || (a.provs[0] ? 'Provinsi ' + a.provs[0] : (a.scope ? (REP_SCOPE && REP_SCOPE[a.scope] || a.scope) : 'wilayah tidak jelas')), list: [] }).list.push(a);
+  });
+  return Object.values(g).map(x => {
+    const media = new Set(x.list.map(a => a.media));
+    const nat = x.list.some(a => BR_NAT.test(a.media));
+    const stake = new Set(); x.list.forEach(a => a.stake.forEach(k => stake.add(k)));
+    const stakeKey = BR_STAKE_KEY.filter(k => stake.has(k));
+    const gm = x.list.some(a => a.leaders && a.leaders.length);
+    let level = 'rendah';
+    if (nat || media.size >= 2 || stakeKey.length) level = 'sedang';
+    if ((nat && (media.size >= 2 || stakeKey.length)) || media.size >= 4 || (stakeKey.includes('DPRD / DPR') && media.size >= 2)) level = 'tinggi';
+    const first = Math.min.apply(null, x.list.map(a => a.pub.getTime()));
+    return Object.assign(x, { media: [...media], nat, stakeKey, gm, level, first });
+  }).sort((a, b) => ({ tinggi: 0, sedang: 1, rendah: 2 }[a.level] - { tinggi: 0, sedang: 1, rendah: 2 }[b.level]) || b.list.length - a.list.length);
+}
+
+function renderBeranda() {
+  const root = document.getElementById('brRoot'); if (!root) return;
+  const ok = BR.rows.filter(a => !a.pending);
+  const pend = BR.rows.filter(a => a.pending).length;
+  const cur = ok.filter(a => a.ageDays >= 0 && a.ageDays < 7);
+  const prev = ok.filter(a => a.ageDays >= 7 && a.ageDays < 14);
+  const idx = l => { const t = repTally(l); const n = t.pos + t.neg + t.neu; return n ? Math.round((t.pos - t.neg) / n * 100) : 0; };
+  const tc = repTally(cur), tp = repTally(prev);
+  const iC = idx(cur), iP = idx(prev), dI = iC - iP;
+  const neg3 = ok.filter(a => a.tone === 'negatif' && a.ageDays >= 0 && a.ageDays < 3);
+  const groups = brGroups(neg3);
+  const tix = brTicketMap();
+  const arrow = (d, goodUp) => d === 0 ? '<span style="color:var(--muted)">sama dengan minggu lalu</span>' : `<span style="color:${(d > 0) === goodUp ? '#15803d' : '#b91c1c'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)} dari minggu lalu</span>`;
+  const H = BR.health;
+  let banners = '';
+  if (pend || (H && H.pending)) banners += `<div class="br-banner warn">⏳ <span><b>${Math.max(pend, H ? H.pending || 0 : 0)} berita belum dianalisis AI</b>, belum punya tone dan tidak dihitung di angka di bawah.</span><button class="br-btn" onclick="switchTab('pengaturan');runAnalyzePending()">🧠 Analisis sekarang</button></div>`;
+  if (H && H.newestCreatedAt) {
+    const age = Date.now() - new Date(H.newestCreatedAt).getTime();
+    if (age > 14 * 3600000) banners += `<div class="br-banner bad">⚠ <span>Terakhir ada berita baru masuk <b>${brAgo(age)}</b>. Auto-crawl mungkin bermasalah, cek tab GitHub Actions atau <a href="#" onclick="switchTab('pengaturan');return false">Pengaturan</a>.</span></div>`;
+  }
+  if (H && H.geminiKeys === 0) banners += `<div class="br-banner bad">⚠ <span>Kunci Gemini belum terpasang di server, analisis AI tidak akan jalan.</span></div>`;
+
+  const kpi = `<div class="br-kpis">
+    <div class="br-kpi"><div class="v" style="color:${iC >= 0 ? '#15803d' : '#b91c1c'}">${iC > 0 ? '+' : ''}${iC}</div><div class="l">Indeks reputasi 7 hari <span title="(positif − negatif) ÷ total berita × 100. Rentang −100 sampai +100">ⓘ</span></div><div class="d">${arrow(dI, true)}</div></div>
+    <div class="br-kpi"><div class="v">${cur.length}</div><div class="l">Berita 7 hari terakhir</div><div class="d">${arrow(cur.length - prev.length, true).replace(/#15803d|#b91c1c/g, 'var(--muted)')}</div></div>
+    <div class="br-kpi"><div class="v" style="color:#b91c1c">${tc.neg}</div><div class="l">Berita negatif 7 hari</div><div class="d">${arrow(tc.neg - tp.neg, false)}</div></div>
+    <div class="br-kpi"><div class="v" style="color:#15803d">${tc.pos}</div><div class="l">Berita positif 7 hari</div><div class="d">${arrow(tc.pos - tp.pos, true)}</div></div>
+  </div>`;
+
+  const statusLbl = { baru: 'Baru', proses: 'Dalam penanganan', selesai: 'Selesai' };
+  const respOpt = [['belum', 'Belum direspons'], ['hak_jawab', 'Hak jawab dikirim'], ['klarifikasi', 'Klarifikasi terbit'], ['tidak_perlu', 'Tidak perlu respons']];
+  const issues = groups.length ? groups.map((g, gi) => {
+    const f = g.list.map(a => tix[a.url]).find(Boolean);
+    const catLbl = repCatLabel(g.cat);
+    const lines = g.list.sort((a, b) => b.pub - a.pub).map(a => `<div style="font-size:12.5px;margin:3px 0"><a href="${brEsc(a.url)}" target="_blank" rel="noopener">${brEsc(a.title)}</a> <span style="color:var(--muted);font-size:11px">· ${brEsc(a.media)} · ${repFmtDate(a.pub)}</span></div>`).join('');
+    const ctl = f ? `
+      <div class="br-ctl">
+        <span style="font-size:11.5px;color:var(--muted)">Tiket:</span>
+        <select onchange="brSetTicketStatus(${f.id},this.value)">${Object.keys(statusLbl).map(k => `<option value="${k}" ${f.status === k ? 'selected' : ''}>${statusLbl[k]}</option>`).join('')}</select>
+        <input type="text" placeholder="PIC (nama penanggung jawab)" value="${brEsc(f.pic || '')}" style="width:170px" onchange="brSaveFollowup(${f.id},{pic:this.value})">
+        <select onchange="brSaveFollowup(${f.id},{response_status:this.value})">${respOpt.map(o => `<option value="${o[0]}" ${(f.response_status || 'belum') === o[0] ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>
+      </div>` : '';
+    return `<div class="br-issue ${g.level}">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="lvl ${g.level}">${g.level.toUpperCase()}</span>
+        <b style="font-size:14px">${brEsc(catLbl)} · ${brEsc(g.place)}</b>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin:4px 0 6px">${g.list.length} berita dari ${g.media.length} media · muncul pertama ${brAgo(Date.now() - g.first)}${g.nat ? ' · <b style="color:#b91c1c">media nasional</b>' : ''}${g.stakeKey.length ? ' · ' + brEsc(g.stakeKey.join(', ')) : ''}${g.gm ? ' · GM/pimpinan dikutip' : ''}</div>
+      <details ${g.list.length <= 2 ? 'open' : ''}><summary style="cursor:pointer;font-size:12px;color:var(--accent)">Lihat berita (${g.list.length})</summary>${lines}</details>
+      <div class="br-ctl">
+        ${f ? '' : `<button class="br-btn pri" onclick="brCreateTicket(${gi})">📌 Tindak lanjuti</button>`}
+        <button class="br-btn" onclick="brOpenDraft(${gi})">✍ Draft respons</button>
+      </div>
+      ${ctl}
+    </div>`;
+  }).join('') : '<div style="padding:18px;border:1px dashed var(--border2);border-radius:10px;color:var(--muted);font-size:13px">✅ Tidak ada berita negatif baru dalam 3 hari terakhir.</div>';
+  BR.groups = groups;
+
+  const terms = brTerms();
+  const msg = terms.map(t => { let re; try { re = new RegExp(t, 'i'); } catch (e) { re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); } return [t, cur.filter(a => re.test(a.title + ' ' + a.resume)).length]; });
+  const now = new Date();
+  const mom = BR_MOMENTS.map(m => { let d = new Date(now.getFullYear(), m[0] - 1, m[1]); if (d < new Date(now.getFullYear(), now.getMonth(), now.getDate())) d = new Date(now.getFullYear() + 1, m[0] - 1, m[1]); return { d, days: Math.round((d - now) / 86400000), n: m[2], c: m[3] }; }).sort((a, b) => a.d - b.d).slice(0, 3);
+
+  root.innerHTML = banners + kpi + `
+  <div class="br-cols">
+    <div>
+      <div class="br-sec">🚨 Perlu Respons Hari Ini <span style="font-weight:400;font-size:12px;color:var(--muted)">· berita negatif 3 hari terakhir, dikelompokkan per isu</span></div>
+      ${issues}
+    </div>
+    <div>
+      <div class="br-sec">🎯 Pesan Kunci (7 hari)</div>
+      <div class="set-card"><div class="br-mini">${msg.map(m => `<div class="row"><span>${brEsc(m[0])} <a href="#" onclick="brDelTerm('${brEsc(m[0]).replace(/'/g, '')}');return false" style="color:var(--muted);text-decoration:none" title="Hapus">✕</a></span><b>${m[1]} berita</b></div>`).join('') || '<div style="color:var(--muted)">Belum ada pesan kunci.</div>'}</div>
+        <div class="br-ctl"><input type="text" id="brTermIn" placeholder="tambah kata/frasa (boleh regex: plts|surya)" style="flex:1;min-width:0" onkeydown="if(event.key==='Enter')brAddTerm()"><button class="br-btn" onclick="brAddTerm()">+</button></div>
+        <div style="font-size:11px;color:var(--muted)">Menghitung berapa banyak berita yang memuat pesan yang ingin PLN dorong.</div>
+      </div>
+      <div class="br-sec" style="margin-top:14px">📅 Momentum Mendatang</div>
+      <div class="set-card"><div class="br-mini">${mom.map(m => `<div class="row" style="flex-direction:column"><span><b>${brEsc(m.n)}</b> <span style="color:var(--muted)">· ${m.days === 0 ? 'hari ini' : m.days + ' hari lagi'}</span></span><span style="color:var(--muted);font-size:11.5px">${brEsc(m.c)}</span></div>`).join('')}</div></div>
+      <div class="br-sec" style="margin-top:14px">🔗 Pintasan</div>
+      <div class="br-ctl" style="margin-top:0"><button class="br-btn" onclick="switchTab('reputasi')">🛡 Reputasi</button><button class="br-btn" onclick="switchTab('laporan')">📄 Buat Laporan</button><button class="br-btn" onclick="switchTab('followups')">🗂 Tindak Lanjut</button></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px">Data diperbarui ${new Date(BR.loadedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} · <a href="#" onclick="loadBeranda(true);return false">muat ulang</a></div>
+    </div>
+  </div>`;
+}
+
+function brTerms() {
+  try { const t = JSON.parse(localStorage.getItem('brTerms') || 'null'); if (Array.isArray(t)) return t; } catch (e) {}
+  return ['elektrifikasi', 'listrik desa', 'andal', 'pelayanan', 'plts|surya|energi baru terbarukan', 'penyambungan baru'];
+}
+function brSaveTerms(t) { try { localStorage.setItem('brTerms', JSON.stringify(t)); } catch (e) {} renderBeranda(); }
+function brAddTerm() { const el = document.getElementById('brTermIn'); const v = (el.value || '').trim(); if (!v) return; const t = brTerms(); if (t.indexOf(v) < 0) t.push(v); brSaveTerms(t); }
+function brDelTerm(v) { brSaveTerms(brTerms().filter(x => brEsc(x).replace(/'/g, '') !== v)); }
+
+async function brPost(body) {
+  const r = await fetch('/api/articles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || d.error) throw new Error(d.error || 'Gagal');
+  return d;
+}
+async function brCreateTicket(gi) {
+  const g = BR.groups[gi]; if (!g) return;
+  const first = g.list[0];
+  try {
+    const d = await brPost({ mode: 'pin', article_url: first.url, article_title: first.title, article_source: first.media, article_published_at: first.pub.toISOString(),
+      articles: g.list.map(a => ({ url: a.url, title: a.title, source: a.media, published_at: a.pub.toISOString() })) });
+    showToast(d.alreadyExists ? '📌 Sudah ada tiketnya' : '📌 Tiket dibuat. Isi PIC dan status respons.');
+    BR.fu = ((await (await fetch('/api/articles?resource=followups')).json()).followups) || BR.fu;
+    renderBeranda();
+  } catch (e) { showToast('⚠ Gagal membuat tiket: ' + e.message); }
+}
+async function brSetTicketStatus(id, status) {
+  try { await brPost({ mode: 'update-status', id, status }); const f = BR.fu.find(x => x.id === id); if (f) f.status = status; showToast('✅ Status tiket diubah'); }
+  catch (e) { showToast('⚠ ' + e.message); }
+}
+async function brSaveFollowup(id, patch) {
+  try { await brPost(Object.assign({ mode: 'update-followup', id }, patch)); const f = BR.fu.find(x => x.id === id); if (f) Object.assign(f, patch); showToast('✅ Tersimpan'); }
+  catch (e) { showToast('⚠ ' + e.message); }
+}
+
+// ---- Draft respons (kerangka dari AI, wajib diverifikasi manusia) ----
+function brOpenDraft(gi) {
+  const g = BR.groups[gi]; if (!g) return;
+  BR.draftGroup = g;
+  let m = document.getElementById('draftModal');
+  if (!m) { m = document.createElement('div'); m.id = 'draftModal'; m.className = 'modal-overlay'; m.addEventListener('click', ev => { if (ev.target === m) m.style.display = 'none'; }); document.body.appendChild(m); }
+  m.innerHTML = `<div class="modal" style="max-width:640px;width:94vw"><div class="modal-header"><h3>✍ Draft respons</h3><button class="modal-close" onclick="document.getElementById('draftModal').style.display='none'">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${brEsc(repCatLabel(g.cat))} · ${brEsc(g.place)} · ${g.list.length} berita</div>
+      <div class="br-ctl" style="margin-top:0"><select id="drJenis"><option value="klarifikasi">Pernyataan klarifikasi</option><option value="hak_jawab">Surat hak jawab ke redaksi</option><option value="siaran_pers">Siaran pers</option><option value="wa">Pesan WA ke pimpinan</option></select></div>
+      <textarea id="drNote" rows="2" placeholder="Catatan faktual dari lapangan (opsional): penyebab, status pemulihan, langkah yang sudah dilakukan..." style="width:100%;margin-top:8px;padding:8px;border:1px solid var(--border2);border-radius:6px;font-family:inherit;font-size:12.5px"></textarea>
+      <button class="br-btn pri" id="drBtn" style="margin-top:8px" onclick="brRunDraft()">✨ Susun kerangka</button>
+      <textarea id="drOut" rows="12" style="display:none;width:100%;margin-top:10px;padding:10px;border:1px solid var(--border2);border-radius:6px;font-family:inherit;font-size:13px;line-height:1.5"></textarea>
+      <div id="drWarn" style="display:none;font-size:11.5px;color:#92400e;background:#fef3c7;border-radius:6px;padding:6px 8px;margin-top:6px">Ini kerangka dari AI. Lengkapi semua bagian [ISI: ...] dan verifikasi fakta sebelum dikirim. AI tidak tahu penyebab atau jadwal pemulihan yang sebenarnya.</div>
+      <button class="br-btn" id="drCopy" style="display:none;margin-top:8px" onclick="navigator.clipboard.writeText(document.getElementById('drOut').value).then(()=>showToast('Disalin'))">📋 Salin</button>
+    </div></div>`;
+  m.style.display = 'flex';
+}
+async function brRunDraft() {
+  const g = BR.draftGroup; if (!g) return;
+  const btn = document.getElementById('drBtn'); btn.disabled = true; btn.textContent = 'Menyusun...';
+  try {
+    const items = g.list.slice(0, 8).map(a => ({ judul: a.title, media: a.media, tanggal: repFmtDate(a.pub), ringkas: (a.resume || '').slice(0, 160) }));
+    const call = () => fetch('/api/brief', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'draft', jenis: document.getElementById('drJenis').value, items, catatan: document.getElementById('drNote').value }) });
+    let r = await call(); let txt = await r.text(); let d; try { d = JSON.parse(txt); } catch (e) { r = await call(); txt = await r.text(); try { d = JSON.parse(txt); } catch (e2) { throw new Error('Server tidak membalas dengan benar, coba lagi'); } }
+    if (d.error) throw new Error(d.detail || d.error);
+    const o = document.getElementById('drOut'); o.value = d.draft || ''; o.style.display = 'block';
+    document.getElementById('drWarn').style.display = 'block'; document.getElementById('drCopy').style.display = 'inline-block';
+  } catch (e) { showToast('⚠ ' + e.message); }
+  btn.disabled = false; btn.textContent = '✨ Susun ulang';
+}
+
+// ==================== PENGATURAN: kesehatan data ====================
+async function loadHealth() {
+  const box = document.getElementById('healthBox'); if (!box) return;
+  box.textContent = 'Memuat...';
+  try {
+    const d = await (await fetch('/api/articles?resource=health')).json();
+    if (d.error) throw new Error(d.error);
+    BR.health = d;
+    const age = d.newestCreatedAt ? Date.now() - new Date(d.newestCreatedAt).getTime() : null;
+    const row = (l, v, bad) => `<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dashed var(--border)"><span>${l}</span><b style="color:${bad ? '#b91c1c' : 'var(--text)'}">${v}</b></div>`;
+    box.innerHTML = row('Berita di database (aktif)', d.total == null ? '—' : d.total)
+      + row('Masuk 24 jam terakhir', d.last24 == null ? '—' : d.last24, d.last24 === 0)
+      + row('Berita terbaru masuk', age == null ? '—' : brAgo(age), age != null && age > 14 * 3600000)
+      + row('Belum dianalisis AI', d.pending == null ? '—' : d.pending, d.pending > 0)
+      + row('Kunci Gemini terpasang', d.geminiKeys, d.geminiKeys === 0)
+      + `<div style="font-size:11.5px;margin-top:8px">${d.pending > 0 ? 'Klik "🧠 Analisis Berita yang Belum Terisi" di kartu sebelah untuk mengisinya.' : 'Semua berita sudah dianalisis.'}${age != null && age > 14 * 3600000 ? ' <b style="color:#b91c1c">Auto-crawl sepertinya tidak berjalan: cek GitHub Actions.</b>' : ''}</div>`;
+    const tg = document.getElementById('tgInfo');
+    if (tg) tg.innerHTML = d.telegram
+      ? '✅ Aktif. Berita negatif baru yang penting (media nasional, DPRD, unjuk rasa, korban) dikirim ke Telegram saat dianalisis. Tambah <code>ALERT_MODE=semua</code> di Vercel kalau ingin semua berita negatif.'
+      : '⚪ Belum aktif. Buat bot lewat @BotFather di Telegram, lalu isi <code>TELEGRAM_BOT_TOKEN</code> dan <code>TELEGRAM_CHAT_ID</code> di Vercel (Environment Variables). Berita negatif baru yang penting akan dikirim otomatis.';
+  } catch (e) { box.innerHTML = '<span style="color:#b91c1c">Gagal memuat: ' + brEsc(e.message) + '</span>'; }
+}
+
 // Jalankan saat halaman siap
 setTimeout(autoLoadFromDB, 500);
+switchTab('beranda');
 
 // Close modal on overlay click
 document.getElementById('rssModal').addEventListener('click', function(e) {
