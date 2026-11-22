@@ -884,7 +884,7 @@
   </div>
 
   <div id="panel-radar-wrap" style="display:none;">
-    <div style="background:#fefce8;border:1px solid #fde047;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#854d0e;">
+    <div class="dismissible" data-k="radar" style="background:#fefce8;border:1px solid #fde047;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#854d0e;">
       📡 Radar berita umum Papua (kebakaran, bencana, keamanan, dll) — di luar konteks PLN, tanpa analisis tone. Diperbarui otomatis tiap 6 jam.
     </div>
     <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
@@ -917,10 +917,10 @@
 
   <!-- PANEL SPOKESPERSON RECAP -->
   <div id="panel-spokesperson-wrap" style="display:none;">
-    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#1e40af;line-height:1.6;">
+    <details style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:8px 14px;margin-bottom:14px;font-size:12px;color:#1e40af;line-height:1.6;"><summary style="cursor:pointer;font-weight:600;">ℹ Cara membaca halaman ini</summary>
       🎙 Satu baris = satu narasumber. <strong>Tone Pemberitaan</strong> = nada keseluruhan berita tempat dia dikutip. <strong>Tone Komentar</strong> = sikap pernyataan orang itu sendiri (misal berita negatif tentang PLN, tapi komentar pejabat PLN-nya membela → komentar positif).
       <br>Klik <strong>📰 N berita</strong> untuk melihat daftar beritanya. <strong>✏ Edit</strong> mengubah nama/jabatan (dan tone komentar semua beritanya sekaligus). Tone komentar tiap berita juga bisa diubah langsung di daftar beritanya. Berita yang sudah diedit manual bertanda 🔒 dan tidak ditimpa analisis ulang AI. <strong>🔗 Gabung</strong> menyatukan baris lain ke baris ini (nama di baris ini yang dipakai) — jabatan dari baris yang digabung ikut terkumpul.
-    </div>
+    </details>
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px;">
       <input id="spkFilterInput" type="text" placeholder="🔍 Cari nama / jabatan..." oninput="window._spkRerender && window._spkRerender()" style="flex:1;max-width:280px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;">
       <button onclick="openManageAliasModal()" style="padding:6px 12px;border:1px solid var(--border);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;">⚙ Kelola Nama yang Sudah Digabung</button>
@@ -1120,7 +1120,7 @@
 
   <!-- PANEL YOUTUBE -->
   <div id="panel-youtube-wrap" style="display:none;">
-    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#991b1b;">
+    <div class="dismissible" data-k="youtube" style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#991b1b;">
       🎥 Video YouTube yang menyebut PLN/listrik Papua & sekitarnya. Diperbarui otomatis tiap 6 jam, ikut dianalisis tone-nya sama seperti berita.
     </div>
     <div id="youtubeGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;"></div>
@@ -5637,7 +5637,7 @@ function lpRender() {
   const list = D.type === 'tematik' ? arts : arts.filter(a => a.tone === 'negatif');
   h += `<h2>${D.type === 'tematik' ? 'Lampiran: Kronologi Berita (' + list.length + ')' : 'Lampiran: Daftar Berita Negatif (' + list.length + ')'}</h2>` +
     (list.length ? `<table class="lp-tbl"><tr><th style="width:84px">Tanggal</th><th style="width:22%">Media</th><th>Judul</th><th style="width:62px">Tone</th></tr>${list.slice(0, 400).map(a => `<tr><td>${lpFmt(a.day).replace(/ 20\d\d$/, '')}</td><td>${spkEsc(a.media)}</td><td><a href="${spkEsc(a.url)}" style="color:#004A97;text-decoration:none">${spkEsc(a.title)}</a></td><td><span class="lp-pill" style="background:${LP_COL[a.tone]}">${a.tone}</span></td></tr>`).join('')}</table>${list.length > 400 ? '<div class="lp-note">400 berita pertama ditampilkan.</div>' : ''}` : '<div class="lp-note">Tidak ada berita negatif pada periode ini.</div>');
-  h += `<div class="lp-note" style="margin-top:18px">Sumber: PLN News Monitor. Hanya mencakup berita yang tertangkap sumber RSS/pencarian aplikasi; tone, kategori, lokasi, dan narasumber dianalisis AI dan dapat berbeda dari penilaian manual. Narasi dan rekomendasi bersifat saran dan perlu ditinjau sebelum dipakai.</div></div>`;
+  h += `<div class="lp-note no-print" style="margin-top:18px">Sumber: PLN News Monitor. Hanya mencakup berita yang tertangkap sumber RSS/pencarian aplikasi; tone, kategori, lokasi, dan narasumber dianalisis AI dan dapat berbeda dari penilaian manual. Narasi dan rekomendasi bersifat saran dan perlu ditinjau sebelum dipakai.</div></div>`;
   out.innerHTML = `<div class="no-print" style="display:flex;gap:8px;align-items:center;margin:10px 0 14px"><button onclick="lpPrint()" style="padding:8px 16px;border:0;border-radius:6px;background:var(--accent2,#1E8449);color:#fff;font-weight:600;cursor:pointer">🖨 Cetak / Simpan PDF</button><button id="lpRetry" onclick="lpNarrative()" style="padding:8px 14px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-size:12px">↻ Buat ulang narasi AI</button><span class="lp-note" style="margin:0">Teks narasi bisa diedit langsung di halaman ini sebelum dicetak.</span></div><div id="lpReport">${h}</div>`;
 }
 
@@ -6800,8 +6800,22 @@ async function loadHealth() {
   } catch (e) { box.innerHTML = '<span style="color:#b91c1c">Gagal memuat: ' + brEsc(e.message) + '</span>'; }
 }
 
+// Banner penjelasan: bisa ditutup, pilihan diingat di browser
+function initDismissibles() {
+  document.querySelectorAll('.dismissible').forEach(el => {
+    const k = 'dismiss_' + el.getAttribute('data-k');
+    let gone = false; try { gone = localStorage.getItem(k) === '1'; } catch (e) {}
+    if (gone) { el.style.display = 'none'; return; }
+    el.style.position = 'relative'; el.style.paddingRight = '30px';
+    const b = document.createElement('button'); b.textContent = '✕'; b.title = 'Sembunyikan penjelasan ini';
+    b.style.cssText = 'position:absolute;top:6px;right:8px;border:0;background:none;cursor:pointer;color:inherit;font-size:13px;';
+    b.onclick = () => { el.style.display = 'none'; try { localStorage.setItem(k, '1'); } catch (e) {} };
+    el.appendChild(b);
+  });
+}
 // Jalankan saat halaman siap
 setTimeout(autoLoadFromDB, 500);
+initDismissibles();
 switchTab('beranda');
 
 // Close modal on overlay click
