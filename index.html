@@ -5024,7 +5024,7 @@ async function runAnalyzePending() {
         if (noProgress >= 3) { reason = 'Berhenti: ' + e.message; break; }
         await new Promise(r => setTimeout(r, 6000)); continue;
       }
-      if (d.message === 'Semua artikel sudah dianalisis') { reason = failedTotal ? 'Selesai, tapi ' + failedTotal + ' berita gagal dianalisis AI.' : 'Selesai: semua berita sudah dianalisis.'; break; }
+      if (d.message === 'Semua artikel sudah dianalisis') { reason = failedTotal ? 'Selesai, tapi ' + failedTotal + ' berita gagal dianalisis AI.' : done === 0 ? 'Server tidak menemukan berita untuk diproses. Kalau angka "belum dianalisis" di Kesehatan Data masih ada, pastikan api/analyze-batch.js versi terbaru sudah diupload (berita terkunci baru ikut diproses di versi itu).' : 'Selesai: semua berita sudah dianalisis.'; break; }
       done += d.processed || 0; failedTotal += d.failed || 0;
       if ((d.processed || 0) === 0 && (d.failed || 0) > 0) {
         noProgress++;
@@ -6542,7 +6542,7 @@ async function loadHealth() {
     box.innerHTML = row('Berita di database (aktif)', d.total == null ? '—' : d.total)
       + row('Masuk 24 jam terakhir', d.last24 == null ? '—' : d.last24, d.last24 === 0)
       + row('Berita terbaru masuk', age == null ? '—' : brAgo(age), age != null && age > 14 * 3600000)
-      + row('Belum dianalisis AI', d.pending == null ? '—' : d.pending, d.pending > 0)
+      + row('Belum dianalisis AI', d.pending == null ? '—' : d.pending + (d.pendingLocked ? ' (' + d.pendingLocked + ' terkunci)' : ''), d.pending > 0)
       + row('Kunci Gemini terpasang', d.geminiKeys, d.geminiKeys === 0)
       + `<div style="font-size:11.5px;margin-top:8px">${d.pending > 0 ? 'Klik "🧠 Analisis Berita yang Belum Terisi" di kartu sebelah untuk mengisinya.' : 'Semua berita sudah dianalisis.'}${age != null && age > 14 * 3600000 ? ' <b style="color:#b91c1c">Auto-crawl sepertinya tidak berjalan: cek GitHub Actions.</b>' : ''}</div>`;
     const tg = document.getElementById('tgInfo');
