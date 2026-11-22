@@ -482,7 +482,9 @@ async function handlePin(req, res) {
       },
       body: JSON.stringify([{
         article_url, article_title, article_source, article_published_at,
-        articles: [{ url: article_url, title: article_title, source: article_source, published_at: article_published_at }]
+        articles: (Array.isArray(req.body.articles) && req.body.articles.length)
+          ? req.body.articles.slice(0, 30).map(x => ({ url: x.url, title: x.title, source: x.source, published_at: x.published_at }))
+          : [{ url: article_url, title: article_title, source: article_source, published_at: article_published_at }]
       }])
     });
     const data = await response.json();
@@ -553,6 +555,64 @@ async function handleUnpin(req, res) {
     });
     if (!response.ok) return res.status(response.status).json({ error: await response.text() });
     return res.status(200).json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+// ===== POST mode=update-followup: isi PIC & status respons PLN pada tiket =====
+async function handleUpdateFollowup(req, res) {
+  const { id, pic, response_status } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id wajib diisi' });
+  const allowed = ['belum', 'hak_jawab', 'klarifikasi', 'tidak_perlu'];
+  const patch = { updated_at: new Date().toISOString() };
+  if (pic !== undefined) patch.pic = String(pic).slice(0, 80);
+  if (response_status !== undefined) {
+    if (!allowed.includes(response_status)) return res.status(400).json({ error: 'response_status tidak valid' });
+    patch.response_status = response_status;
+    patch.responded_at = response_status === 'belum' ? null : new Date().toISOString();
+  }
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/followups?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Prefer': 'return=representation' },
+      body: JSON.stringify(patch)
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const msg = JSON.stringify(data);
+      return res.status(response.status).json({ error: /pic|response_status|responded_at/i.test(msg) ? 'Kolom belum ada di database. Jalankan add-followup-fields.sql di Supabase dulu.' : msg });
+    }
+    return res.status(200).json({ success: true, followup: data[0] });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+// ===== GET ?resource=health: ringkasan kesehatan data =====
+async function handleHealth(req, res) {
+  const H = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Prefer': 'count=exact', 'Range-Unit': 'items', 'Range': '0-0' };
+  const count = async q => {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/articles?select=id&${q}`, { headers: H });
+    const cr = r.headers.get('content-range') || '';
+    const n = parseInt(cr.split('/')[1], 10);
+    return isNaN(n) ? null : n;
+  };
+  try {
+    const since24 = encodeURIComponent(new Date(Date.now() - 86400000).toISOString());
+    const [total, pending, last24, newest] = await Promise.all([
+      count('hidden=not.is.true'),
+      count('hidden=not.is.true&or=(tone.is.null,tone.eq.)'),
+      count(`hidden=not.is.true&created_at=gte.${since24}`),
+      fetch(`${SUPABASE_URL}/rest/v1/articles?select=created_at,published_at&order=created_at.desc&limit=1`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }).then(r => r.json())
+    ]);
+    const geminiKeys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean).length;
+    return res.status(200).json({
+      total, pending, last24,
+      newestCreatedAt: Array.isArray(newest) && newest[0] ? newest[0].created_at : null,
+      geminiKeys,
+      telegram: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID)
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -834,6 +894,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'GET') {
     if (req.query.resource === 'followups') return handleListFollowups(req, res);
     if (req.query.resource === 'radar') return handleListRadar(req, res);
+    if (req.query.resource === 'health') return handleHealth(req, res);
     if (req.query.resource === 'spk-names') return handleSpkNames(req, res);
     return handleList(req, res);
   }
@@ -846,6 +907,7 @@ module.exports = async function handler(req, res) {
     if (mode === 'pin') return handlePin(req, res);
     if (mode === 'unpin') return handleUnpin(req, res);
     if (mode === 'update-status') return handleUpdateStatus(req, res);
+    if (mode === 'update-followup') return handleUpdateFollowup(req, res);
     if (mode === 'add-note') return handleAddNote(req, res);
     if (mode === 'merge-followups') return handleMergeFollowups(req, res);
     if (mode === 'update-tone') return handleUpdateTone(req, res);

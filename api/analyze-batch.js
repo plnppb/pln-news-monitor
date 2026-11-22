@@ -276,6 +276,31 @@ async function fetchArticlesSkippingLocked(url) {
   return response;
 }
 
+// ===== Peringatan Telegram untuk berita NEGATIF baru (opsional) =====
+// Aktif hanya bila TELEGRAM_BOT_TOKEN dan TELEGRAM_CHAT_ID diisi di Vercel.
+// ALERT_MODE=semua -> semua berita negatif baru; default "penting" -> hanya yang dimuat media nasional,
+// menyebut DPR/DPRD/GM, atau berupa unjuk rasa/desakan. Berita lebih dari 3 hari lalu tidak diperingatkan.
+const ALERT_NAT = /kompas|detik|cnn|cnbc|tempo|tirto|liputan6|kumparan|republika|merdeka|okezone|sindo|bisnis\.com|kontan|metrotv|media indonesia|suara\.com|jpnn|inews|beritasatu|rri/i;
+const ALERT_KEY = /dprd|dpr ri|dpr|gubernur|bupati|wali kota|walikota|unjuk rasa|demo|aksi massa|desak|tuntut|ombudsman|viral|korban|tewas|meninggal|kebakaran/i;
+async function notifyTelegram(article, result) {
+  const token = process.env.TELEGRAM_BOT_TOKEN, chat = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chat || result.tone !== 'negatif' || !article.url) return;
+  try {
+    const age = article.published_at ? (Date.now() - new Date(article.published_at).getTime()) / 86400000 : 0;
+    if (age > 3) return;
+    const text = `${article.title || ''} ${result.resume || ''}`;
+    const nat = ALERT_NAT.test(article.source || '');
+    const key = ALERT_KEY.test(text);
+    if (process.env.ALERT_MODE !== 'semua' && !nat && !key) return;
+    const level = nat && key ? 'TINGGI' : (nat || key) ? 'SEDANG' : 'RENDAH';
+    const msg = `🚨 Berita NEGATIF (${level})\n${article.title}\n— ${article.source || ''}\n${result.resume ? '\n' + String(result.resume).slice(0, 300) + '\n' : ''}\n${article.url}`;
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chat, text: msg, disable_web_page_preview: true })
+    });
+  } catch (e) { /* peringatan gagal tidak boleh menghentikan analisis */ }
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -471,9 +496,9 @@ module.exports = async function handler(req, res) {
   try {
     let url;
     if (reanalyze) {
-      url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description${dateFilter}&limit=${batchSize}&offset=${offset}&order=id.asc`;
+      url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description,url,source,published_at${dateFilter}&limit=${batchSize}&offset=${offset}&order=id.asc`;
     } else {
-      url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description&or=(tone.is.null,tone.eq.)${dateFilter}&limit=${batchSize}&offset=${offset}&order=id.asc`;
+      url = `${SUPABASE_URL}/rest/v1/articles?select=id,title,description,url,source,published_at&or=(tone.is.null,tone.eq.)${dateFilter}&limit=${batchSize}&offset=${offset}&order=id.asc`;
     }
 
     const response = await fetchArticlesSkippingLocked(url);
@@ -534,6 +559,7 @@ module.exports = async function handler(req, res) {
 
       toneCount[result.tone] = (toneCount[result.tone] || 0) + 1;
       processed++;
+      if (!reanalyze) await notifyTelegram(article, result);
       // TIDAK ADA jeda di sini lagi — batch sengaja dibikin kecil (default 2)
       // biar satu request selesai jauh di bawah limit eksekusi 10 detik Vercel
       // Hobby. Jeda antar-request Gemini (biar tidak kena rate limit 15/menit)
