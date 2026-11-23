@@ -602,6 +602,10 @@
     <div id="panel-pengaturan-wrap" style="display:none;padding-bottom:40px;">
       <div class="set-grid">
         <div class="set-card"><div class="set-title">🩺 Kesehatan Data</div><div id="healthBox" style="font-size:12.5px;color:var(--muted)">Memuat...</div></div>
+        <div class="set-card"><div class="set-title">🧹 Berita Duplikat</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Mencari berita yang sama (judul dan media sama) tetapi URL-nya berbeda, 60 hari terakhir. Yang disembunyikan bukan dihapus. Yang dipertahankan: yang terkunci, sudah dianalisis, atau masuk paling awal.</div>
+          <button class="br-btn" onclick="dupScan()">🔍 Cek duplikat</button>
+          <div id="dupBox" style="margin-top:10px;font-size:12.5px"></div></div>
         <div class="set-card"><div class="set-title">🤖 Crawl & Analisis</div>
       <!-- Auto Crawl Status -->
       <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:8px 10px;margin-bottom:8px;">
@@ -6779,6 +6783,27 @@ async function brRunDraft() {
 }
 
 // ==================== PENGATURAN: kesehatan data ====================
+async function dupScan() {
+  const box = document.getElementById('dupBox'); box.textContent = 'Memeriksa...';
+  try {
+    const d = await (await fetch('/api/articles?resource=dedupe&days=60')).json();
+    if (d.error) throw new Error(d.error);
+    if (!d.groups.length) { box.innerHTML = '✅ Tidak ada duplikat dari ' + d.scanned + ' berita yang diperiksa.'; return; }
+    box.innerHTML = `<div style="margin-bottom:8px"><b>${d.extra}</b> berita duplikat ditemukan dari ${d.scanned} berita (${d.groups.length} kelompok).</div>`
+      + d.groups.slice(0, 15).map(g => `<div style="border-left:3px solid #fdba74;padding:4px 8px;margin-bottom:6px;font-size:12px"><b>${brEsc(g.keep.title)}</b><div style="color:var(--muted)">dipertahankan: ${brEsc(g.keep.source || '')} · disembunyikan: ${g.dups.length}</div></div>`).join('')
+      + (d.groups.length > 15 ? `<div style="color:var(--muted);font-size:11.5px">+ ${d.groups.length - 15} kelompok lain</div>` : '')
+      + `<button class="br-btn" style="margin-top:6px" onclick="dupApply()">🙈 Sembunyikan ${d.extra} duplikat</button>`;
+  } catch (e) { box.innerHTML = '<span style="color:#b91c1c">Gagal: ' + brEsc(e.message) + '</span>'; }
+}
+async function dupApply() {
+  const box = document.getElementById('dupBox'); box.textContent = 'Menyembunyikan...';
+  try {
+    const d = await (await fetch('/api/articles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'dedupe-apply', days: 60 }) })).json();
+    if (d.error) throw new Error(d.error);
+    box.innerHTML = '✅ ' + d.hidden + ' duplikat disembunyikan. Muat ulang Monitor untuk melihat hasilnya.';
+    loadHealth();
+  } catch (e) { box.innerHTML = '<span style="color:#b91c1c">Gagal: ' + brEsc(e.message) + '</span>'; }
+}
 async function loadHealth() {
   const box = document.getElementById('healthBox'); if (!box) return;
   box.textContent = 'Memuat...';
