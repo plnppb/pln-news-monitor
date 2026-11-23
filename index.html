@@ -291,6 +291,10 @@
   .icon-btn.pri{background:var(--accent-light);color:var(--accent);border-color:var(--accent2);font-weight:600;}
   @media (pointer:coarse){.icon-btn{min-width:42px;min-height:42px;font-size:16px;}.act-menu button{padding:12px 14px !important;}}
   .card-actions{align-items:flex-start;}
+  .db-chip{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;font-size:12px;font-weight:600;border-radius:8px;padding:0 10px;height:32px;}
+  .db-chip.ok{background:#dcfce7;color:#166534;border:1px solid #bbf7d0;}
+  .db-chip.todo{background:#fff7ed;color:#9a3412;border:1px solid #fdba74;}
+  .db-chip.todo:hover{background:#ffedd5;}
   .act-wrap{position:relative;}
   .act-menu{display:none;position:absolute;right:0;top:100%;margin-top:4px;z-index:60;background:var(--surface);border:1px solid var(--border2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:230px;padding:4px;}
   .act-menu.open{display:block;}
@@ -1841,6 +1845,9 @@ function renderCard(a, i) {
           : ''}
       </div>
       <div class="card-actions">
+        ${a._fromDB
+          ? `<span class="db-chip ok" title="Berita ini sudah ada di database">✅ Tersimpan</span>`
+          : `<button class="icon-btn db-chip todo" id="savedb-${gi}" onclick="saveArticleToDB(${gi})" title="Belum ada di database. Klik untuk menyimpan.">💾 <span style="font-size:12px">Simpan</span></button>`}
         <button class="icon-btn pri" onclick="openQuickEdit(${gi})" title="Edit tone, kategori, dan lokasi sekaligus">✎ <span style="font-size:12px">Edit</span></button>
         <button class="icon-btn" onclick="pinArticle(${gi})" title="Tambahkan ke Tindak Lanjut">📌</button>
         <a href="${url}" target="_blank" rel="noopener" style="text-decoration:none"><button class="icon-btn" title="Buka artikel">↗</button></a>
@@ -1850,9 +1857,6 @@ function renderCard(a, i) {
             ${a._fromDB ? `<button onclick="toggleLock(${gi})">${a._locked ? '🔒 Terkunci dari analisis ulang AI (klik untuk buka kunci)' : '🔓 Kunci dari analisis ulang AI'}</button>` : ''}
             <button onclick="openMgrSpkModal(${gi})">👥 Kelola narasumber</button>
             <button onclick="openTagModal(${gi})">🏷 Kategori lengkap (termasuk sekunder)</button>
-            ${a._fromDB
-              ? `<button disabled style="opacity:.55;cursor:default">✅ Sudah tersimpan di database</button>`
-              : `<button id="savedb-${gi}" onclick="saveArticleToDB(${gi})">💾 Simpan ke database</button>`}
             <button class="danger" onclick="deleteArticle(${gi})">🗑 Hapus dari monitoring</button>
           </div>
         </div>
@@ -2003,11 +2007,8 @@ async function saveArticleToDB(idx) {
     if (!resp.ok || data.error) throw new Error(data.error || 'Gagal simpan');
 
     a._fromDB = true;
-    if (btn) {
-      btn.textContent = '✅';
-      btn.title = data.alreadyExists ? 'Sudah ada di database' : 'Tersimpan ke database';
-      btn.style.opacity = '1';
-    }
+    const cardEl = document.getElementById('card-' + idx);
+    if (cardEl) { try { cardEl.outerHTML = renderCard(a, idx); } catch (e) {} }
     showToast(data.alreadyExists ? 'Artikel sudah ada di database' : '✅ Artikel masuk database — akan terus muncul di crawl berikutnya');
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = '💾'; }
@@ -2292,7 +2293,7 @@ document.addEventListener('click', () => document.querySelectorAll('.act-menu.op
 
 function openQuickEdit(gi) {
   const a = allArticles[gi]; if (!a) return;
-  if (!a._fromDB) { showToast('Simpan berita ke database dulu (menu ⋯ → Simpan ke database) supaya bisa diedit.'); return; }
+  if (!a._fromDB) { showToast('Klik tombol 💾 Simpan di kartu ini dulu supaya bisa diedit.'); return; }
   const locs = (a._locations || '').split(';').map(x => x.trim()).filter(Boolean);
   REP.ext = [{ url: a.url, title: a.title || '', tone: a._pending ? '' : a._tone, cat: a._category || '', cat2: a._categorySecondary || '', locs, scope: a._geoScope || '' }];
   REP.editHook = (kind, item) => {
