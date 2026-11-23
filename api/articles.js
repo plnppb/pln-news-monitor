@@ -1,6 +1,7 @@
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const TAX = require('../lib/taxonomy');
+const DEDUP = require('../lib/dedup');
 const TEXT_LIMIT = 800;
 const GEMINI_KEYS = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '')
   .split(',').map(k => k.trim()).filter(Boolean);
@@ -344,6 +345,17 @@ async function handleSave(req, res) {
       return res.status(200).json({ success: true, alreadyExists: true });
     }
 
+    // Judul + media sama dengan berita yang sudah ada (URL beda)? Jangan buat baris kedua.
+    try {
+      const since = new Date(Date.now() - 30 * 86400000).toISOString();
+      const near = await fetch(`${SUPABASE_URL}/rest/v1/articles?select=id,url,title,source&hidden=eq.false&published_at=gte.${encodeURIComponent(since)}&limit=2000`,
+        { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }).then(r => r.json());
+      const k = DEDUP.titleKey(title), sk = DEDUP.sourceKey(source);
+      if (k.length >= 15 && Array.isArray(near) && near.some(n => DEDUP.titleKey(n.title) === k && DEDUP.sameOutlet(DEDUP.sourceKey(n.source), sk))) {
+        return res.status(200).json({ success: true, alreadyExists: true, duplicateOfTitle: true });
+      }
+    } catch (e) { /* pengecekan gagal: lanjut simpan seperti biasa */ }
+
     const analysis = await analyzeArticle(title, description);
 
     const row = {
@@ -414,6 +426,52 @@ async function handleSpkNames(req, res) {
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
+}
+
+// ===== Duplikat: berita sama (judul + media sama) dengan URL berbeda =====
+async function fetchDedupRows(days) {
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const sel = 'id,url,title,source,published_at,created_at,tone,resume,manual_locked';
+  const H = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` };
+  let rows = [];
+  for (let off = 0; off < 6000; off += 1000) {
+    const base = `${SUPABASE_URL}/rest/v1/articles?select=${sel}&published_at=gte.${encodeURIComponent(since)}&order=published_at.desc&limit=1000&offset=${off}`;
+    let r = await fetch(base + '&hidden=eq.false', { headers: H });
+    if (!r.ok) r = await fetch(base, { headers: H });
+    const part = await r.json();
+    if (!Array.isArray(part)) throw new Error('Gagal membaca berita');
+    rows = rows.concat(part);
+    if (part.length < 1000) break;
+  }
+  return rows;
+}
+async function handleDedupePreview(req, res) {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days) || 60, 1), 365);
+    const rows = await fetchDedupRows(days);
+    const groups = DEDUP.findDuplicateGroups(rows);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ scanned: rows.length, groups: groups.map(g => ({ keep: g.keep, dups: g.dups })), extra: groups.reduce((n, g) => n + g.dups.length, 0) });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+async function handleDedupeApply(req, res) {
+  try {
+    const days = Math.min(Math.max(parseInt(req.body?.days) || 60, 1), 365);
+    const groups = DEDUP.findDuplicateGroups(await fetchDedupRows(days));
+    const ids = groups.reduce((a, g) => a.concat(g.dups.map(d => d.id)), []);
+    let hidden = 0;
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50);
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/articles?id=in.(${chunk.join(',')})`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ hidden: true })
+      });
+      if (!r.ok) { const t = await r.text().catch(() => ''); return res.status(r.status).json({ error: t.slice(0, 300), hidden }); }
+      hidden += chunk.length;
+    }
+    return res.status(200).json({ success: true, hidden });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
 }
 
 // ===== GET ?resource=spk-data: data ringan untuk tab Narasumber (tanpa deskripsi/resume yang besar) =====
@@ -918,6 +976,7 @@ module.exports = async function handler(req, res) {
     if (req.query.resource === 'health') return handleHealth(req, res);
     if (req.query.resource === 'spk-names') return handleSpkNames(req, res);
     if (req.query.resource === 'spk-data') return handleSpkData(req, res);
+    if (req.query.resource === 'dedupe') return handleDedupePreview(req, res);
     return handleList(req, res);
   }
 
@@ -938,6 +997,7 @@ module.exports = async function handler(req, res) {
     if (mode === 'set-stance') return handleSetStance(req, res);
     if (mode === 'set-lock') return handleSetLock(req, res);
     if (mode === 'hide-article') return handleHideArticle(req, res);
+    if (mode === 'dedupe-apply') return handleDedupeApply(req, res);
     if (mode === 'set-category') return handleSetCategory(req, res);
     if (mode === 'set-locations') return handleSetLocations(req, res);
     return res.status(400).json({ error: 'mode tidak dikenal' });
