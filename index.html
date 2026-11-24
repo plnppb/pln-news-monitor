@@ -883,7 +883,7 @@
       <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
         <label style="font-size:12px;color:var(--muted)">Dari<br><input type="date" id="lpFrom" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;"></label>
         <label style="font-size:12px;color:var(--muted)">Sampai<br><input type="date" id="lpTo" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;"></label>
-        <div id="lpKwRow" style="display:none;"><label style="font-size:12px;color:var(--muted)">Kata kunci isu<br><input id="lpKw" placeholder="mis. papua spark" onkeydown="if(event.key==='Enter')lpGenerate()" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:220px;"></label></div>
+        <div id="lpKwRow" style="display:none;"><label style="font-size:12px;color:var(--muted)">Tema laporan (tulis dengan kalimat biasa)<br><input id="lpKw" placeholder="mis. transisi energi di Manokwari, termasuk rencana Pemkab ganti kendaraan dinas ke listrik" onkeydown="if(event.key==='Enter')lpGenerate()" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:min(560px,90vw);"></label></div>
         <button id="lpBtn" onclick="lpGenerate()" style="padding:8px 18px;border:0;border-radius:6px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;">📄 Susun Laporan</button>
       </div>
       <div id="lpHint" style="font-size:11.5px;color:var(--muted);margin-top:8px;"></div>
@@ -5515,7 +5515,7 @@ function lpSetType(t) {
   document.getElementById('lpFrom').value = from;
   document.getElementById('lpTo').value = to;
   document.getElementById('lpKwRow').style.display = t === 'tematik' ? 'block' : 'none';
-  const hint = { harian: 'Kemarin (00.00–23.59 WIT).', mingguan: 'Senin sampai Minggu pekan lalu. Tanggal bisa diubah.', tematik: 'Isi kata kunci isu/acara, lalu atur periode awal sampai akhir.' };
+  const hint = { harian: 'Kemarin (00.00–23.59 WIT).', mingguan: 'Senin sampai Minggu pekan lalu. Tanggal bisa diubah.', tematik: 'Tulis tema dengan kalimat biasa. AI mencari kata kunci dan sinonim, lalu Anda memilih berita yang relevan sebelum laporan disusun.' };
   document.getElementById('lpHint').textContent = hint[t];
 }
 
@@ -5535,13 +5535,143 @@ function lpPrep(rows) {
   }).filter(a => !isNaN(a.pub));
 }
 
+// ===== Laporan tematik dua tahap: kandidat -> penyaringan AI -> pilih -> susun =====
+const LPT = { tema: '', from: '', to: '', terms: [], place: [], queries: [], rows: {}, verdict: {}, pick: {}, busy: false, note: '' };
+const lpEsc = x => spkEsc(String(x == null ? '' : x));
+async function lpBrief(body) {
+  const r = await fetch('/api/brief', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const d = await r.json();
+  if (!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+function lpThStatus(msg) { document.getElementById('lpOut').innerHTML = '<div class="lp-note" style="padding:30px;text-align:center">' + lpEsc(msg) + '</div>'; }
+async function lpThemeStart(from, to, tema) {
+  if (LPT.busy) return;
+  LPT.busy = true; Object.assign(LPT, { tema, from, to, rows: {}, verdict: {}, pick: {}, note: '' });
+  const btn = document.getElementById('lpBtn'); btn.disabled = true; btn.textContent = '⏳ Mencari...';
+  try {
+    lpThStatus('Memahami tema dan menyiapkan kata kunci...');
+    const ex = await lpBrief({ mode: 'theme-expand', tema });
+    LPT.terms = ex.terms || []; LPT.place = ex.place || []; LPT.queries = ex.queries || [];
+    if (!LPT.terms.length) throw new Error('AI tidak menghasilkan kata kunci. Coba tulis tema lebih spesifik.');
+    await lpThemeCollect();
+  } catch (e) { document.getElementById('lpOut').innerHTML = '<div class="lp-note" style="color:#B3261E;padding:20px">⚠ ' + lpEsc(e.message) + '</div>'; }
+  finally { LPT.busy = false; btn.disabled = false; btn.textContent = '📄 Susun Laporan'; }
+}
+async function lpThemeCollect() {
+  const fq = encodeURIComponent(new Date(LPT.from + 'T00:00:00+09:00').toISOString()), tq = encodeURIComponent(new Date(LPT.to + 'T23:59:59+09:00').toISOString());
+  lpThStatus('Menjaring berita kandidat...');
+  let rows = [], off = 0;
+  while (off < 3000) {
+    const r = await fetch('/api/articles?limit=500&offset=' + off + '&from=' + fq + '&to=' + tq + '&qs=' + encodeURIComponent(LPT.terms.join('|')));
+    if (!r.ok) throw new Error('Gagal memuat berita (HTTP ' + r.status + ')');
+    const d = await r.json();
+    if (!Array.isArray(d.articles)) throw new Error('Database menolak permintaan: ' + JSON.stringify(d.articles || d.error || '').slice(0, 160));
+    rows = rows.concat(d.articles);
+    if (d.articles.length < 500) break;
+    off += 500;
+  }
+  const total = rows.length;
+  const hay = r => ((r.title || '') + ' ' + (r.description || '') + ' ' + (r.resume || '') + ' ' + (r.locations || '')).toLowerCase();
+  let dropped = 0;
+  if (LPT.place.length) { rows = rows.filter(r => { const h = hay(r); const ok = LPT.place.some(p => h.indexOf(p) >= 0); if (!ok) dropped++; return ok; }); }
+  const CAP = 100;
+  const over = Math.max(0, rows.length - CAP);
+  rows = rows.slice(0, CAP);
+  LPT.note = total + ' berita memuat kata kunci' + (dropped ? ', ' + dropped + ' dibuang karena tidak menyebut ' + LPT.place.join('/') : '') + (over ? ', ' + over + ' lebih lama tidak diperiksa (batas ' + CAP + ')' : '') + '.';
+  LPT.rows = {}; rows.forEach(r => { LPT.rows[r.url] = r; });
+  const todo = rows.filter(r => !LPT.verdict[r.url]);
+  const batches = []; for (let i = 0; i < todo.length; i += 20) batches.push(todo.slice(i, i + 20));
+  let doneN = 0; LPT.judgeFail = 0;
+  for (let i = 0; i < batches.length; i += 2) {
+    lpThStatus('AI menilai relevansi ' + Math.min(todo.length, doneN + 1) + '–' + Math.min(todo.length, doneN + 40) + ' dari ' + todo.length + ' berita...');
+    await Promise.all(batches.slice(i, i + 2).map(async batch => {
+      try {
+        const items = batch.map((r, k) => ({ i: k + 1, judul: r.title, media: r.source, ringkas: (r.resume || (r.description || '').replace(/<[^>]+>/g, '')).slice(0, 220) }));
+        const d = await lpBrief({ mode: 'theme-judge', tema: LPT.tema, items });
+        const byI = {}; (d.results || []).forEach(x => { byI[x.i] = x; });
+        batch.forEach((r, k) => { const x = byI[k + 1]; if (x) LPT.verdict[r.url] = { v: x.v, alasan: x.alasan }; else LPT.judgeFail++; });
+      } catch (e) { LPT.judgeFail += batch.length; LPT.lastErr = e.message; }
+    }));
+    doneN += 40;
+  }
+  Object.keys(LPT.rows).forEach(u => { if (!(u in LPT.pick)) LPT.pick[u] = !!(LPT.verdict[u] && LPT.verdict[u].v === 'ya'); });
+  lpThemeRender();
+}
+function lpThemeRender() {
+  const out = document.getElementById('lpOut');
+  const urls = Object.keys(LPT.rows);
+  const ord = { ya: 0, sebagian: 1, tidak: 2 };
+  urls.sort((a, b) => { const va = LPT.verdict[a] ? ord[LPT.verdict[a].v] : 3, vb = LPT.verdict[b] ? ord[LPT.verdict[b].v] : 3; return va - vb || new Date(LPT.rows[b].published_at) - new Date(LPT.rows[a].published_at); });
+  const cnt = { ya: 0, sebagian: 0, tidak: 0, none: 0 };
+  urls.forEach(u => { const v = LPT.verdict[u]; cnt[v ? v.v : 'none']++; });
+  const sel = urls.filter(u => LPT.pick[u]).length;
+  const col = { ya: ['#dcfce7', '#166534', 'Relevan'], sebagian: ['#fef3c7', '#92400e', 'Sebagian'], tidak: ['#f1f5f9', '#64748b', 'Tidak relevan'] };
+  out.innerHTML = `<div class="lp-box" style="margin-bottom:12px">
+    <div class="lp-sub">Tahap 1 dan 2: pilih berita yang relevan</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Tema: <b style="color:var(--text)">${lpEsc(LPT.tema)}</b></div>
+    <div style="font-size:12px;margin-bottom:4px">Kata kunci yang dipakai (boleh diubah, pisahkan dengan koma):</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><input id="lpThTerms" value="${lpEsc(LPT.terms.join(', '))}" style="flex:1;min-width:220px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12.5px"><button class="br-btn" onclick="lpThemeRescan()">🔄 Cari ulang</button></div>
+    ${LPT.place.length ? `<div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">Hanya berita yang menyebut: ${lpEsc(LPT.place.join(', '))}</div>` : ''}
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">${lpEsc(LPT.note)}${LPT.judgeFail ? ' <b style="color:#b91c1c">' + LPT.judgeFail + ' berita gagal dinilai AI' + (LPT.lastErr ? ' (' + lpEsc(LPT.lastErr) + ')' : '') + ', nilai sendiri.</b>' : ''}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <button class="br-btn" onclick="lpThemeCrawl()" title="Menarik berita baru dari pencarian online lalu menyimpannya ke database">🌐 Cari berita baru untuk tema ini</button>
+      <button class="br-btn" onclick="lpThemePickAll('ya')">Pilih yang relevan saja</button>
+      <button class="br-btn" onclick="lpThemePickAll('ya+')">Relevan + sebagian</button>
+      <button class="br-btn" onclick="lpThemePickAll('none')">Kosongkan</button>
+    </div></div>
+    <div style="font-size:12px;margin-bottom:6px">Relevan <b>${cnt.ya}</b> · Sebagian <b>${cnt.sebagian}</b> · Tidak relevan <b>${cnt.tidak}</b>${cnt.none ? ' · Belum dinilai <b>' + cnt.none + '</b>' : ''}. Yang tercentang awalnya hanya yang "Relevan". Penilaian AI hanya saran, periksa daftar ini.</div>
+    ${urls.map(u => { const r = LPT.rows[u], v = LPT.verdict[u], c = v ? col[v.v] : ['#f1f5f9', '#64748b', 'Belum dinilai'];
+      return `<label class="card" style="display:flex;gap:10px;align-items:flex-start;padding:8px 12px;margin-bottom:5px;cursor:pointer"><input type="checkbox" ${LPT.pick[u] ? 'checked' : ''} onchange="LPT.pick[${lpEsc(JSON.stringify(u)).replace(/"/g, '&quot;')}]=this.checked;lpThemeCount()" style="margin-top:3px">
+      <div style="flex:1;font-size:12.5px"><div><span style="font-size:10.5px;padding:1px 7px;border-radius:9px;background:${c[0]};color:${c[1]};font-weight:600">${c[2]}</span> <b>${lpEsc(r.title)}</b></div>
+      <div style="color:var(--muted);font-size:11.5px">${lpEsc(r.source || '')} · ${lpEsc(new Date(r.published_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }))}${v && v.alasan ? ' · ' + lpEsc(v.alasan) : ''} · <a href="${lpEsc(r.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">buka</a></div></div></label>`; }).join('') || '<div class="lp-note" style="padding:20px;text-align:center">Tidak ada berita kandidat di periode ini. Coba "Cari berita baru untuk tema ini" atau perlebar periode.</div>'}
+    <div style="position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);padding:10px 0;margin-top:8px;display:flex;gap:10px;align-items:center"><button id="lpThGo" class="br-btn" style="background:var(--accent);color:#fff;font-weight:600" onclick="lpThemeBuild()">📄 Susun laporan dari ${sel} berita terpilih</button></div>`;
+}
+function lpThemeCount() { const n = Object.keys(LPT.pick).filter(u => LPT.pick[u] && LPT.rows[u]).length; const b = document.getElementById('lpThGo'); if (b) b.textContent = '📄 Susun laporan dari ' + n + ' berita terpilih'; }
+function lpThemePickAll(k) { Object.keys(LPT.rows).forEach(u => { const v = LPT.verdict[u] && LPT.verdict[u].v; LPT.pick[u] = k === 'ya' ? v === 'ya' : k === 'ya+' ? (v === 'ya' || v === 'sebagian') : false; }); lpThemeRender(); }
+async function lpThemeRescan() {
+  const t = (document.getElementById('lpThTerms').value || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+  if (!t.length) { showToast('Isi minimal satu kata kunci'); return; }
+  LPT.terms = t; LPT.busy = true;
+  try { await lpThemeCollect(); } catch (e) { document.getElementById('lpOut').innerHTML = '<div class="lp-note" style="color:#B3261E;padding:20px">⚠ ' + lpEsc(e.message) + '</div>'; }
+  LPT.busy = false;
+}
+async function lpThemeCrawl() {
+  if (LPT.busy) return;
+  const qs = (LPT.queries && LPT.queries.length ? LPT.queries : LPT.terms.slice(0, 3).map(t => (LPT.place[0] ? t + ' ' + LPT.place[0] : t))).slice(0, 4);
+  LPT.busy = true; let saved = 0, failed = 0;
+  try {
+    for (let i = 0; i < qs.length; i++) {
+      lpThStatus('Mencari berita baru (' + (i + 1) + '/' + qs.length + '): ' + qs[i] + ' ...');
+      try {
+        const r = await fetch(`/api/crawl?secret=${CRON_SECRET}&keyword=${encodeURIComponent(qs[i])}&source=external&dateFrom=${LPT.from}&dateTo=${LPT.to}`);
+        const d = await r.json(); if (d && d.saved) saved += d.saved; else if (!r.ok) failed++;
+      } catch (e) { failed++; }
+    }
+    LPT.note0 = saved + ' berita baru masuk database' + (failed ? ', ' + failed + ' pencarian gagal' : '') + '. Berita baru belum dianalisis tone-nya (jalankan "Analisis Berita yang Belum Terisi" di Pengaturan sebelum laporan final).';
+    await lpThemeCollect();
+    LPT.note = LPT.note0 + ' ' + LPT.note; lpThemeRender();
+  } catch (e) { document.getElementById('lpOut').innerHTML = '<div class="lp-note" style="color:#B3261E;padding:20px">⚠ ' + lpEsc(e.message) + '</div>'; }
+  LPT.busy = false;
+}
+function lpThemeBuild() {
+  const rows = Object.keys(LPT.rows).filter(u => LPT.pick[u]).map(u => LPT.rows[u]);
+  if (!rows.length) { showToast('Pilih minimal satu berita'); return; }
+  const arts = lpPrep(rows).sort((a, b) => a.pub - b.pub);
+  LP.data = { type: 'tematik', from: LPT.from, to: LPT.to, kw: LPT.tema, arts };
+  LP.ai = null;
+  lpRender();
+  if (arts.length) lpNarrative();
+}
+
 async function lpGenerate() {
   if (LP.busy) return;
   const from = document.getElementById('lpFrom').value, to = document.getElementById('lpTo').value;
   const kw = LP.type === 'tematik' ? document.getElementById('lpKw').value.trim() : '';
   const out = document.getElementById('lpOut');
   if (!from || !to || from > to) { out.innerHTML = '<div class="lp-note" style="color:#B3261E">Periode tidak valid: tanggal awal harus sebelum atau sama dengan tanggal akhir.</div>'; return; }
-  if (LP.type === 'tematik' && !kw) { out.innerHTML = '<div class="lp-note" style="color:#B3261E">Isi kata kunci isu dulu, misalnya: papua spark</div>'; return; }
+  if (LP.type === 'tematik' && !kw) { out.innerHTML = '<div class="lp-note" style="color:#B3261E">Tulis tema dulu, misalnya: transisi energi di Manokwari</div>'; return; }
+  if (LP.type === 'tematik') { return lpThemeStart(from, to, kw); }
   LP.busy = true;
   const btn = document.getElementById('lpBtn'); btn.disabled = true; btn.textContent = '⏳ Menyusun...';
   try {
