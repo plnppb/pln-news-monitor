@@ -93,6 +93,69 @@ Balas HANYA JSON: {"draft":"teks kerangka"}`;
   return res.status(500).json({ error: 'Gagal menyusun draft', detail: lastError });
 }
 
+// ===== MODE TEMA (laporan tematik): POST {mode:'theme-expand'|'theme-judge', tema, items?} =====
+async function geminiJson(prompt, maxTokens, timeoutMs) {
+  const KEYS = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+  if (!KEYS.length) throw new Error('Gemini API key not configured');
+  let lastError = null;
+  for (let i = 0; i < KEYS.length; i++) {
+    try {
+      const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+      let r; try { r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${KEYS[i]}`, {
+        signal: ctrl.signal, method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, maxOutputTokens: maxTokens, responseMimeType: 'application/json' } })
+      }); } finally { clearTimeout(timer); }
+      const data = await r.json();
+      if (data.error) { lastError = data.error.message; if ((data.error.code === 429 || /quota/i.test(lastError || '')) && i < KEYS.length - 1) continue; throw new Error(lastError); }
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const m = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').match(/\{[\s\S]*\}/);
+      if (!m) throw new Error('Format jawaban AI tidak terbaca');
+      return JSON.parse(m[0]);
+    } catch (e) { lastError = e.name === 'AbortError' ? 'AI terlalu lama menjawab (timeout), coba lagi' : e.message; if (i === KEYS.length - 1) throw new Error(lastError); }
+  }
+  throw new Error(lastError || 'Gagal');
+}
+async function themeMode(req, res) {
+  const b = req.body || {};
+  const tema = String(b.tema || '').slice(0, 400).trim();
+  if (!tema) return res.status(400).json({ error: 'Tema kosong' });
+  try {
+    if (b.mode === 'theme-expand') {
+      const out = await geminiJson(`Kamu asisten pemantau media untuk humas PLN UIW Papua dan Papua Barat. Pengguna ingin laporan tematik dengan tema:
+"${tema}"
+
+Tugasmu menyiapkan kata penjaring berita. Balas HANYA JSON:
+{"terms":[...],"place":[...],"queries":[...]}
+- terms: 8 sampai 14 kata atau frasa pendek huruf kecil (bahasa Indonesia) yang kemungkinan muncul di judul atau ringkasan berita tentang POKOK tema (tanpa nama tempat), termasuk sinonim dan singkatan umum (mis. ebt, plts, kendaraan listrik, mobil listrik, motor listrik, spklu, kendaraan dinas). Jangan masukkan kata yang terlalu umum (mis. listrik saja, pln saja, pemerintah).
+- place: nama tempat yang disebut pada tema (huruf kecil), mis. ["manokwari"]. Kosongkan [] jika tema tidak menyebut tempat.
+- queries: 3 sampai 4 kueri pencarian berita pendek (2 sampai 4 kata), masing-masing memuat tempat dan satu aspek tema, mis. "mobil listrik manokwari".`, 900, 8500);
+      const arr = x => (Array.isArray(x) ? x : []).map(s => String(s).toLowerCase().trim()).filter(s => s && s.length <= 40);
+      return res.status(200).json({ terms: arr(out.terms).slice(0, 14), place: arr(out.place).slice(0, 4), queries: arr(out.queries).slice(0, 4) });
+    }
+    if (b.mode === 'theme-judge') {
+      const items = Array.isArray(b.items) ? b.items.slice(0, 25) : [];
+      if (!items.length) return res.status(200).json({ results: [] });
+      const lines = items.map(a => `${a.i}. ${String(a.judul || '').slice(0, 200)} | ${String(a.media || '').slice(0, 40)}${a.ringkas ? ' | ' + String(a.ringkas).slice(0, 220) : ''}`).join('\n');
+      const out = await geminiJson(`Kamu penyaring relevansi berita untuk laporan tematik humas PLN. TEMA LAPORAN: "${tema}"
+
+Nilai tiap berita di bawah apakah relevan dengan tema tersebut, termasuk tempat yang disebut pada tema.
+- "ya": pokok bahasan berita langsung tentang tema, di tempat yang dimaksud.
+- "sebagian": hanya menyinggung tema, atau tema berdekatan (mis. energi terbarukan di daerah lain yang dikaitkan, atau tempat benar tetapi pokok bahasan hanya sebagian).
+- "tidak": hanya kebetulan memuat kata yang sama, atau tempat/isinya berbeda dari tema.
+Jangan menebak di luar judul dan ringkasan yang diberikan. Bila ragu antara "ya" dan "sebagian", pilih "sebagian".
+
+BERITA:
+${lines}
+
+Balas HANYA JSON: {"results":[{"i":<nomor>,"v":"ya|sebagian|tidak","alasan":"maks 12 kata"}]}`, 2500, 9000);
+      const ok = { ya: 1, sebagian: 1, tidak: 1 };
+      const results = (Array.isArray(out.results) ? out.results : []).filter(r => r && ok[r.v]).map(r => ({ i: r.i, v: r.v, alasan: String(r.alasan || '').slice(0, 120) }));
+      return res.status(200).json({ results });
+    }
+    return res.status(400).json({ error: 'Mode tidak dikenal' });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -103,6 +166,7 @@ export default async function handler(req, res) {
 
   if (req.body && req.body.mode === 'report') return reportMode(req, res);
   if (req.body && req.body.mode === 'draft') return draftMode(req, res);
+  if (req.body && (req.body.mode === 'theme-expand' || req.body.mode === 'theme-judge')) return themeMode(req, res);
 
   const { articles, keyword } = req.body;
   const GEMINI_KEYS = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '')

@@ -500,7 +500,11 @@ async function handleList(req, res) {
   let url = `${SUPABASE_URL}/rest/v1/articles?select=*&order=published_at.desc&limit=${limit}&offset=${offset}`;
   if (keyword) url += `&keyword=eq.${encodeURIComponent(keyword)}`;
   if (source) url += `&source=ilike.${encodeURIComponent('%' + source + '%')}`;
-  if (q) {
+  if (req.query.qs) {
+    // Beberapa kata kunci sekaligus (dipisah |): berita yang memuat salah satunya di judul, ringkasan, atau resume
+    const terms = String(req.query.qs).split('|').map(t => t.replace(/[(),*%\\]/g, ' ').trim().slice(0, 40)).filter(Boolean).slice(0, 14);
+    if (terms.length) url += `&or=(${terms.map(t => ['title', 'description', 'resume'].map(f => encodeURIComponent(f + '.ilike.*' + t + '*')).join(',')).join(',')})`;
+  } else if (q) {
     // Pencarian bebas di judul, ringkasan, media; tanda kurung/koma dibuang agar tidak merusak filter PostgREST
     const term = String(q).replace(/[(),*%\\]/g, ' ').trim().slice(0, 80);
     if (term) url += `&or=(${encodeURIComponent('title.ilike.*' + term + '*')},${encodeURIComponent('description.ilike.*' + term + '*')},${encodeURIComponent('source.ilike.*' + term + '*')},${encodeURIComponent('resume.ilike.*' + term + '*')})`;
