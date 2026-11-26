@@ -6752,6 +6752,7 @@ function brFmtDay(d) { return d.toLocaleDateString('id-ID', { weekday: 'short', 
 
 
 function brEsc(x) { return spkEsc(String(x == null ? '' : x)); }
+function brStamp(iso) { const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Jayapura' }).replace(',', '').replace(/\./g, ':') + ' WIT'; }
 function brAgo(ms) { const h = Math.floor(ms / 3600000); return h < 1 ? 'baru saja' : h < 24 ? h + ' jam lalu' : Math.floor(h / 24) + ' hari lalu'; }
 
 async function brFetchRows(days) {
@@ -6845,7 +6846,7 @@ function renderBeranda() {
   if (pend || (H && H.pending)) banners += `<div class="br-banner warn">⏳ <span><b>${Math.max(pend, H ? H.pending || 0 : 0)} berita belum dianalisis AI</b>, belum punya tone dan tidak dihitung di angka di bawah.</span><button class="br-btn" onclick="switchTab('pengaturan');runAnalyzePending()">🧠 Analisis sekarang</button></div>`;
   if (H && H.newestCreatedAt) {
     const age = Date.now() - new Date(H.newestCreatedAt).getTime();
-    if (age > 14 * 3600000) banners += `<div class="br-banner bad">⚠ <span>Terakhir ada berita baru masuk <b>${brAgo(age)}</b>. Auto-crawl mungkin bermasalah, cek tab GitHub Actions atau <a href="#" onclick="switchTab('pengaturan');return false">Pengaturan</a>.</span></div>`;
+    if (age > 14 * 3600000) banners += `<div class="br-banner bad">⚠ <span>Terakhir ada berita baru masuk <b>${brStamp(H.newestCreatedAt)}</b>. Auto-crawl mungkin bermasalah, cek tab GitHub Actions atau <a href="#" onclick="switchTab('pengaturan');return false">Pengaturan</a>.</span></div>`;
   }
   if (H && H.geminiKeys === 0) banners += `<div class="br-banner bad">⚠ <span>Kunci Gemini belum terpasang di server, analisis AI tidak akan jalan.</span></div>`;
 
@@ -7072,7 +7073,7 @@ async function loadHealth() {
     const row = (l, v, bad) => `<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dashed var(--border)"><span>${l}</span><b style="color:${bad ? '#b91c1c' : 'var(--text)'}">${v}</b></div>`;
     box.innerHTML = row('Berita di database (aktif)', d.total == null ? '—' : d.total)
       + row('Masuk 24 jam terakhir', d.last24 == null ? '—' : d.last24, d.last24 === 0)
-      + row('Berita terbaru masuk', age == null ? '—' : brAgo(age), age != null && age > 14 * 3600000)
+      + row('Berita terbaru masuk', age == null ? '—' : brStamp(d.newestCreatedAt), age != null && age > 14 * 3600000)
       + row('Belum dianalisis AI', d.pending == null ? '—' : d.pending + (d.pendingLocked ? ' (' + d.pendingLocked + ' terkunci)' : ''), d.pending > 0)
       + row('Kunci Gemini terpasang', d.geminiKeys, d.geminiKeys === 0)
       + `<div style="font-size:11.5px;margin-top:8px">${d.pending > 0 ? 'Klik "🧠 Analisis Berita yang Belum Terisi" di kartu sebelah untuk mengisinya.' : 'Semua berita sudah dianalisis.'}${age != null && age > 14 * 3600000 ? ' <b style="color:#b91c1c">Auto-crawl sepertinya tidak berjalan: cek GitHub Actions.</b>' : ''}</div>`;
