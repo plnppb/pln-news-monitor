@@ -6140,12 +6140,12 @@ async function loadFromDB() {
 
 // ===== Kelas media (pengganti skor Alexa yang sudah tidak ada) =====
 // Pengelompokan awal berdasarkan nama media; bisa diubah dan diberi bintang "prioritas" (disimpan di browser ini).
-const MC_CLASSES = { nasional: ['Nasional', '#1d4ed8', '#dbeafe'], regional: ['Regional Papua', '#15803d', '#dcfce7'], agregator: ['Agregator', '#a16207', '#fef9c3'], sosial: ['YouTube/Sosial', '#7e22ce', '#f3e8ff'], lainnya: ['Belum dikelompokkan', '#64748b', '#f1f5f9'] };
+const MC_CLASSES = { nasional: ['Nasional', '#1d4ed8', '#dbeafe'], regional: ['Regional Papua', '#15803d', '#dcfce7'], agregator: ['Agregator', '#a16207', '#fef9c3'], sosial: ['YouTube/Sosial', '#7e22ce', '#f3e8ff'], lokal: ['Lokal/Lainnya', '#0e7490', '#cffafe'], lainnya: ['Belum dikelompokkan', '#64748b', '#f1f5f9'] };
 const MC_RULES = [
   ['sosial', /youtube|instagram|tiktok|facebook|twitter|^x\b/i],
   ['agregator', /head ?topics|google news|msn|dailyhunt|newsbreak|lensa|ground news/i],
   ['regional', /papua|jubi|cenderawasih|cepos|koreri|tabura|jagat|pasific|pasifik|sorong|manokwari|merauke|timika|mimika|nabire|wamena|jayapura|biak|fakfak|kaimana|bintuni|raja ampat|sentani|bintang|seputar|suara perempuan|metro papua|teropong|salam papua|lintas papua|radar (sorong|timika|jayapura|biak)|tribun[- ]?papua/i],
-  ['nasional', /kompas|detik|antara|tribunnews|cnn ?indonesia|cnbc|kumparan|liputan ?6|merdeka|republika|tempo|bisnis\.com|kontan|katadata|okezone|sindonews|viva|suara\.com|tirto|media ?indonesia|jpnn|inews|rri|tvone|metro ?tv|beritasatu|berita satu|idn ?times|bbc|mongabay|gatra|jawa ?pos|warta ?ekonomi|cnn|republika|rmol|pikiran rakyat|kabar ?24|bisnis|investor\.id|emitennews|energi ?today|esdm|dunia ?energi|rm\.id|poskota|akurat|fajar|harian ?(kompas|disway)|disway|era\.id|genpi|medcom|alinea|bloomberg|reuters|tempo|the jakarta post|jakarta globe|pos kota|okezone|tribun ?network|jawapos|solopos|suara merdeka|sindo|warta kota|kumparan/i]
+  ['nasional', /kompas|detik|antara|tribunnews|cnn ?indonesia|cnbc|kumparan|liputan ?6|merdeka|republika|tempo|bisnis\.com|kontan|katadata|okezone|sindonews|viva|suara\.com|tirto|media ?indonesia|jpnn|inews|rri|tvone|metro ?tv|beritasatu|berita satu|idn ?times|bbc|mongabay|gatra|jawa ?pos|warta ?ekonomi|cnn|republika|rmol|pikiran rakyat|kabar ?24|bisnis|investor\.id|emitennews|energi ?today|esdm|dunia ?energi|rm\.id|poskota|akurat|fajar|harian ?(kompas|disway)|disway|era\.id|genpi|medcom|alinea|koran[- ]?jakarta|bloomberg|reuters|tempo|the jakarta post|jakarta globe|pos kota|okezone|tribun ?network|jawapos|solopos|suara merdeka|sindo|warta kota|kumparan/i]
 ];
 // ===== Pengaturan bersama: database (app_settings) dengan cadangan di browser =====
 const APPSET = { loaded: false, available: null, note: '' };
@@ -6197,8 +6197,32 @@ function mcClassOf(name) {
 function mcSet(name, cls) { const o = mcLoad(); o[name] = cls; mcSave(o); renderMediaReach(window._mcArts || []); renderDashMediaChips(); }
 function mcTogglePrio(name) { let p = mcPrio(); p = p.indexOf(name) >= 0 ? p.filter(x => x !== name) : p.concat(name); appSave('media_prio', p); renderMediaReach(window._mcArts || []); }
 function renderDashMediaChips() { document.querySelectorAll('#dashMediaList .media-name').forEach(el => { const n = el.getAttribute('data-m'); if (!n) return; const c = MC_CLASSES[mcClassOf(n)]; let chip = el.querySelector('.mc-chip'); if (!chip) { chip = document.createElement('span'); chip.className = 'mc-chip'; el.appendChild(chip); } chip.textContent = c[0]; chip.style.cssText = `margin-left:6px;font-size:9.5px;padding:1px 6px;border-radius:8px;background:${c[2]};color:${c[1]};font-weight:600;white-space:nowrap`; }); }
-function renderMediaReach(arts) {
-  window._mcArts = arts;
+window._mcUI = { q: '', f: 'belum', n: 40 };
+function mcAllCounts() { const c = {}; (window._mcAll || window._mcArts || []).forEach(a => { const n = (a.source && a.source.name) || 'Unknown'; c[n] = (c[n] || 0) + 1; }); return c; }
+function mcRenderList() {
+  const el = document.getElementById('mcList'); if (!el) return;
+  const esc = x => spkEsc(String(x)); const U = window._mcUI;
+  const cnt = mcAllCounts(), prio = mcPrio(), order = ['nasional', 'regional', 'agregator', 'sosial', 'lokal', 'lainnya'];
+  let names = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || a.localeCompare(b));
+  const q = (U.q || '').toLowerCase().trim();
+  if (q) names = names.filter(n => n.toLowerCase().indexOf(q) >= 0);
+  if (U.f === 'belum') names = names.filter(n => mcClassOf(n) === 'lainnya');
+  else if (U.f === 'prio') names = names.filter(n => prio.indexOf(n) >= 0);
+  else if (U.f !== 'semua') names = names.filter(n => mcClassOf(n) === U.f);
+  const shown = names.slice(0, U.n);
+  el.innerHTML = (shown.length ? shown.map(n => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--border)"><button class="br-btn" style="padding:0 7px" title="Tandai media prioritas" onclick="mcTogglePrio(${esc(JSON.stringify(n)).replace(/"/g, '&quot;')})">${prio.indexOf(n) >= 0 ? '⭐' : '☆'}</button><span style="flex:1;font-size:12.5px">${esc(n)} <span style="color:var(--muted)">(${cnt[n]} berita)</span></span><select onchange="mcSet(${esc(JSON.stringify(n)).replace(/"/g, '&quot;')},this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px">${order.map(c => `<option value="${c}" ${mcClassOf(n) === c ? 'selected' : ''}>${esc(MC_CLASSES[c][0])}</option>`).join('')}</select></div>`).join('')
+    : '<div style="font-size:12px;color:var(--muted);padding:8px 0">' + (U.f === 'belum' && !q ? '✅ Semua media sudah dikelompokkan.' : 'Tidak ada media yang cocok.') + '</div>')
+    + `<div style="font-size:11.5px;color:var(--muted);margin-top:6px">Menampilkan ${shown.length} dari ${names.length} media.${names.length > shown.length ? ' <a href="#" onclick="window._mcUI.n+=60;mcRenderList();return false">Tampilkan 60 lagi</a> · <a href="#" onclick="window._mcUI.n=99999;mcRenderList();return false">Semua</a>' : ''}</div>`;
+}
+function mcBulkUnknown() {
+  const cnt = mcAllCounts(); const names = Object.keys(cnt).filter(n => mcClassOf(n) === 'lainnya');
+  if (!names.length) { showToast('Tidak ada yang belum dikelompokkan'); return; }
+  if (!confirm('Tandai ' + names.length + ' media yang belum dikelompokkan sebagai Lokal/Lainnya? Masing-masing masih bisa diubah lagi.')) return;
+  const o = Object.assign({}, mcLoad()); names.forEach(n => { o[n] = 'lokal'; });
+  mcSave(o); renderMediaReach(window._mcArts || []); renderDashMediaChips(); showToast(names.length + ' media ditandai Lokal/Lainnya');
+}
+function renderMediaReach(arts, all) {
+  window._mcArts = arts; if (all) window._mcAll = all;
   const el = document.getElementById('dashReach'); if (!el) return;
   if (!arts.length) { el.innerHTML = '<p style="color:var(--muted);font-size:12px;">Belum ada data</p>'; return; }
   const wasOpen = !!(el.querySelector('details') && el.querySelector('details').open);
@@ -6209,22 +6233,29 @@ function renderMediaReach(arts) {
   const prio = mcPrio(); const prioN = Object.keys(byMedia).filter(n => prio.indexOf(n) >= 0).reduce((s, n) => s + byMedia[n].n, 0);
   const pct = c => total ? Math.round(((cls[c] || { n: 0 }).n / total) * 1000) / 10 : 0;
   const stat = (v, l) => `<div class="dash-stat"><div class="num" style="font-size:22px">${v}</div><div class="lbl">${l}</div></div>`;
-  const order = ['nasional', 'regional', 'agregator', 'sosial', 'lainnya'];
+  const order = ['nasional', 'regional', 'agregator', 'sosial', 'lokal', 'lainnya'];
   const bar = order.filter(c => cls[c]).map(c => `<div title="${esc(MC_CLASSES[c][0])}: ${cls[c].n} berita" style="flex:${cls[c].n};background:${MC_CLASSES[c][1]};min-width:3px"></div>`).join('');
   const legend = order.filter(c => cls[c]).map(c => `<span style="font-size:11.5px;margin-right:12px"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${MC_CLASSES[c][1]};margin-right:4px"></span>${esc(MC_CLASSES[c][0])} <b>${pct(c)}%</b> (${cls[c].n})</span>`).join('');
   const topNas = nas.media.map(n => [n, byMedia[n]]).sort((a, b) => b[1].n - a[1].n).slice(0, 8);
   const unk = (cls.lainnya ? cls.lainnya.media : []).map(n => [n, byMedia[n].n]).sort((a, b) => b[1] - a[1]);
-  const all = Object.keys(byMedia).sort((a, b) => byMedia[b].n - byMedia[a].n).slice(0, 60);
   el.innerHTML = `<div class="dash-stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px">
       ${stat(pct('nasional') + '%', 'Berita di media nasional')}${stat(nas.media.length, 'Media nasional yang memuat')}${stat(prioN, 'Berita di media prioritas ⭐')}${stat(unk.length, 'Media belum dikelompokkan')}</div>
     <div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-bottom:6px">${bar}</div><div style="margin-bottom:12px">${legend}</div>
     <div style="font-weight:600;font-size:12.5px;margin-bottom:4px">Media nasional teratas</div>
     ${topNas.length ? topNas.map(([n, v]) => `<div class="media-item"><span class="media-name" style="min-width:160px">${prio.indexOf(n) >= 0 ? '⭐ ' : ''}${esc(n)}</span><span style="font-size:12px;color:var(--muted)">${v.n} berita${v.pos ? ' · ' + v.pos + ' positif' : ''}${v.neg ? ' · <span style="color:#b91c1c">' + v.neg + ' negatif</span>' : ''}</span></div>`).join('') : '<div style="font-size:12px;color:var(--muted)">Belum ada berita di media nasional pada periode ini.</div>'}
     ${unk.length ? `<div style="font-size:11.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;margin-top:10px">Belum dikelompokkan: ${unk.slice(0, 6).map(x => esc(x[0]) + ' (' + x[1] + ')').join(', ')}${unk.length > 6 ? ', ...' : ''}. Atur di bawah.</div>` : ''}
-    <details ${wasOpen ? 'open' : ''} style="margin-top:10px"><summary style="cursor:pointer;font-size:12.5px;color:var(--accent2,#1E8449);font-weight:600">⚙ Atur kelas media dan prioritas (${all.length} media teratas)</summary>
-      <div style="font-size:11.5px;color:var(--muted);margin:6px 0">Pengelompokan awal saya tebak dari nama media, jadi periksa dan ubah bila keliru. ${APPSET.available === false ? '<b style="color:#b91c1c">Perhatian: tabel pengaturan belum ada di database, jadi perubahan hanya tersimpan di browser ini. Jalankan add-app-settings.sql di Supabase.</b>' : 'Perubahan tersimpan di database dan berlaku untuk semua pengguna.'}</div>
-      ${all.map(n => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--border)"><button class="br-btn" style="padding:0 7px" title="Tandai media prioritas" onclick="mcTogglePrio(${esc(JSON.stringify(n)).replace(/"/g, '&quot;')})">${prio.indexOf(n) >= 0 ? '⭐' : '☆'}</button><span style="flex:1;font-size:12.5px">${esc(n)} <span style="color:var(--muted)">(${byMedia[n].n})</span></span><select onchange="mcSet(${esc(JSON.stringify(n)).replace(/"/g, '&quot;')},this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px">${order.map(c => `<option value="${c}" ${mcClassOf(n) === c ? 'selected' : ''}>${esc(MC_CLASSES[c][0])}</option>`).join('')}</select></div>`).join('')}
+    <details ${wasOpen ? 'open' : ''} style="margin-top:10px"><summary style="cursor:pointer;font-size:12.5px;color:var(--accent2,#1E8449);font-weight:600">⚙ Atur kelas media dan prioritas (semua media, ${Object.keys(mcAllCounts()).length})</summary>
+      <div style="font-size:11.5px;color:var(--muted);margin:6px 0">Pengelompokan awal saya tebak dari nama media, jadi periksa dan ubah bila keliru. ⭐ Media prioritas = media yang menurut Anda paling berpengaruh bagi PLN (mis. Kompas, ANTARA, media lokal kunci). Berita di media bertanda ⭐ dihitung di kartu "Berita di media prioritas". ${APPSET.available === false ? '<b style="color:#b91c1c">Perhatian: tabel pengaturan belum ada di database, jadi perubahan hanya tersimpan di browser ini. Jalankan add-app-settings.sql di Supabase.</b>' : 'Perubahan tersimpan di database dan berlaku untuk semua pengguna.'}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        <input id="mcQ" placeholder="Cari nama media..." value="${esc(window._mcUI.q)}" oninput="window._mcUI.q=this.value;window._mcUI.n=40;mcRenderList()" style="flex:1;min-width:160px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+        <select id="mcF" onchange="window._mcUI.f=this.value;window._mcUI.n=40;mcRenderList()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px">
+          <option value="belum" ${window._mcUI.f === 'belum' ? 'selected' : ''}>Belum dikelompokkan</option><option value="semua" ${window._mcUI.f === 'semua' ? 'selected' : ''}>Semua media</option>
+          ${order.filter(c => c !== 'lainnya').map(c => `<option value="${c}" ${window._mcUI.f === c ? 'selected' : ''}>${esc(MC_CLASSES[c][0])}</option>`).join('')}<option value="prio" ${window._mcUI.f === 'prio' ? 'selected' : ''}>⭐ Prioritas</option></select>
+        <button class="br-btn" onclick="mcBulkUnknown()" title="Semua media yang belum dikelompokkan dijadikan Lokal/Lainnya">Tandai semua yang belum dikelompokkan sebagai Lokal/Lainnya</button>
+      </div>
+      <div id="mcList"></div>
     </details>`;
+  mcRenderList();
 }
 
 async function renderDashboard() {
@@ -6410,7 +6441,7 @@ async function renderDashboard() {
       <div class="media-bar-wrap"><div class="media-bar" style="width:${Math.round(count/maxCount*100)}%"></div></div>
       <span class="media-count">${count}</span>
     </div>`).join('') : '<p style="color:var(--muted);font-size:12px;">Belum ada data</p>';
-  try { renderDashMediaChips(); renderMediaReach(articles); } catch (e) { console.error('Gagal render Jangkauan Media:', e); }
+  try { renderDashMediaChips(); renderMediaReach(articles, dashAllArticles); } catch (e) { console.error('Gagal render Jangkauan Media:', e); }
 
   // Kalender Heatmap 3 bulan terakhir
   const allDayCounts = {};
