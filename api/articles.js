@@ -428,6 +428,82 @@ async function handleSpkNames(req, res) {
   }
 }
 
+// ===== Bersihkan berita lama: sembunyikan (hidden=true) yang terbit sebelum tanggal tertentu; yang terkunci manual tidak disentuh =====
+function cleanupBefore(v) {
+  const d = String(v || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+  const t = new Date(d + 'T00:00:00+09:00'); if (isNaN(t)) return null;
+  if (t.getTime() > Date.now() - 30 * 86400000) return null; // pengaman: tidak boleh membersihkan 30 hari terakhir
+  return t.toISOString();
+}
+// Selain tanggal terbit, tangkap juga berita lama yang tercatat bertanggal baru (bug lama: tanggal kosong dianggap hari ini) lewat tahun di URL, mis. /2020/05/.
+const CLEAN_FILTER = (iso) => {
+  const yr = new Date(iso).getUTCFullYear();
+  const urlYears = []; for (let y = 2005; y <= yr - 1; y++) urlYears.push(`url.ilike.*/${y}/*`);
+  return `hidden=eq.false&and=(or(manual_locked.is.null,manual_locked.eq.false),or(published_at.lt.${encodeURIComponent(iso)},${urlYears.join(',')}))`;
+};
+async function handleCleanupPreview(req, res) {
+  const iso = cleanupBefore(req.query.before);
+  if (!iso) return res.status(400).json({ error: 'Tanggal batas tidak valid atau terlalu dekat (minimal 30 hari yang lalu).' });
+  try {
+    const H = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` };
+    const counts = {}; let total = 0, oldest = null;
+    for (let off = 0; off < 20000; off += 1000) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/articles?select=source,published_at&${CLEAN_FILTER(iso)}&order=published_at.asc&limit=1000&offset=${off}`, { headers: H });
+      const rows = await r.json();
+      if (!Array.isArray(rows)) return res.status(500).json({ error: (rows && rows.message) || 'Gagal membaca data' });
+      rows.forEach(x => { counts[x.source || '-'] = (counts[x.source || '-'] || 0) + 1; total++; if (!oldest || x.published_at < oldest) oldest = x.published_at; });
+      if (rows.length < 1000) break;
+    }
+    const bySource = Object.entries(counts).sort((p, q) => q[1] - p[1]).slice(0, 15).map(([source, n]) => ({ source, n }));
+    return res.status(200).json({ total, oldest, bySource });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+async function handleCleanupApply(req, res) {
+  const iso = cleanupBefore(req.body && req.body.before);
+  if (!iso) return res.status(400).json({ error: 'Tanggal batas tidak valid atau terlalu dekat (minimal 30 hari yang lalu).' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/articles?${CLEAN_FILTER(iso)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Prefer': 'return=representation' },
+      body: JSON.stringify({ hidden: true })
+    });
+    if (!r.ok) { const t = await r.text().catch(() => ''); return res.status(r.status).json({ error: t.slice(0, 300) }); }
+    const rows = await r.json();
+    return res.status(200).json({ success: true, hidden: Array.isArray(rows) ? rows.length : 0 });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+
+// ===== Pengaturan bersama (tabel app_settings: key, value jsonb) =====
+const SETTING_KEYS = ['media_class', 'media_prio', 'moments_custom', 'moments_hidden'];
+async function handleSettingsGet(req, res) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/app_settings?select=key,value`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } });
+    if (!r.ok) {
+      const t = await r.text().catch(() => '');
+      return res.status(200).json({ settings: {}, available: false, reason: /app_settings|PGRST205|42P01/.test(t) ? 'Tabel app_settings belum dibuat. Jalankan add-app-settings.sql di Supabase.' : t.slice(0, 200) });
+    }
+    const rows = await r.json(); const settings = {};
+    (Array.isArray(rows) ? rows : []).forEach(x => { if (SETTING_KEYS.indexOf(x.key) >= 0) settings[x.key] = x.value; });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ settings, available: true });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+async function handleSettingSet(req, res) {
+  const { key, value } = req.body || {};
+  if (SETTING_KEYS.indexOf(key) < 0) return res.status(400).json({ error: 'Kunci pengaturan tidak dikenal' });
+  if (value === undefined || JSON.stringify(value).length > 100000) return res.status(400).json({ error: 'Nilai kosong atau terlalu besar' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/app_settings?on_conflict=key`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ key, value, updated_at: new Date().toISOString() })
+    });
+    if (!r.ok) { const t = await r.text().catch(() => ''); return res.status(r.status).json({ error: /app_settings|PGRST205|42P01/.test(t) ? 'Tabel app_settings belum dibuat. Jalankan add-app-settings.sql di Supabase.' : t.slice(0, 300) }); }
+    return res.status(200).json({ success: true });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+
 // ===== Duplikat: berita sama (judul + media sama) dengan URL berbeda =====
 async function fetchDedupRows(days) {
   const since = new Date(Date.now() - days * 86400000).toISOString();
@@ -981,6 +1057,8 @@ module.exports = async function handler(req, res) {
     if (req.query.resource === 'spk-names') return handleSpkNames(req, res);
     if (req.query.resource === 'spk-data') return handleSpkData(req, res);
     if (req.query.resource === 'dedupe') return handleDedupePreview(req, res);
+    if (req.query.resource === 'settings') return handleSettingsGet(req, res);
+    if (req.query.resource === 'cleanup') return handleCleanupPreview(req, res);
     return handleList(req, res);
   }
 
@@ -1002,6 +1080,8 @@ module.exports = async function handler(req, res) {
     if (mode === 'set-lock') return handleSetLock(req, res);
     if (mode === 'hide-article') return handleHideArticle(req, res);
     if (mode === 'dedupe-apply') return handleDedupeApply(req, res);
+    if (mode === 'set-setting') return handleSettingSet(req, res);
+    if (mode === 'cleanup-apply') return handleCleanupApply(req, res);
     if (mode === 'set-category') return handleSetCategory(req, res);
     if (mode === 'set-locations') return handleSetLocations(req, res);
     return res.status(400).json({ error: 'mode tidak dikenal' });

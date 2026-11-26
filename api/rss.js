@@ -55,6 +55,14 @@ export default async function handler(req, res) {
   const { url, q } = req.query;
   if (!url) return res.status(400).json({ error: 'URL required' });
 
+  // Tanggal tidak boleh dikarang: item tanpa tanggal yang valid tidak dipakai (dulu dianggap "hari ini" sehingga berita lama muncul sebagai terbaru)
+  const pickDate = (raw, link) => {
+    if (raw) { const d = new Date(raw); if (!isNaN(d)) return d.toISOString(); }
+    const m = String(link || '').match(/\/(20\d{2})\/(0?[1-9]|1[0-2])(?:\/(0?[1-9]|[12]\d|3[01]))?(?:\/|$)/);
+    if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +(m[3] || 1), 12)).toISOString();
+    return null;
+  };
+  let undated = 0;
   try {
     const xml = await fetchWithFallback(url);
     const items = [];
@@ -71,10 +79,11 @@ export default async function handler(req, res) {
           const kws = q.toLowerCase().split(/\s+/).filter(k => k.length > 1);
           if (!kws.every(k => title.toLowerCase().includes(k))) continue;
         }
-        const d = new Date(tg(b, 'news:publication_date'));
-        items.push({ title, url: link, publishedAt: isNaN(d) ? new Date().toISOString() : d.toISOString(), source: { name: tg(b, 'news:name') || host }, description: '', urlToImage: null });
+        const pd = pickDate(tg(b, 'news:publication_date'), link);
+        if (!pd) { undated++; continue; }
+        items.push({ title, url: link, publishedAt: pd, source: { name: tg(b, 'news:name') || host }, description: '', urlToImage: null });
       }
-      return res.status(200).json({ status: 'ok', articles: items, count: items.length });
+      return res.status(200).json({ status: 'ok', articles: items, count: items.length, undated });
     }
     const itemRegex = /<item>([\s\S]*?)<\/item>/g;
     let match;
@@ -101,10 +110,12 @@ export default async function handler(req, res) {
         if (!keywords.every(k => text.includes(k))) continue;
       }
 
+      const pd = pickDate(pubDate || getTag('dc:date'), link);
+      if (!pd) { undated++; continue; }
       items.push({
         title,
         url: link,
-        publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
+        publishedAt: pd,
         source: { name: sourceName },
         description,
         urlToImage: null
