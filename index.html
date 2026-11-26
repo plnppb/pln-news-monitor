@@ -602,6 +602,10 @@
     <div id="panel-pengaturan-wrap" style="display:none;padding-bottom:40px;">
       <div class="set-grid">
         <div class="set-card"><div class="set-title">🩺 Kesehatan Data</div><div id="healthBox" style="font-size:12.5px;color:var(--muted)">Memuat...</div></div>
+        <div class="set-card"><div class="set-title">🗓 Bersihkan Berita Lama</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Menyembunyikan berita yang terbit sebelum tanggal tertentu. Tidak dihapus permanen (bisa dipulihkan lewat Supabase), dan berita yang terkunci manual tidak disentuh.</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><label style="font-size:12px">Sebelum tanggal <input id="oldBefore" type="date" value="2026-01-01" style="padding:5px;border:1px solid var(--border);border-radius:6px;font-size:12px"></label><button class="br-btn" onclick="oldScan()">🔍 Lihat dulu</button></div>
+          <div id="oldBox" style="margin-top:10px;font-size:12.5px"></div></div>
         <div class="set-card"><div class="set-title">🧹 Berita Duplikat</div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Mencari berita yang sama (judul dan media sama) tetapi URL-nya berbeda, 60 hari terakhir. Yang disembunyikan bukan dihapus. Yang dipertahankan: yang terkunci, sudah dianalisis, atau masuk paling awal.</div>
           <button class="br-btn" onclick="dupScan()">🔍 Cek duplikat</button>
@@ -810,6 +814,12 @@
       <div class="dash-card dash-full">
         <h4>🏆 Top 15 Media Pemberitaan</h4>
         <div id="dashMediaList" style="margin-top:8px;"></div>
+      </div>
+
+      <!-- Jangkauan Media -->
+      <div class="dash-card dash-full">
+        <h4>📡 Jangkauan Media <span style="font-weight:400;font-size:11.5px;color:var(--muted)">· berita kita dimuat di media seperti apa</span></h4>
+        <div id="dashReach" style="margin-top:8px;"></div>
       </div>
 
       <!-- Kalender Heatmap -->
@@ -1687,10 +1697,11 @@ async function fetchNews() {
     }
   }
 
-  // Filter by date (applies to ALL sources)
-  if (from || to) {
-    articles = articles.filter(a => inDateRange(a.publishedAt, from, to));
-  }
+  // Filter by date (applies to ALL sources). Tanpa "Dari tanggal", batasi 90 hari terakhir supaya berita lama tidak ikut.
+  let defaultCut = false;
+  const effFrom = from || (() => { defaultCut = true; return new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10); })();
+  articles = articles.filter(a => a.publishedAt && inDateRange(a.publishedAt, effFrom, to));
+  if (defaultCut) showToast('Menampilkan berita 90 hari terakhir. Isi "Dari tanggal" untuk mencari yang lebih lama.');
 
   articles.sort((a,b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
@@ -4525,28 +4536,31 @@ function renderHighlight() {
 function renderKalender() {
   const el = document.getElementById('radarKalender');
   const list = brMomentsBetween(366);
-  const custom = brCustomMoments();
+  const hiddenN = brHiddenMoments().length;
   let lastM = '';
   const rows = list.map(m => {
     const mo = m.date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
     const head = mo !== lastM ? `<div style="font-weight:700;margin:14px 0 6px;font-size:13px">${brEsc(mo)}</div>` : '';
     lastM = mo;
     const ty = BR_CAL_TYPES[m.t] || BR_CAL_TYPES.nasional;
-    return head + `<div class="card" style="padding:8px 12px;margin-bottom:5px;display:flex;gap:10px;align-items:flex-start;"><div style="min-width:92px;font-size:12px;font-weight:600">${brEsc(m.date.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' }))}<div style="font-weight:400;color:var(--muted);font-size:11px">${m.days === 0 ? 'hari ini' : 'H-' + m.days}</div></div><div style="flex:1;font-size:12.5px"><b>${brEsc(m.n)}</b> <span style="font-size:10.5px;padding:1px 7px;border-radius:9px;background:${ty[1]};color:${ty[2]}">${ty[0]}</span>${m.v === false ? ' <span style="font-size:10.5px;padding:1px 7px;border-radius:9px;background:#fef9c3;color:#854d0e">cek tanggal</span>' : ''}${m.c ? `<div style="color:var(--muted);font-size:11.5px;margin-top:2px">${brEsc(m.c)}</div>` : ''}</div>${m.t === 'custom' ? `<button class="br-btn" onclick="brDelMoment(${m.custom})">Hapus</button>` : ''}</div>`;
+    return head + `<div class="card" style="padding:8px 12px;margin-bottom:5px;display:flex;gap:10px;align-items:flex-start;"><div style="min-width:92px;font-size:12px;font-weight:600">${brEsc(m.date.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' }))}<div style="font-weight:400;color:var(--muted);font-size:11px">${m.days === 0 ? 'hari ini' : 'H-' + m.days}</div></div><div style="flex:1;font-size:12.5px"><b>${brEsc(m.n)}</b> <span style="font-size:10.5px;padding:1px 7px;border-radius:9px;background:${ty[1]};color:${ty[2]}">${ty[0]}</span>${m.v === false ? ' <span style="font-size:10.5px;padding:1px 7px;border-radius:9px;background:#fef9c3;color:#854d0e">cek tanggal</span>' : ''}${m.c ? `<div style="color:var(--muted);font-size:11.5px;margin-top:2px">${brEsc(m.c)}</div>` : ''}</div>${m.custom !== undefined ? `<button class="br-btn" onclick="brDelMoment(${m.custom})">Hapus</button>` : `<button class="br-btn" title="Sembunyikan dari kalender" onclick="brHideMoment(${brEsc(JSON.stringify(brMKey(m))).replace(/&quot;/g, '&quot;')})">Sembunyikan</button>`}</div>`;
   }).join('');
-  el.innerHTML = `<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">Libur nasional 2027 dari SKB 3 Menteri. Tanggal HUT daerah yang belum saya pastikan diberi label "cek tanggal". Hari raya keagamaan bisa bergeser, cocokkan lagi dengan penetapan resmi.</div>
-    <div class="card" style="padding:10px 12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><b style="font-size:12px">Tambah momentum:</b><input id="kmDate" type="date" style="padding:5px;border:1px solid var(--border);border-radius:6px;font-size:12px"><input id="kmName" placeholder="Nama (mis. HUT Kab. Mimika)" style="flex:1;min-width:160px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px"><label style="font-size:12px"><input id="kmYearly" type="checkbox" checked> ulang tiap tahun</label><button class="br-btn" onclick="brAddMoment()">Simpan</button></div>
+  el.innerHTML = `<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">Libur nasional 2027 dari SKB 3 Menteri. Tanggal HUT daerah yang belum saya pastikan diberi label "cek tanggal". Hari raya keagamaan bisa bergeser, cocokkan lagi dengan penetapan resmi. ${APPSET.available === false ? '<b style="color:#b91c1c">Tabel pengaturan belum ada di database, jadi tambahan Anda hanya tersimpan di browser ini. Jalankan add-app-settings.sql di Supabase.</b>' : 'Tambahan dan yang disembunyikan tersimpan di database dan berlaku untuk semua pengguna.'}</div>
+    <div class="card" style="padding:10px 12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><b style="font-size:12px">Tambah momentum:</b><input id="kmDate" type="date" style="padding:5px;border:1px solid var(--border);border-radius:6px;font-size:12px"><input id="kmName" placeholder="Nama (mis. HUT Kab. Mimika)" style="flex:1;min-width:160px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px"><select id="kmType" style="padding:5px;border:1px solid var(--border);border-radius:6px;font-size:12px"><option value="daerah">Daerah</option><option value="nasional">Nasional</option><option value="pln">PLN</option><option value="waspada">Waspada</option><option value="libur">Libur</option></select><input id="kmNote" placeholder="Catatan (opsional)" style="flex:1;min-width:140px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px"><label style="font-size:12px"><input id="kmYearly" type="checkbox" checked> ulang tiap tahun</label><button class="br-btn" onclick="brAddMoment()">Simpan</button></div>
+    ${hiddenN ? `<div style="font-size:11.5px;margin:8px 0;color:var(--muted)">${hiddenN} momentum bawaan disembunyikan. <a href="#" onclick="brShowAllMoments();return false">Tampilkan semua lagi</a></div>` : ''}
     ${rows || '<div style="padding:20px;text-align:center;color:var(--muted)">Tidak ada momentum.</div>'}`;
 }
 function brAddMoment() {
   const d = document.getElementById('kmDate').value, n = document.getElementById('kmName').value.trim();
   if (!d || !n) { showToast('Isi tanggal dan nama dulu'); return; }
   const yearly = document.getElementById('kmYearly').checked;
-  const a = brCustomMoments(); a.push({ d: yearly ? d.slice(5) : d, n, c: '' });
-  try { localStorage.setItem('brCustomMoments', JSON.stringify(a)); } catch (e) { showToast('Gagal menyimpan di browser ini'); return; }
-  renderKalender(); showToast('Momentum ditambahkan (tersimpan di browser ini)');
+  const t = document.getElementById('kmType').value, c = (document.getElementById('kmNote').value || '').trim().slice(0, 200);
+  const a = brCustomMoments().slice(); a.push({ d: yearly ? d.slice(5) : d, n, c, t });
+  appSave('moments_custom', a); renderKalender(); showToast('Momentum ditambahkan');
 }
-function brDelMoment(i) { const a = brCustomMoments(); a.splice(i, 1); try { localStorage.setItem('brCustomMoments', JSON.stringify(a)); } catch (e) {} renderKalender(); }
+function brDelMoment(i) { const a = brCustomMoments().slice(); a.splice(i, 1); appSave('moments_custom', a); renderKalender(); }
+function brHideMoment(key) { const h = brHiddenMoments().concat(key); appSave('moments_hidden', h); renderKalender(); }
+function brShowAllMoments() { appSave('moments_hidden', []); renderKalender(); }
 function radarSub(name) {
   RADAR.sub = name;
   ['highlight', 'berita', 'kalender'].forEach(k => {
@@ -6124,6 +6138,95 @@ async function loadFromDB() {
   return [];
 }
 
+// ===== Kelas media (pengganti skor Alexa yang sudah tidak ada) =====
+// Pengelompokan awal berdasarkan nama media; bisa diubah dan diberi bintang "prioritas" (disimpan di browser ini).
+const MC_CLASSES = { nasional: ['Nasional', '#1d4ed8', '#dbeafe'], regional: ['Regional Papua', '#15803d', '#dcfce7'], agregator: ['Agregator', '#a16207', '#fef9c3'], sosial: ['YouTube/Sosial', '#7e22ce', '#f3e8ff'], lainnya: ['Belum dikelompokkan', '#64748b', '#f1f5f9'] };
+const MC_RULES = [
+  ['sosial', /youtube|instagram|tiktok|facebook|twitter|^x\b/i],
+  ['agregator', /head ?topics|google news|msn|dailyhunt|newsbreak|lensa|ground news/i],
+  ['regional', /papua|jubi|cenderawasih|cepos|koreri|tabura|jagat|pasific|pasifik|sorong|manokwari|merauke|timika|mimika|nabire|wamena|jayapura|biak|fakfak|kaimana|bintuni|raja ampat|sentani|bintang|seputar|suara perempuan|metro papua|teropong|salam papua|lintas papua|radar (sorong|timika|jayapura|biak)|tribun[- ]?papua/i],
+  ['nasional', /kompas|detik|antara|tribunnews|cnn ?indonesia|cnbc|kumparan|liputan ?6|merdeka|republika|tempo|bisnis\.com|kontan|katadata|okezone|sindonews|viva|suara\.com|tirto|media ?indonesia|jpnn|inews|rri|tvone|metro ?tv|beritasatu|berita satu|idn ?times|bbc|mongabay|gatra|jawa ?pos|warta ?ekonomi|cnn|republika|rmol|pikiran rakyat|kabar ?24|bisnis|investor\.id|emitennews|energi ?today|esdm|dunia ?energi|rm\.id|poskota|akurat|fajar|harian ?(kompas|disway)|disway|era\.id|genpi|medcom|alinea|bloomberg|reuters|tempo|the jakarta post|jakarta globe|pos kota|okezone|tribun ?network|jawapos|solopos|suara merdeka|sindo|warta kota|kumparan/i]
+];
+// ===== Pengaturan bersama: database (app_settings) dengan cadangan di browser =====
+const APPSET = { loaded: false, available: null, note: '' };
+const APPSET_LOCAL = { media_class: 'mediaClassOv', media_prio: 'mediaPrio', moments_custom: 'brCustomMoments', moments_hidden: 'momentsHidden' };
+function appGet(key, def) {
+  if (APPSET[key] !== undefined) return APPSET[key];
+  try { const v = JSON.parse(localStorage.getItem(APPSET_LOCAL[key]) || 'null'); if (v !== null) return v; } catch (e) {}
+  return def;
+}
+async function appSave(key, val) {
+  APPSET[key] = val;
+  try { localStorage.setItem(APPSET_LOCAL[key], JSON.stringify(val)); } catch (e) {}
+  try {
+    const r = await fetch('/api/articles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'set-setting', key, value: val }) });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+  } catch (e) { showToast('⚠ Tersimpan di browser ini saja: ' + e.message); }
+}
+async function appLoad() {
+  try {
+    const d = await (await fetch('/api/articles?resource=settings')).json();
+    APPSET.available = d.available !== false; APPSET.note = d.reason || '';
+    if (d.available === false) return;
+    for (const k of Object.keys(APPSET_LOCAL)) {
+      if (d.settings && d.settings[k] !== undefined) { APPSET[k] = d.settings[k]; }
+      else {
+        // belum ada di database: kirim data lama dari browser ini (migrasi sekali jalan)
+        let local = null; try { local = JSON.parse(localStorage.getItem(APPSET_LOCAL[k]) || 'null'); } catch (e) {}
+        const has = local && (Array.isArray(local) ? local.length : Object.keys(local).length);
+        if (has) { APPSET[k] = local; appSave(k, local); }
+      }
+    }
+    APPSET.loaded = true;
+    try { renderMediaReach(window._mcArts || []); renderDashMediaChips(); } catch (e) {}
+    try { if (RADAR.sub === 'kalender') renderKalender(); } catch (e) {}
+    try { if (typeof renderBeranda === 'function' && BR && BR.rows) renderBeranda(); } catch (e) {}
+  } catch (e) { APPSET.available = false; }
+}
+function mcLoad() { const v = appGet('media_class', {}); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; }
+function mcSave(o) { appSave('media_class', o); }
+function mcPrio() { const v = appGet('media_prio', []); return Array.isArray(v) ? v : []; }
+function mcClassOf(name) {
+  const ov = mcLoad(); if (ov[name]) return ov[name];
+  // Radio dan kantor berita perwakilan daerah tetap "nasional" kecuali nama memuat wilayah Papua lebih dulu: ANTARA Papua = nasional.
+  if (/^antara/i.test(name)) return 'nasional';
+  for (const r of MC_RULES) if (r[1].test(name)) return r[0];
+  return 'lainnya';
+}
+function mcSet(name, cls) { const o = mcLoad(); o[name] = cls; mcSave(o); renderMediaReach(window._mcArts || []); renderDashMediaChips(); }
+function mcTogglePrio(name) { let p = mcPrio(); p = p.indexOf(name) >= 0 ? p.filter(x => x !== name) : p.concat(name); appSave('media_prio', p); renderMediaReach(window._mcArts || []); }
+function renderDashMediaChips() { document.querySelectorAll('#dashMediaList .media-name').forEach(el => { const n = el.getAttribute('data-m'); if (!n) return; const c = MC_CLASSES[mcClassOf(n)]; let chip = el.querySelector('.mc-chip'); if (!chip) { chip = document.createElement('span'); chip.className = 'mc-chip'; el.appendChild(chip); } chip.textContent = c[0]; chip.style.cssText = `margin-left:6px;font-size:9.5px;padding:1px 6px;border-radius:8px;background:${c[2]};color:${c[1]};font-weight:600;white-space:nowrap`; }); }
+function renderMediaReach(arts) {
+  window._mcArts = arts;
+  const el = document.getElementById('dashReach'); if (!el) return;
+  if (!arts.length) { el.innerHTML = '<p style="color:var(--muted);font-size:12px;">Belum ada data</p>'; return; }
+  const wasOpen = !!(el.querySelector('details') && el.querySelector('details').open);
+  const esc = x => spkEsc(String(x));
+  const byMedia = {}; arts.forEach(a => { const n = (a.source && a.source.name) || 'Unknown'; (byMedia[n] = byMedia[n] || { n: 0, neg: 0, pos: 0 }).n++; if (a._tone === 'negatif') byMedia[n].neg++; if (a._tone === 'positif') byMedia[n].pos++; });
+  const cls = {}; Object.keys(byMedia).forEach(n => { const c = mcClassOf(n); (cls[c] = cls[c] || { n: 0, media: [] }); cls[c].n += byMedia[n].n; cls[c].media.push(n); });
+  const total = arts.length, nas = cls.nasional || { n: 0, media: [] };
+  const prio = mcPrio(); const prioN = Object.keys(byMedia).filter(n => prio.indexOf(n) >= 0).reduce((s, n) => s + byMedia[n].n, 0);
+  const pct = c => total ? Math.round(((cls[c] || { n: 0 }).n / total) * 1000) / 10 : 0;
+  const stat = (v, l) => `<div class="dash-stat"><div class="num" style="font-size:22px">${v}</div><div class="lbl">${l}</div></div>`;
+  const order = ['nasional', 'regional', 'agregator', 'sosial', 'lainnya'];
+  const bar = order.filter(c => cls[c]).map(c => `<div title="${esc(MC_CLASSES[c][0])}: ${cls[c].n} berita" style="flex:${cls[c].n};background:${MC_CLASSES[c][1]};min-width:3px"></div>`).join('');
+  const legend = order.filter(c => cls[c]).map(c => `<span style="font-size:11.5px;margin-right:12px"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${MC_CLASSES[c][1]};margin-right:4px"></span>${esc(MC_CLASSES[c][0])} <b>${pct(c)}%</b> (${cls[c].n})</span>`).join('');
+  const topNas = nas.media.map(n => [n, byMedia[n]]).sort((a, b) => b[1].n - a[1].n).slice(0, 8);
+  const unk = (cls.lainnya ? cls.lainnya.media : []).map(n => [n, byMedia[n].n]).sort((a, b) => b[1] - a[1]);
+  const all = Object.keys(byMedia).sort((a, b) => byMedia[b].n - byMedia[a].n).slice(0, 60);
+  el.innerHTML = `<div class="dash-stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px">
+      ${stat(pct('nasional') + '%', 'Berita di media nasional')}${stat(nas.media.length, 'Media nasional yang memuat')}${stat(prioN, 'Berita di media prioritas ⭐')}${stat(unk.length, 'Media belum dikelompokkan')}</div>
+    <div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-bottom:6px">${bar}</div><div style="margin-bottom:12px">${legend}</div>
+    <div style="font-weight:600;font-size:12.5px;margin-bottom:4px">Media nasional teratas</div>
+    ${topNas.length ? topNas.map(([n, v]) => `<div class="media-item"><span class="media-name" style="min-width:160px">${prio.indexOf(n) >= 0 ? '⭐ ' : ''}${esc(n)}</span><span style="font-size:12px;color:var(--muted)">${v.n} berita${v.pos ? ' · ' + v.pos + ' positif' : ''}${v.neg ? ' · <span style="color:#b91c1c">' + v.neg + ' negatif</span>' : ''}</span></div>`).join('') : '<div style="font-size:12px;color:var(--muted)">Belum ada berita di media nasional pada periode ini.</div>'}
+    ${unk.length ? `<div style="font-size:11.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;margin-top:10px">Belum dikelompokkan: ${unk.slice(0, 6).map(x => esc(x[0]) + ' (' + x[1] + ')').join(', ')}${unk.length > 6 ? ', ...' : ''}. Atur di bawah.</div>` : ''}
+    <details ${wasOpen ? 'open' : ''} style="margin-top:10px"><summary style="cursor:pointer;font-size:12.5px;color:var(--accent2,#1E8449);font-weight:600">⚙ Atur kelas media dan prioritas (${all.length} media teratas)</summary>
+      <div style="font-size:11.5px;color:var(--muted);margin:6px 0">Pengelompokan awal saya tebak dari nama media, jadi periksa dan ubah bila keliru. ${APPSET.available === false ? '<b style="color:#b91c1c">Perhatian: tabel pengaturan belum ada di database, jadi perubahan hanya tersimpan di browser ini. Jalankan add-app-settings.sql di Supabase.</b>' : 'Perubahan tersimpan di database dan berlaku untuk semua pengguna.'}</div>
+      ${all.map(n => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--border)"><button class="br-btn" style="padding:0 7px" title="Tandai media prioritas" onclick="mcTogglePrio(${esc(JSON.stringify(n)).replace(/"/g, '&quot;')})">${prio.indexOf(n) >= 0 ? '⭐' : '☆'}</button><span style="flex:1;font-size:12.5px">${esc(n)} <span style="color:var(--muted)">(${byMedia[n].n})</span></span><select onchange="mcSet(${esc(JSON.stringify(n)).replace(/"/g, '&quot;')},this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px">${order.map(c => `<option value="${c}" ${mcClassOf(n) === c ? 'selected' : ''}>${esc(MC_CLASSES[c][0])}</option>`).join('')}</select></div>`).join('')}
+    </details>`;
+}
+
 async function renderDashboard() {
   if (window._chartLoadPromise) await window._chartLoadPromise;
   if (!dashAllArticles.length) {
@@ -6303,10 +6406,11 @@ async function renderDashboard() {
   const maxCount = sortedMedia[0]?.[1] || 1;
   document.getElementById('dashMediaList').innerHTML = sortedMedia.length ? sortedMedia.map(([name, count]) => `
     <div class="media-item">
-      <span class="media-name" style="min-width:140px;">${name}</span>
+      <span class="media-name" style="min-width:140px;" data-m="${spkEsc(name)}">${name}</span>
       <div class="media-bar-wrap"><div class="media-bar" style="width:${Math.round(count/maxCount*100)}%"></div></div>
       <span class="media-count">${count}</span>
     </div>`).join('') : '<p style="color:var(--muted);font-size:12px;">Belum ada data</p>';
+  try { renderDashMediaChips(); renderMediaReach(articles); } catch (e) { console.error('Gagal render Jangkauan Media:', e); }
 
   // Kalender Heatmap 3 bulan terakhir
   const allDayCounts = {};
@@ -6630,11 +6734,14 @@ const BR_CAL = [
 ];
 const BR_CAL_TYPES = { libur: ['Libur nasional', '#dbeafe', '#1e40af'], nasional: ['Nasional', '#f1f5f9', '#475569'], daerah: ['Daerah', '#dcfce7', '#166534'], pln: ['PLN', '#fef3c7', '#92400e'], waspada: ['Waspada', '#fee2e2', '#991b1b'], custom: ['Tambahan', '#ede9fe', '#5b21b6'] };
 
-function brCustomMoments() { try { const a = JSON.parse(localStorage.getItem('brCustomMoments') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
-function brMomentsBetween(days) {
+function brCustomMoments() { const a = appGet('moments_custom', []); return Array.isArray(a) ? a : []; }
+function brHiddenMoments() { const a = appGet('moments_hidden', []); return Array.isArray(a) ? a : []; }
+const brMKey = m => m.d + '|' + m.n;
+function brMomentsBetween(days, showHidden) {
   const now = new Date(); const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()); const end = new Date(start.getTime() + days * 86400000);
   const out = [];
-  BR_CAL.concat(brCustomMoments().map((m, i) => Object.assign({}, m, { t: 'custom', custom: i }))).forEach(m => {
+  const hid = showHidden ? [] : brHiddenMoments();
+  BR_CAL.filter(m => hid.indexOf(brMKey(m)) < 0).concat(brCustomMoments().map((m, i) => Object.assign({}, m, { t: m.t || 'custom', custom: i }))).forEach(m => {
     const p = m.d.split('-').map(Number);
     if (p.length === 3) { const d = new Date(p[0], p[1] - 1, p[2]); if (d >= start && d < end) out.push(Object.assign({}, m, { date: d })); }
     else { for (let y = start.getFullYear(); y <= end.getFullYear(); y++) { const d = new Date(y, p[0] - 1, p[1]); if (d >= start && d < end) out.push(Object.assign({}, m, { date: d })); } }
@@ -6913,6 +7020,26 @@ async function brRunDraft() {
 }
 
 // ==================== PENGATURAN: kesehatan data ====================
+async function oldScan() {
+  const box = document.getElementById('oldBox'), before = document.getElementById('oldBefore').value; box.textContent = 'Memeriksa...';
+  try {
+    const d = await (await fetch('/api/articles?resource=cleanup&before=' + encodeURIComponent(before))).json();
+    if (d.error) throw new Error(d.error);
+    if (!d.total) { box.innerHTML = '✅ Tidak ada berita sebelum tanggal itu yang perlu dibersihkan.'; return; }
+    box.innerHTML = `<div style="margin-bottom:6px"><b>${d.total}</b> berita akan disembunyikan (terlama ${brEsc(String(d.oldest).slice(0, 10))}).</div>` + d.bySource.map(x => `<div style="font-size:12px;color:var(--muted)">${brEsc(x.source)}: ${x.n}</div>`).join('')
+      + `<button class="br-btn" style="margin-top:8px" onclick="oldApply()">🙈 Sembunyikan ${d.total} berita</button>`;
+  } catch (e) { box.innerHTML = '<span style="color:#b91c1c">Gagal: ' + brEsc(e.message) + '</span>'; }
+}
+async function oldApply() {
+  const box = document.getElementById('oldBox'), before = document.getElementById('oldBefore').value;
+  if (!confirm('Sembunyikan semua berita sebelum ' + before + '? Berita terkunci manual tidak ikut.')) return;
+  box.textContent = 'Menyembunyikan...';
+  try {
+    const d = await (await fetch('/api/articles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'cleanup-apply', before }) })).json();
+    if (d.error) throw new Error(d.error);
+    box.innerHTML = '✅ ' + d.hidden + ' berita disembunyikan. Muat ulang Monitor dan Dashboard untuk melihat hasilnya.'; loadHealth();
+  } catch (e) { box.innerHTML = '<span style="color:#b91c1c">Gagal: ' + brEsc(e.message) + '</span>'; }
+}
 async function dupScan() {
   const box = document.getElementById('dupBox'); box.textContent = 'Memeriksa...';
   try {
@@ -6972,6 +7099,7 @@ function initDismissibles() {
 // Jalankan saat halaman siap
 setTimeout(autoLoadFromDB, 500);
 initDismissibles();
+appLoad();
 switchTab('beranda');
 
 // Close modal on overlay click
