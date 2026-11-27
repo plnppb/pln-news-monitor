@@ -474,6 +474,52 @@ async function handleCleanupApply(req, res) {
   } catch (e) { return res.status(500).json({ error: e.message }); }
 }
 
+// ===== Berita luar wilayah: AI menandai cakupan "luar_wilayah" dan tidak ada nama wilayah Papua di teksnya =====
+async function findOutsideRegion(days) {
+  const H = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` };
+  const since = encodeURIComponent(new Date(Date.now() - days * 86400000).toISOString());
+  const out = []; let scanned = 0;
+  for (let off = 0; off < 5000; off += 1000) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/articles?select=id,title,source,url,description,resume,published_at&hidden=not.is.true&or=(manual_locked.is.null,manual_locked.eq.false)&geo_scope=eq.luar_wilayah&published_at=gte.${since}&order=published_at.desc&limit=1000&offset=${off}`, { headers: H });
+    const rows = await r.json();
+    if (!Array.isArray(rows)) throw new Error((rows && rows.message) || 'Gagal membaca data');
+    scanned += rows.length;
+    rows.forEach(a => {
+      const text = (a.title + ' ' + (a.description || '') + ' ' + (a.resume || '')).toLowerCase();
+      // aman: kalau teks menyebut Papua / wilayah Papua mana pun, jangan disentuh
+      if (/(^|[^a-z])papua([^a-z]|$)/.test(text) || TAX.detectLocations(text).length) return;
+      out.push({ id: a.id, title: a.title, source: a.source, url: a.url, published_at: a.published_at });
+    });
+    if (rows.length < 1000) break;
+  }
+  return { scanned, list: out };
+}
+async function handleOutsidePreview(req, res) {
+  try {
+    const days = Math.min(365, Math.max(7, parseInt(req.query.days, 10) || 120));
+    const { scanned, list } = await findOutsideRegion(days);
+    return res.status(200).json({ days, scanned, total: list.length, sample: list.slice(0, 40) });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+async function handleOutsideApply(req, res) {
+  try {
+    const days = Math.min(365, Math.max(7, parseInt((req.body || {}).days, 10) || 120));
+    const { list } = await findOutsideRegion(days);
+    let hidden = 0;
+    for (let i = 0; i < list.length; i += 100) {
+      const ids = list.slice(i, i + 100).map(x => x.id).join(',');
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/articles?id=in.(${ids})`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ hidden: true })
+      });
+      if (!r.ok) { const t = await r.text().catch(() => ''); return res.status(r.status).json({ error: t.slice(0, 300), hidden }); }
+      hidden += Math.min(100, list.length - i);
+    }
+    return res.status(200).json({ success: true, hidden });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+}
+
 // ===== Pengaturan bersama (tabel app_settings: key, value jsonb) =====
 const SETTING_KEYS = ['media_class', 'media_prio', 'moments_custom', 'moments_hidden'];
 async function handleSettingsGet(req, res) {
@@ -1130,6 +1176,7 @@ module.exports = async function handler(req, res) {
     if (req.query.resource === 'dedupe') return handleDedupePreview(req, res);
     if (req.query.resource === 'settings') return handleSettingsGet(req, res);
     if (req.query.resource === 'cleanup') return handleCleanupPreview(req, res);
+    if (req.query.resource === 'outside') return handleOutsidePreview(req, res);
     return handleList(req, res);
   }
 
@@ -1151,6 +1198,7 @@ module.exports = async function handler(req, res) {
     if (mode === 'set-lock') return handleSetLock(req, res);
     if (mode === 'hide-article') return handleHideArticle(req, res);
     if (mode === 'dedupe-apply') return handleDedupeApply(req, res);
+    if (mode === 'outside-apply') return handleOutsideApply(req, res);
     if (mode === 'set-setting') return handleSettingSet(req, res);
     if (mode === 'cleanup-apply') return handleCleanupApply(req, res);
     if (mode === 'set-category') return handleSetCategory(req, res);

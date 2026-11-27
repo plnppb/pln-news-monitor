@@ -32,21 +32,35 @@ const PAPUA_REGION_TERMS = [
   'jayapura', 'keerom', 'sarmi', 'biak', 'supiori', 'waropen', 'mamberamo raya', 'yapen', 'kepulauan yapen',
 ];
 
+// Cocok per KATA UTUH (bukan potongan kata), supaya "biak", "asmat", "sorong", "mappi" dsb.
+// tidak ikut cocok di dalam kata lain.
+const PAPUA_REGION_RE = new RegExp('(?<![a-z0-9])(' + PAPUA_REGION_TERMS.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![a-z0-9])');
 function matchesPapuaRegion(text) {
-  return PAPUA_REGION_TERMS.some(term => text.includes(term));
+  return PAPUA_REGION_RE.test(text);
 }
+// Media yang memang berbasis Papua walau namanya tidak memuat kata "Papua".
+const PAPUA_OUTLET_RE = /jubi|cenderawasih|pasific|pasifik|tabura|seputar papua|radar (sorong|timika|jayapura|manokwari|merauke|biak)/i;
 
 // Cocokkan tiap kata kunci ke teks artikel.
 // - "papua" dianggap cocok juga kalau teksnya menyebut nama kabupaten/kota
 //   spesifik di wilayah Papua (tidak wajib ada kata literal "papua").
+//   regionText (opsional) = teks khusus untuk pemeriksaan wilayah. Dipakai untuk Google News:
+//   deskripsinya memuat daftar judul berita TERKAIT dari media lain, jadi nama daerah di situ
+//   bukan nama daerah berita itu sendiri.
 // - "pln" dianggap cocok juga kalau teksnya menyebut "listrik" (banyak berita
 //   soal kelistrikan Papua yang tidak literal menyebut "PLN").
-function keywordMatch(text, keywords) {
+function keywordMatch(text, keywords, regionText) {
   return keywords.every(k => {
-    if (k === 'papua') return matchesPapuaRegion(text);
+    if (k === 'papua') return matchesPapuaRegion(regionText != null ? regionText : text);
     if (k === 'pln') return text.includes('pln') || text.includes('listrik');
     return text.includes(k);
   });
+}
+// Teks untuk cek wilayah: Google News hanya judul + nama media.
+function regionTextFor(a) {
+  if (a.origin_api !== 'googlenews') return undefined;
+  const src = String(a.source || '');
+  return (a.title + ' ' + src + (PAPUA_OUTLET_RE.test(src) ? ' papua' : '')).toLowerCase();
 }
 
 async function fetchUrl(urlStr) {
@@ -549,7 +563,7 @@ module.exports = async function handler(req, res) {
 
       combined = combined.filter(a => {
         const text = (a.title + ' ' + a.description).toLowerCase();
-        return keywordMatch(text, keywords);
+        return keywordMatch(text, keywords, regionTextFor(a));
       });
       const afterKeywordFilter = combined.length;
 
