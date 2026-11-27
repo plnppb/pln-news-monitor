@@ -763,6 +763,11 @@
       <button class="br-btn lag-p" data-d="14" onclick="loadLag(14)">14 hari</button>
       <button class="br-btn lag-p" data-d="30" onclick="loadLag(30)">30 hari</button>
       <button class="br-btn lag-p" data-d="90" onclick="loadLag(90)">90 hari</button>
+      <span style="font-size:12px;font-weight:700;color:var(--accent);margin-left:10px">Tone:</span>
+      <button class="br-btn lag-t" data-t="" onclick="loadLag(LAG_DAYS,'')">Semua</button>
+      <button class="br-btn lag-t" data-t="negatif" onclick="loadLag(LAG_DAYS,'negatif')">Negatif</button>
+      <button class="br-btn lag-t" data-t="netral" onclick="loadLag(LAG_DAYS,'netral')">Netral</button>
+      <button class="br-btn lag-t" data-t="positif" onclick="loadLag(LAG_DAYS,'positif')">Positif</button>
     </div>
     <div class="br-banner dismissible" data-k="lag-info">ℹ <span>Menghitung selisih antara <b>jam berita terbit</b> dan <b>jam berita masuk ke aplikasi</b>. Ini ukuran seberapa cepat pemantauan kita menangkap berita, bukan seberapa cepat isu berkembang di media sosial. Berita yang hanya mencantumkan tanggal (tanpa jam) tidak dihitung.</span></div>
     <div id="lagBody">Memuat...</div>
@@ -7116,7 +7121,7 @@ async function dupApply() {
 function fmtLag(m) { if (m == null) return '—'; if (m < 60) return m + ' menit'; const h = Math.floor(m / 60), r = m % 60; return h + ' jam' + (r ? ' ' + r + ' menit' : ''); }
 
 // ===== Dashboard > Kecepatan Pantau =====
-let LAG_DAYS = 14;
+let LAG_DAYS = 14, LAG_TONE = '';
 function dashSub(n) {
   const lag = n === 'lag';
   const a = document.getElementById('panel-dashboard'), b = document.getElementById('panel-lag');
@@ -7124,16 +7129,19 @@ function dashSub(n) {
   ['ringkasan', 'lag'].forEach(k => { const x = document.getElementById('dsub-' + k); if (x) { x.style.fontWeight = k === n ? '700' : '400'; x.style.borderColor = k === n ? 'var(--accent2)' : ''; } });
   if (lag) loadLag(LAG_DAYS);
 }
-async function loadLag(days) {
-  LAG_DAYS = days;
+async function loadLag(days, tone) {
+  LAG_DAYS = days; if (tone !== undefined) LAG_TONE = tone;
+  document.querySelectorAll('.lag-t').forEach(b => { const on = b.dataset.t === LAG_TONE; b.style.fontWeight = on ? '700' : '400'; b.style.borderColor = on ? 'var(--accent2)' : ''; });
   document.querySelectorAll('.lag-p').forEach(b => { const on = +b.dataset.d === days; b.style.fontWeight = on ? '700' : '400'; b.style.borderColor = on ? 'var(--accent2)' : ''; });
   const box = document.getElementById('lagBody'); if (!box) return;
   box.textContent = 'Memuat...';
   try {
-    const d = await (await fetch('/api/articles?resource=lag&days=' + days)).json();
+    const d = await (await fetch('/api/articles?resource=lag&days=' + days + (LAG_TONE ? '&tone=' + LAG_TONE : ''))).json();
     if (d.error) throw new Error(d.error);
     const S = d.summary;
-    if (!S) { box.innerHTML = '<div class="br-banner warn">Belum ada berita ber-jam pada periode ini.</div>'; return; }
+    if (!S) { box.innerHTML = '<div class="br-banner warn">Belum ada berita ber-jam pada periode dan tone ini.</div>'; return; }
+    const TL = { negatif: '🔴 Negatif', netral: '⚪ Netral', positif: '🟢 Positif', belum: '⏳ Belum dianalisis' };
+    const toneRows = Object.keys(TL).map(t => { const x = d.byTone && d.byTone[t]; return x ? `<tr><td style="padding:5px 6px">${TL[t]}</td><td style="text-align:right;padding:5px 6px">${x.n}</td><td style="text-align:right;padding:5px 6px"><b>${fmtLag(x.medianMin)}</b></td><td style="text-align:right;padding:5px 6px">${fmtLag(x.p90Min)}</td><td style="text-align:right;padding:5px 6px">${x.within60}%</td></tr>` : `<tr><td style="padding:5px 6px">${TL[t]}</td><td colspan="4" style="text-align:right;color:var(--muted);padding:5px 6px">tidak ada data</td></tr>`; }).join('');
     const card = (num, lbl) => `<div class="dash-stat"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>`;
     const maxD = Math.max(1, ...d.dist.map(x => x.n));
     const bars = d.dist.map(x => `<div style="display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12px"><span style="width:92px;color:var(--muted)">${x.label}</span><div style="flex:1;background:var(--border);border-radius:4px;height:14px"><div style="width:${Math.round(100 * x.n / maxD)}%;background:var(--accent);height:14px;border-radius:4px"></div></div><b style="width:90px;text-align:right">${x.n} (${Math.round(100 * x.n / S.n)}%)</b></div>`).join('');
@@ -7143,7 +7151,8 @@ async function loadLag(days) {
     const slow = d.slowest.map(x => `<div style="padding:5px 0;border-bottom:1px dashed var(--border);font-size:12px"><a href="${brEsc(x.url)}" target="_blank" rel="noopener">${brEsc(x.title)}</a><div style="color:var(--muted)">${brEsc(x.source || '')} · terbit ${brStamp(x.published_at)} · terpantau ${brStamp(x.created_at)} · <b>jeda ${fmtLag(x.lagMin)}</b></div></div>`).join('');
     box.innerHTML = `<div class="dash-stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">${card(fmtLag(S.medianMin), 'Jeda median')}${card(fmtLag(S.p90Min), '90% berita terpantau dalam')}${card(S.within60 + '%', 'Terpantau ≤ 1 jam')}${card(S.within180 + '%', 'Terpantau ≤ 3 jam')}</div>
       <div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Dasar hitung: ${S.n} berita dari ${d.total} yang masuk ${d.days} hari terakhir (tanpa simpan manual). ${d.dateOnly} berita tidak dihitung karena hanya bertanggal tanpa jam.</div>
-      <div class="set-card"><h3 style="margin:0 0 6px;font-size:13px">Sebaran jeda</h3>${bars}</div>
+      <div class="set-card"><h3 style="margin:0 0 6px;font-size:13px">Jeda menurut tone (semua berita pada periode ini)</h3><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="text-align:left;color:var(--muted)"><th style="padding:4px 6px">Tone</th><th style="text-align:right;padding:4px 6px">Berita</th><th style="text-align:right;padding:4px 6px">Median</th><th style="text-align:right;padding:4px 6px">90%</th><th style="text-align:right;padding:4px 6px">≤ 1 jam</th></tr></thead><tbody>${toneRows}</tbody></table><div style="font-size:11.5px;color:var(--muted);margin-top:6px">Tone diberi AI setelah berita masuk dan bisa diubah manual, jadi satu berita bisa pindah baris. Kartu dan grafik lain di bawah mengikuti filter Tone di atas.</div></div>
+      <div class="set-card"><h3 style="margin:0 0 6px;font-size:13px">Sebaran jeda${LAG_TONE ? ' (' + LAG_TONE + ')' : ''}</h3>${bars}</div>
       <div class="set-card"><h3 style="margin:0 0 2px;font-size:13px">Median jeda per hari terbit</h3><div style="font-size:11.5px;color:var(--muted)">Batang merah: median lebih dari 3 jam. Arahkan kursor untuk rincian.</div>${daily}</div>
       <div class="set-card"><h3 style="margin:0 0 6px;font-size:13px">Per media (40 teratas menurut jumlah berita)</h3><div style="max-height:320px;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="text-align:left;color:var(--muted)"><th style="padding:4px 6px">Media</th><th style="text-align:right;padding:4px 6px">Berita</th><th style="text-align:right;padding:4px 6px">Median</th><th style="text-align:right;padding:4px 6px">90%</th></tr></thead><tbody>${outlets}</tbody></table></div></div>
       <div class="set-card"><h3 style="margin:0 0 6px;font-size:13px">10 berita dengan jeda terlama</h3>${slow}<div style="font-size:11.5px;color:var(--muted);margin-top:6px">Jeda sangat lama biasanya karena media terlambat terindeks di sumber berita, atau tanggal terbit di sumber kurang akurat.</div></div>`;
