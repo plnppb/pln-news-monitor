@@ -6085,13 +6085,15 @@ function filterByPeriod(articles) {
   return articles.filter(a => getDate(a) >= cutoff);
 }
 
-async function loadFromDB() {
+let dashLoadedDays = 0;
+async function loadFromDB(days) {
+  days = days === undefined ? 100 : days; dashLoadedDays = days;
   const statusEl = document.getElementById('dashDbStatus');
   if (statusEl) statusEl.textContent = 'Memuat dari database...';
   try {
     const from = new Date();
-    from.setDate(from.getDate() - 30);
-    const fromStr = from.toISOString().split('T')[0];
+    from.setDate(from.getDate() - (days || 0));
+    const fromStr = days ? from.toISOString().split('T')[0] : '';
 
     const pageSize = 500;
     let allFetched = [];
@@ -6099,7 +6101,7 @@ async function loadFromDB() {
 
     while (true) {
       if (statusEl) statusEl.textContent = 'Memuat... ' + allFetched.length + ' artikel';
-      const r = await fetch('/api/articles?limit=' + pageSize + '&offset=' + offset + '&from=' + fromStr);
+      const r = await fetch('/api/articles?limit=' + pageSize + '&offset=' + offset + (fromStr ? '&from=' + fromStr : ''));
       if (!r.ok) break;
       const d = await r.json();
       if (!d.articles || !d.articles.length) break;
@@ -6130,7 +6132,7 @@ async function loadFromDB() {
       offset += pageSize;
     }
 
-    if (statusEl) statusEl.textContent = allFetched.length + ' artikel (30 hari terakhir)';
+    if (statusEl) statusEl.textContent = allFetched.length + ' artikel (' + (days ? days + ' hari terakhir' : 'semua') + ')';
     return allFetched;
   } catch(e) {
     if (statusEl) statusEl.textContent = 'Gagal: ' + e.message;
@@ -6186,7 +6188,6 @@ async function appLoad() {
 }
 function mcLoad() { const v = appGet('media_class', {}); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; }
 function mcSave(o) { appSave('media_class', o); }
-function mcPrio() { const v = appGet('media_prio', []); return Array.isArray(v) ? v : []; }
 function mcClassOf(name) {
   const ov = mcLoad(); if (ov[name]) return ov[name];
   // Radio dan kantor berita perwakilan daerah tetap "nasional" kecuali nama memuat wilayah Papua lebih dulu: ANTARA Papua = nasional.
@@ -6195,22 +6196,20 @@ function mcClassOf(name) {
   return 'lainnya';
 }
 function mcSet(name, cls) { const o = mcLoad(); o[name] = cls; mcSave(o); renderMediaReach(window._mcArts || []); renderDashMediaChips(); }
-function mcTogglePrio(name) { let p = mcPrio(); p = p.indexOf(name) >= 0 ? p.filter(x => x !== name) : p.concat(name); appSave('media_prio', p); renderMediaReach(window._mcArts || []); }
 function renderDashMediaChips() { document.querySelectorAll('#dashMediaList .media-name').forEach(el => { const n = el.getAttribute('data-m'); if (!n) return; const c = MC_CLASSES[mcClassOf(n)]; let chip = el.querySelector('.mc-chip'); if (!chip) { chip = document.createElement('span'); chip.className = 'mc-chip'; el.appendChild(chip); } chip.textContent = c[0]; chip.style.cssText = `margin-left:6px;font-size:9.5px;padding:1px 6px;border-radius:8px;background:${c[2]};color:${c[1]};font-weight:600;white-space:nowrap`; }); }
 window._mcUI = { q: '', f: 'belum', n: 40 };
 function mcAllCounts() { const c = {}; (window._mcAll || window._mcArts || []).forEach(a => { const n = (a.source && a.source.name) || 'Unknown'; c[n] = (c[n] || 0) + 1; }); return c; }
 function mcRenderList() {
   const el = document.getElementById('mcList'); if (!el) return;
   const esc = x => spkEsc(String(x)); const U = window._mcUI;
-  const cnt = mcAllCounts(), prio = mcPrio(), order = ['nasional', 'regional', 'agregator', 'sosial', 'lokal', 'lainnya'];
+  const cnt = mcAllCounts(), order = ['nasional', 'regional', 'agregator', 'sosial', 'lokal', 'lainnya'];
   let names = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || a.localeCompare(b));
   const q = (U.q || '').toLowerCase().trim();
   if (q) names = names.filter(n => n.toLowerCase().indexOf(q) >= 0);
   if (U.f === 'belum') names = names.filter(n => mcClassOf(n) === 'lainnya');
-  else if (U.f === 'prio') names = names.filter(n => prio.indexOf(n) >= 0);
   else if (U.f !== 'semua') names = names.filter(n => mcClassOf(n) === U.f);
   const shown = names.slice(0, U.n);
-  el.innerHTML = (shown.length ? shown.map(n => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--border)"><button class="br-btn" style="padding:0 7px" title="Tandai media prioritas" onclick="mcTogglePrio(${esc(JSON.stringify(n)).replace(/"/g, '&quot;')})">${prio.indexOf(n) >= 0 ? '⭐' : '☆'}</button><span style="flex:1;font-size:12.5px">${esc(n)} <span style="color:var(--muted)">(${cnt[n]} berita)</span></span><select onchange="mcSet(${esc(JSON.stringify(n)).replace(/"/g, '&quot;')},this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px">${order.map(c => `<option value="${c}" ${mcClassOf(n) === c ? 'selected' : ''}>${esc(MC_CLASSES[c][0])}</option>`).join('')}</select></div>`).join('')
+  el.innerHTML = (shown.length ? shown.map(n => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--border)"><span style="flex:1;font-size:12.5px">${esc(n)} <span style="color:var(--muted)">(${cnt[n]} berita)</span></span><select onchange="mcSet(${esc(JSON.stringify(n)).replace(/"/g, '&quot;')},this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px">${order.map(c => `<option value="${c}" ${mcClassOf(n) === c ? 'selected' : ''}>${esc(MC_CLASSES[c][0])}</option>`).join('')}</select></div>`).join('')
     : '<div style="font-size:12px;color:var(--muted);padding:8px 0">' + (U.f === 'belum' && !q ? '✅ Semua media sudah dikelompokkan.' : 'Tidak ada media yang cocok.') + '</div>')
     + `<div style="font-size:11.5px;color:var(--muted);margin-top:6px">Menampilkan ${shown.length} dari ${names.length} media.${names.length > shown.length ? ' <a href="#" onclick="window._mcUI.n+=60;mcRenderList();return false">Tampilkan 60 lagi</a> · <a href="#" onclick="window._mcUI.n=99999;mcRenderList();return false">Semua</a>' : ''}</div>`;
 }
@@ -6230,7 +6229,6 @@ function renderMediaReach(arts, all) {
   const byMedia = {}; arts.forEach(a => { const n = (a.source && a.source.name) || 'Unknown'; (byMedia[n] = byMedia[n] || { n: 0, neg: 0, pos: 0 }).n++; if (a._tone === 'negatif') byMedia[n].neg++; if (a._tone === 'positif') byMedia[n].pos++; });
   const cls = {}; Object.keys(byMedia).forEach(n => { const c = mcClassOf(n); (cls[c] = cls[c] || { n: 0, media: [] }); cls[c].n += byMedia[n].n; cls[c].media.push(n); });
   const total = arts.length, nas = cls.nasional || { n: 0, media: [] };
-  const prio = mcPrio(); const prioN = Object.keys(byMedia).filter(n => prio.indexOf(n) >= 0).reduce((s, n) => s + byMedia[n].n, 0);
   const pct = c => total ? Math.round(((cls[c] || { n: 0 }).n / total) * 1000) / 10 : 0;
   const stat = (v, l) => `<div class="dash-stat"><div class="num" style="font-size:22px">${v}</div><div class="lbl">${l}</div></div>`;
   const order = ['nasional', 'regional', 'agregator', 'sosial', 'lokal', 'lainnya'];
@@ -6238,19 +6236,19 @@ function renderMediaReach(arts, all) {
   const legend = order.filter(c => cls[c]).map(c => `<span style="font-size:11.5px;margin-right:12px"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${MC_CLASSES[c][1]};margin-right:4px"></span>${esc(MC_CLASSES[c][0])} <b>${pct(c)}%</b> (${cls[c].n})</span>`).join('');
   const topNas = nas.media.map(n => [n, byMedia[n]]).sort((a, b) => b[1].n - a[1].n).slice(0, 8);
   const unk = (cls.lainnya ? cls.lainnya.media : []).map(n => [n, byMedia[n].n]).sort((a, b) => b[1] - a[1]);
-  el.innerHTML = `<div class="dash-stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px">
-      ${stat(pct('nasional') + '%', 'Berita di media nasional')}${stat(nas.media.length, 'Media nasional yang memuat')}${stat(prioN, 'Berita di media prioritas ⭐')}${stat(unk.length, 'Media belum dikelompokkan')}</div>
+  el.innerHTML = `<div class="dash-stat-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
+      ${stat(pct('nasional') + '%', 'Berita di media nasional')}${stat(nas.media.length, 'Media nasional yang memuat')}${stat(unk.length, 'Media belum dikelompokkan')}</div>
     <div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-bottom:6px">${bar}</div><div style="margin-bottom:12px">${legend}</div>
     <div style="font-weight:600;font-size:12.5px;margin-bottom:4px">Media nasional teratas</div>
-    ${topNas.length ? topNas.map(([n, v]) => `<div class="media-item"><span class="media-name" style="min-width:160px">${prio.indexOf(n) >= 0 ? '⭐ ' : ''}${esc(n)}</span><span style="font-size:12px;color:var(--muted)">${v.n} berita${v.pos ? ' · ' + v.pos + ' positif' : ''}${v.neg ? ' · <span style="color:#b91c1c">' + v.neg + ' negatif</span>' : ''}</span></div>`).join('') : '<div style="font-size:12px;color:var(--muted)">Belum ada berita di media nasional pada periode ini.</div>'}
+    ${topNas.length ? topNas.map(([n, v]) => `<div class="media-item"><span class="media-name" style="min-width:160px">${esc(n)}</span><span style="font-size:12px;color:var(--muted)">${v.n} berita${v.pos ? ' · ' + v.pos + ' positif' : ''}${v.neg ? ' · <span style="color:#b91c1c">' + v.neg + ' negatif</span>' : ''}</span></div>`).join('') : '<div style="font-size:12px;color:var(--muted)">Belum ada berita di media nasional pada periode ini.</div>'}
     ${unk.length ? `<div style="font-size:11.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;margin-top:10px">Belum dikelompokkan: ${unk.slice(0, 6).map(x => esc(x[0]) + ' (' + x[1] + ')').join(', ')}${unk.length > 6 ? ', ...' : ''}. Atur di bawah.</div>` : ''}
-    <details ${wasOpen ? 'open' : ''} style="margin-top:10px"><summary style="cursor:pointer;font-size:12.5px;color:var(--accent2,#1E8449);font-weight:600">⚙ Atur kelas media dan prioritas (semua media, ${Object.keys(mcAllCounts()).length})</summary>
-      <div style="font-size:11.5px;color:var(--muted);margin:6px 0">Pengelompokan awal saya tebak dari nama media, jadi periksa dan ubah bila keliru. ⭐ Media prioritas = media yang menurut Anda paling berpengaruh bagi PLN (mis. Kompas, ANTARA, media lokal kunci). Berita di media bertanda ⭐ dihitung di kartu "Berita di media prioritas". ${APPSET.available === false ? '<b style="color:#b91c1c">Perhatian: tabel pengaturan belum ada di database, jadi perubahan hanya tersimpan di browser ini. Jalankan add-app-settings.sql di Supabase.</b>' : 'Perubahan tersimpan di database dan berlaku untuk semua pengguna.'}</div>
+    <details ${wasOpen ? 'open' : ''} style="margin-top:10px"><summary style="cursor:pointer;font-size:12.5px;color:var(--accent2,#1E8449);font-weight:600">⚙ Atur kelas media (semua media, ${Object.keys(mcAllCounts()).length})</summary>
+      <div style="font-size:11.5px;color:var(--muted);margin:6px 0">Pengelompokan awal saya tebak dari nama media, jadi periksa dan ubah bila keliru. ${APPSET.available === false ? '<b style="color:#b91c1c">Perhatian: tabel pengaturan belum ada di database, jadi perubahan hanya tersimpan di browser ini. Jalankan add-app-settings.sql di Supabase.</b>' : 'Perubahan tersimpan di database dan berlaku untuk semua pengguna.'}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
         <input id="mcQ" placeholder="Cari nama media..." value="${esc(window._mcUI.q)}" oninput="window._mcUI.q=this.value;window._mcUI.n=40;mcRenderList()" style="flex:1;min-width:160px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
         <select id="mcF" onchange="window._mcUI.f=this.value;window._mcUI.n=40;mcRenderList()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px">
           <option value="belum" ${window._mcUI.f === 'belum' ? 'selected' : ''}>Belum dikelompokkan</option><option value="semua" ${window._mcUI.f === 'semua' ? 'selected' : ''}>Semua media</option>
-          ${order.filter(c => c !== 'lainnya').map(c => `<option value="${c}" ${window._mcUI.f === c ? 'selected' : ''}>${esc(MC_CLASSES[c][0])}</option>`).join('')}<option value="prio" ${window._mcUI.f === 'prio' ? 'selected' : ''}>⭐ Prioritas</option></select>
+          ${order.filter(c => c !== 'lainnya').map(c => `<option value="${c}" ${window._mcUI.f === c ? 'selected' : ''}>${esc(MC_CLASSES[c][0])}</option>`).join('')}</select>
         <button class="br-btn" onclick="mcBulkUnknown()" title="Semua media yang belum dikelompokkan dijadikan Lokal/Lainnya">Tandai semua yang belum dikelompokkan sebagai Lokal/Lainnya</button>
       </div>
       <div id="mcList"></div>
@@ -6260,8 +6258,14 @@ function renderMediaReach(arts, all) {
 
 async function renderDashboard() {
   if (window._chartLoadPromise) await window._chartLoadPromise;
-  if (!dashAllArticles.length) {
-    dashAllArticles = await loadFromDB();
+  // Data yang dimuat harus mencakup periode yang dipilih (dulu selalu 30 hari, jadi "3 Bulan", "Semua", dan "Bulan Lalu" salah hitung)
+  let need = 100;
+  if (dashCustomFrom) need = Math.ceil((Date.now() - new Date(dashCustomFrom).getTime()) / 86400000) + 2;
+  else if (dashPeriodDays === 0) need = 0;
+  else if (dashPeriodDays > 0) need = Math.max(dashPeriodDays, 100);
+  const loadedEnough = dashAllArticles.length && (dashLoadedDays === 0 || (need !== 0 && need <= dashLoadedDays));
+  if (!loadedEnough) {
+    dashAllArticles = await loadFromDB(need === 0 ? 0 : Math.max(need, 100));
   }
 
   let articles = filterByPeriod(dashAllArticles);
@@ -7093,6 +7097,7 @@ async function dupApply() {
     loadHealth();
   } catch (e) { box.innerHTML = '<span style="color:#b91c1c">Gagal: ' + brEsc(e.message) + '</span>'; }
 }
+function fmtLag(m) { if (m == null) return '—'; if (m < 60) return m + ' menit'; const h = Math.floor(m / 60), r = m % 60; return h + ' jam' + (r ? ' ' + r + ' menit' : ''); }
 async function loadHealth() {
   const box = document.getElementById('healthBox'); if (!box) return;
   box.textContent = 'Memuat...';
@@ -7105,6 +7110,8 @@ async function loadHealth() {
     box.innerHTML = row('Berita di database (aktif)', d.total == null ? '—' : d.total)
       + row('Masuk 24 jam terakhir', d.last24 == null ? '—' : d.last24, d.last24 === 0)
       + row('Berita terbaru masuk', age == null ? '—' : brStamp(d.newestCreatedAt), age != null && age > 14 * 3600000)
+      + (d.lag ? row('Jeda terbit → terpantau (median)', fmtLag(d.lag.medianMin), d.lag.medianMin > 180)
+        + `<div style="font-size:11.5px;color:var(--text-muted,#64748b);padding:3px 0 4px;border-bottom:1px dashed var(--border)">90% berita terpantau dalam ${fmtLag(d.lag.p90Min)}; ${d.lag.within60}% dalam 1 jam. Dari ${d.lag.n} berita, 14 hari terakhir (tanpa simpan manual). Berita yang jam terbitnya tidak tercatat bisa tampak lebih lambat.</div>` : row('Jeda terbit → terpantau', '—'))
       + row('Belum dianalisis AI', d.pending == null ? '—' : d.pending + (d.pendingLocked ? ' (' + d.pendingLocked + ' terkunci)' : ''), d.pending > 0)
       + row('Kunci Gemini terpasang', d.geminiKeys, d.geminiKeys === 0)
       + `<div style="font-size:11.5px;margin-top:8px">${d.pending > 0 ? 'Klik "🧠 Analisis Berita yang Belum Terisi" di kartu sebelah untuk mengisinya.' : 'Semua berita sudah dianalisis.'}${age != null && age > 14 * 3600000 ? ' <b style="color:#b91c1c">Auto-crawl sepertinya tidak berjalan: cek GitHub Actions.</b>' : ''}</div>`;
