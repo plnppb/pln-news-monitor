@@ -758,18 +758,31 @@ async function handleHealth(req, res) {
   };
   try {
     const since24 = encodeURIComponent(new Date(Date.now() - 86400000).toISOString());
-    const [total, pending, pendingLocked, last24, newest] = await Promise.all([
+    const since14 = encodeURIComponent(new Date(Date.now() - 14 * 86400000).toISOString());
+    const [total, pending, pendingLocked, last24, newest, lagRows] = await Promise.all([
       count('hidden=not.is.true'),
       count('hidden=not.is.true&or=(tone.is.null,tone.eq.)'),
       count('hidden=not.is.true&manual_locked=eq.true&or=(tone.is.null,tone.eq.)'),
       count(`hidden=not.is.true&created_at=gte.${since24}`),
-      fetch(`${SUPABASE_URL}/rest/v1/articles?select=created_at,published_at&order=created_at.desc&limit=1`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }).then(r => r.json())
+      fetch(`${SUPABASE_URL}/rest/v1/articles?select=created_at,published_at&order=created_at.desc&limit=1`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }).then(r => r.json()),
+      // jeda terbit -> terpantau: 14 hari terakhir, tanpa berita simpan manual
+      fetch(`${SUPABASE_URL}/rest/v1/articles?select=created_at,published_at&hidden=not.is.true&or=(manual_locked.is.null,manual_locked.eq.false)&created_at=gte.${since14}&published_at=not.is.null&order=created_at.desc&limit=1000`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }).then(r => r.json()).catch(() => [])
     ]);
+    // abaikan jeda negatif (jam salah) dan > 3 hari (hasil backfill / tanggal hanya hari)
+    const lags = (Array.isArray(lagRows) ? lagRows : [])
+      .map(a => (new Date(a.created_at) - new Date(a.published_at)) / 60000)
+      .filter(m => isFinite(m) && m >= 0 && m <= 3 * 1440)
+      .sort((a, b) => a - b);
+    const pct = q => lags.length ? Math.round(lags[Math.min(lags.length - 1, Math.floor(q * lags.length))]) : null;
+    const lag = lags.length ? {
+      n: lags.length, medianMin: pct(0.5), p90Min: pct(0.9),
+      within60: Math.round(100 * lags.filter(m => m <= 60).length / lags.length)
+    } : null;
     const geminiKeys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean).length;
     return res.status(200).json({
       total, pending, pendingLocked, last24,
       newestCreatedAt: Array.isArray(newest) && newest[0] ? newest[0].created_at : null,
-      geminiKeys,
+      lag, geminiKeys,
       telegram: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID)
     });
   } catch (error) {
