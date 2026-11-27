@@ -775,12 +775,18 @@ async function handleLag(req, res) {
   try {
     let rows = [];
     for (let page = 0; page < 5; page++) {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/articles?select=title,url,source,created_at,published_at&hidden=not.is.true&or=(manual_locked.is.null,manual_locked.eq.false)&created_at=gte.${since}&published_at=not.is.null&order=created_at.desc&limit=1000&offset=${page * 1000}`, { headers: H });
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/articles?select=title,url,source,tone,created_at,published_at&hidden=not.is.true&or=(manual_locked.is.null,manual_locked.eq.false)&created_at=gte.${since}&published_at=not.is.null&order=created_at.desc&limit=1000&offset=${page * 1000}`, { headers: H });
       const batch = await r.json();
       if (!Array.isArray(batch)) throw new Error(JSON.stringify(batch));
       rows = rows.concat(batch);
       if (batch.length < 1000) break;
     }
+    // perbandingan per tone selalu dihitung dari semua berita; filter tone hanya mempersempit rincian lain
+    const toneOf = a => ['negatif', 'positif', 'netral'].includes(a.tone) ? a.tone : 'belum';
+    const byTone = {};
+    ['negatif', 'netral', 'positif', 'belum'].forEach(t => { byTone[t] = lagSummary(rows.filter(a => toneOf(a) === t)); });
+    const tone = ['negatif', 'positif', 'netral'].includes(req.query.tone) ? req.query.tone : '';
+    if (tone) rows = rows.filter(a => toneOf(a) === tone);
     const total = rows.length;
     const dateOnly = rows.filter(a => a.published_at && isDateOnlyTs(a.published_at)).length;
     const valid = rows.map(a => ({ a, m: lagMinutes(a) })).filter(x => x.m != null);
@@ -801,7 +807,7 @@ async function handleLag(req, res) {
       .sort((a, b) => b.n - a.n).slice(0, 40);
     const slowest = valid.sort((a, b) => b.m - a.m).slice(0, 10)
       .map(x => ({ title: x.a.title, url: x.a.url, source: x.a.source, published_at: x.a.published_at, created_at: x.a.created_at, lagMin: Math.round(x.m) }));
-    return res.status(200).json({ days, total, dateOnly, summary: lagSummary(rows), dist, daily, outlets, slowest });
+    return res.status(200).json({ days, tone, byTone, total, dateOnly, summary: lagSummary(rows), dist, daily, outlets, slowest });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
