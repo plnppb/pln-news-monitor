@@ -747,6 +747,66 @@ async function handleUpdateFollowup(req, res) {
   }
 }
 
+// ===== Jeda terbit -> terpantau =====
+// Berita yang jam terbitnya hanya tanggal (tepat 00:00 UTC atau WIT) tidak dihitung, karena jedanya semu.
+function isDateOnlyTs(iso) {
+  const d = new Date(iso); if (isNaN(d)) return false;
+  const z = (x) => x.getUTCHours() === 0 && x.getUTCMinutes() === 0 && x.getUTCSeconds() === 0;
+  return z(d) || z(new Date(d.getTime() + 9 * 3600000));
+}
+function lagMinutes(a) {
+  if (!a.published_at || !a.created_at || isDateOnlyTs(a.published_at)) return null;
+  const m = (new Date(a.created_at) - new Date(a.published_at)) / 60000;
+  return isFinite(m) && m >= 0 && m <= 3 * 1440 ? m : null; // buang jam salah (negatif) dan backfill (> 3 hari)
+}
+const lagPct = (sorted, q) => sorted.length ? Math.round(sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]) : null;
+function lagSummary(rows) {
+  const lags = rows.map(lagMinutes).filter(m => m != null).sort((a, b) => a - b);
+  if (!lags.length) return null;
+  const share = lim => Math.round(100 * lags.filter(m => m <= lim).length / lags.length);
+  return { n: lags.length, medianMin: lagPct(lags, 0.5), p90Min: lagPct(lags, 0.9), within60: share(60), within180: share(180) };
+}
+
+// ===== GET ?resource=lag&days=N: sub-menu Kecepatan Pantau =====
+async function handleLag(req, res) {
+  const days = Math.min(90, Math.max(1, parseInt(req.query.days, 10) || 14));
+  const since = encodeURIComponent(new Date(Date.now() - days * 86400000).toISOString());
+  const H = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` };
+  try {
+    let rows = [];
+    for (let page = 0; page < 5; page++) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/articles?select=title,url,source,created_at,published_at&hidden=not.is.true&or=(manual_locked.is.null,manual_locked.eq.false)&created_at=gte.${since}&published_at=not.is.null&order=created_at.desc&limit=1000&offset=${page * 1000}`, { headers: H });
+      const batch = await r.json();
+      if (!Array.isArray(batch)) throw new Error(JSON.stringify(batch));
+      rows = rows.concat(batch);
+      if (batch.length < 1000) break;
+    }
+    const total = rows.length;
+    const dateOnly = rows.filter(a => a.published_at && isDateOnlyTs(a.published_at)).length;
+    const valid = rows.map(a => ({ a, m: lagMinutes(a) })).filter(x => x.m != null);
+    const buckets = [['≤ 15 menit', 15], ['15–60 menit', 60], ['1–3 jam', 180], ['3–6 jam', 360], ['6–24 jam', 1440], ['1–3 hari', 4320]];
+    const dist = buckets.map(([label, max], i) => {
+      const min = i ? buckets[i - 1][1] : -1;
+      return { label, n: valid.filter(x => x.m > min && x.m <= max).length };
+    });
+    // per hari (hari terbit, WIT)
+    const dayKey = iso => new Date(new Date(iso).getTime() + 9 * 3600000).toISOString().slice(0, 10);
+    const byDay = {};
+    valid.forEach(x => { (byDay[dayKey(x.a.published_at)] = byDay[dayKey(x.a.published_at)] || []).push(x.m); });
+    const daily = Object.keys(byDay).sort().map(d => { const arr = byDay[d].sort((a, b) => a - b); return { day: d, n: arr.length, medianMin: lagPct(arr, 0.5) }; });
+    // per media
+    const byOutlet = {};
+    valid.forEach(x => { const k = (x.a.source || 'Tidak diketahui').trim(); (byOutlet[k] = byOutlet[k] || []).push(x.m); });
+    const outlets = Object.keys(byOutlet).map(k => { const arr = byOutlet[k].sort((a, b) => a - b); return { source: k, n: arr.length, medianMin: lagPct(arr, 0.5), p90Min: lagPct(arr, 0.9) }; })
+      .sort((a, b) => b.n - a.n).slice(0, 40);
+    const slowest = valid.sort((a, b) => b.m - a.m).slice(0, 10)
+      .map(x => ({ title: x.a.title, url: x.a.url, source: x.a.source, published_at: x.a.published_at, created_at: x.a.created_at, lagMin: Math.round(x.m) }));
+    return res.status(200).json({ days, total, dateOnly, summary: lagSummary(rows), dist, daily, outlets, slowest });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
 // ===== GET ?resource=health: ringkasan kesehatan data =====
 async function handleHealth(req, res) {
   const H = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Prefer': 'count=exact', 'Range-Unit': 'items', 'Range': '0-0' };
@@ -768,16 +828,7 @@ async function handleHealth(req, res) {
       // jeda terbit -> terpantau: 14 hari terakhir, tanpa berita simpan manual
       fetch(`${SUPABASE_URL}/rest/v1/articles?select=created_at,published_at&hidden=not.is.true&or=(manual_locked.is.null,manual_locked.eq.false)&created_at=gte.${since14}&published_at=not.is.null&order=created_at.desc&limit=1000`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }).then(r => r.json()).catch(() => [])
     ]);
-    // abaikan jeda negatif (jam salah) dan > 3 hari (hasil backfill / tanggal hanya hari)
-    const lags = (Array.isArray(lagRows) ? lagRows : [])
-      .map(a => (new Date(a.created_at) - new Date(a.published_at)) / 60000)
-      .filter(m => isFinite(m) && m >= 0 && m <= 3 * 1440)
-      .sort((a, b) => a - b);
-    const pct = q => lags.length ? Math.round(lags[Math.min(lags.length - 1, Math.floor(q * lags.length))]) : null;
-    const lag = lags.length ? {
-      n: lags.length, medianMin: pct(0.5), p90Min: pct(0.9),
-      within60: Math.round(100 * lags.filter(m => m <= 60).length / lags.length)
-    } : null;
+    const lag = lagSummary(Array.isArray(lagRows) ? lagRows : []);
     const geminiKeys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean).length;
     return res.status(200).json({
       total, pending, pendingLocked, last24,
@@ -1067,6 +1118,7 @@ module.exports = async function handler(req, res) {
     if (req.query.resource === 'followups') return handleListFollowups(req, res);
     if (req.query.resource === 'radar') return handleListRadar(req, res);
     if (req.query.resource === 'health') return handleHealth(req, res);
+    if (req.query.resource === 'lag') return handleLag(req, res);
     if (req.query.resource === 'spk-names') return handleSpkNames(req, res);
     if (req.query.resource === 'spk-data') return handleSpkData(req, res);
     if (req.query.resource === 'dedupe') return handleDedupePreview(req, res);
